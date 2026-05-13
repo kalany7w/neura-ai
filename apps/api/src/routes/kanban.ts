@@ -237,6 +237,115 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
   return c.json({ cards });
 });
 
+// GET /api/kanban/cards/:id — detalhe completo
+kanbanRouter.get('/cards/:id', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const now = new Date();
+  const card = await prisma.card.findFirst({
+    where: { id, workspaceId },
+    include: {
+      labels: { include: { label: true } },
+      products: { orderBy: { createdAt: 'asc' } },
+      notes: { orderBy: { createdAt: 'asc' } },
+      stage: true,
+      funnel: { include: { stages: { orderBy: { order: 'asc' } } } },
+      snoozes: {
+        where: { snoozeUntil: { gt: now }, reactivatedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
+  });
+  if (!card) return c.json({ error: 'not_found' }, 404);
+
+  // Histórico (audit log) — somente moves+snoozes deste card
+  const history = await prisma.auditLog.findMany({
+    where: { workspaceId, resource: `Card:${id}` },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { action: true, metadata: true, createdAt: true, actorId: true },
+  });
+
+  let conversation = null as null | {
+    id: string;
+    status: string;
+    contact: { id: string; name: string | null; phoneNumber: string };
+  };
+  if (card.conversationId) {
+    conversation = await prisma.conversation.findFirst({
+      where: { id: card.conversationId, workspaceId },
+      select: {
+        id: true,
+        status: true,
+        contact: { select: { id: true, name: true, phoneNumber: true } },
+      },
+    });
+  }
+
+  return c.json({ card, conversation, history });
+});
+
+// POST /api/kanban/cards/:id/notes — adicionar nota interna ao card
+const cardNoteSchema = z.object({ body: z.string().min(1).max(4000) });
+
+kanbanRouter.get('/cards/:id/notes', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const card = await prisma.card.findFirst({ where: { id, workspaceId } });
+  if (!card) return c.json({ error: 'not_found' }, 404);
+  const notes = await prisma.cardNote.findMany({
+    where: { cardId: id },
+    orderBy: { createdAt: 'asc' },
+  });
+  return c.json({ notes });
+});
+
+kanbanRouter.post(
+  '/cards/:id/notes',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = cardNoteSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const card = await prisma.card.findFirst({ where: { id, workspaceId } });
+    if (!card) return c.json({ error: 'not_found' }, 404);
+    const note = await prisma.cardNote.create({
+      data: { cardId: id, authorId: c.get('userId'), body: parsed.data.body },
+    });
+    await publishEvent(workspaceId, 'cards', 'card.updated', { cardId: id });
+    return c.json({ note }, 201);
+  },
+);
+
+kanbanRouter.delete(
+  '/notes/:id',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const note = await prisma.cardNote.findFirst({
+      where: { id, card: { workspaceId } },
+      include: { card: { select: { id: true } } },
+    });
+    if (!note) return c.json({ error: 'not_found' }, 404);
+    const role = c.get('role')!;
+    const userId = c.get('userId');
+    if (note.authorId !== userId && role !== 'ADMIN') {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    await prisma.cardNote.delete({ where: { id } });
+    await publishEvent(workspaceId, 'cards', 'card.updated', { cardId: note.card.id });
+    return c.json({ ok: true });
+  },
+);
+
 kanbanRouter.post(
   '/cards',
   requireAuth,

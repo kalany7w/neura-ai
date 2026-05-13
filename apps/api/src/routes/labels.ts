@@ -98,10 +98,10 @@ labelsRouter.delete(
   },
 );
 
-// Aplicar/remover label em CONTACT ou CONVERSATION
+// Aplicar/remover label em CONTACT, CONVERSATION ou CARD
 const applySchema = z.object({
   labelId: z.string().min(1),
-  targetType: z.enum(['CONTACT', 'CONVERSATION']),
+  targetType: z.enum(['CONTACT', 'CONVERSATION', 'CARD']),
   targetId: z.string().min(1),
 });
 
@@ -132,7 +132,7 @@ labelsRouter.post(
         create: { contactId: contact.id, labelId: label.id },
         update: {},
       });
-    } else {
+    } else if (parsed.data.targetType === 'CONVERSATION') {
       const conv = await prisma.conversation.findFirst({
         where: { id: parsed.data.targetId, workspaceId },
       });
@@ -148,6 +148,18 @@ labelsRouter.post(
         conversationId: conv.id,
         labelId: label.id,
       });
+    } else {
+      // CARD
+      const card = await prisma.card.findFirst({
+        where: { id: parsed.data.targetId, workspaceId },
+      });
+      if (!card) return c.json({ error: 'card_not_found' }, 404);
+      await prisma.cardLabel.upsert({
+        where: { cardId_labelId: { cardId: card.id, labelId: label.id } },
+        create: { cardId: card.id, labelId: label.id },
+        update: {},
+      });
+      await publishEvent(workspaceId, 'cards', 'card.updated', { cardId: card.id });
     }
     return c.json({ ok: true });
   },
@@ -174,7 +186,7 @@ labelsRouter.post(
           },
         })
         .catch(() => null);
-    } else {
+    } else if (parsed.data.targetType === 'CONVERSATION') {
       await prisma.conversationLabel
         .delete({
           where: {
@@ -188,6 +200,21 @@ labelsRouter.post(
       await publishEvent(workspaceId, 'conversations', 'label.removed', {
         conversationId: parsed.data.targetId,
         labelId: parsed.data.labelId,
+      });
+    } else {
+      // CARD
+      await prisma.cardLabel
+        .delete({
+          where: {
+            cardId_labelId: {
+              cardId: parsed.data.targetId,
+              labelId: parsed.data.labelId,
+            },
+          },
+        })
+        .catch(() => null);
+      await publishEvent(workspaceId, 'cards', 'card.updated', {
+        cardId: parsed.data.targetId,
       });
     }
     return c.json({ ok: true });
