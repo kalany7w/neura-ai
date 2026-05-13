@@ -1,14 +1,12 @@
 'use client';
 
-import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LogOut } from 'lucide-react';
-import { signOut, useSession } from '@/lib/auth-client';
+import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { Button } from '@/components/ui/button';
 import { RealtimeProvider } from '@/components/realtime-provider';
+import { Sidebar } from '@/components/layout/sidebar';
 
 interface WorkspaceListItem {
   id: string;
@@ -43,101 +41,37 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [workspaces, pathname, router]);
 
   if (isPending || workspacesLoading) {
-    return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">Carregando…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Carregando…
+      </div>
+    );
   }
 
   if (!session?.user) return null;
 
   const activeWorkspace = workspaces?.workspaces[0];
 
+  // /onboarding renderiza sem sidebar — user ainda não tem workspace
+  if (pathname === '/onboarding') {
+    return <RealtimeProvider>{children}</RealtimeProvider>;
+  }
+
   return (
     <RealtimeProvider>
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b bg-background">
-        <div className="container flex h-14 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="font-semibold">
-              Neura AI
-            </Link>
-            {activeWorkspace && (
-              <span className="text-sm text-muted-foreground">{activeWorkspace.name}</span>
-            )}
-            <nav className="flex items-center gap-4 text-sm">
-              <Link
-                href="/dashboard"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/inbox"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Conversas
-              </Link>
-              <Link
-                href="/kanban"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Kanban
-              </Link>
-              <Link
-                href="/contacts"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Contatos
-              </Link>
-              <Link
-                href="/inboxes"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                Inboxes
-              </Link>
-              {activeWorkspace && (
-                <Link
-                  href="/settings/templates"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  Templates
-                </Link>
-              )}
-              {activeWorkspace && activeWorkspace.role === 'ADMIN' && (
-                <>
-                  <Link
-                    href="/settings/labels"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    Etiquetas
-                  </Link>
-                  <Link
-                    href="/settings/members"
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    Membros
-                  </Link>
-                </>
-              )}
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">{session.user.email}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={async () => {
-                await signOut();
-                router.push('/login');
-                router.refresh();
-              }}
-            >
-              <LogOut className="h-4 w-4" />
-              Sair
-            </Button>
-          </div>
-        </div>
-      </header>
-      <main className="flex-1 container py-8">{children}</main>
-    </div>
+      <div className="flex h-screen overflow-hidden">
+        <Sidebar
+          user={{
+            id: session.user.id,
+            name: session.user.name,
+            email: session.user.email,
+          }}
+          workspace={activeWorkspace ?? null}
+        />
+        <main className="flex-1 overflow-y-auto">
+          <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
+        </main>
+      </div>
     </RealtimeProvider>
   );
 }
