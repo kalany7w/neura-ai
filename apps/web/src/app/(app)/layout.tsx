@@ -70,6 +70,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Dashboard
               </Link>
               <Link
+                href="/inbox"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Conversas
+              </Link>
+              <Link
                 href="/inboxes"
                 className="text-muted-foreground hover:text-foreground"
               >
