@@ -78,6 +78,91 @@ inboxesRouter.get(
   },
 );
 
+// PATCH /api/inboxes/:id — atualiza nome e settings (round-robin, business hours, mensagens auto)
+const inboxSettingsSchema = z
+  .object({
+    roundRobinEnabled: z.boolean().optional(),
+    businessHours: z
+      .object({
+        enabled: z.boolean(),
+        start: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:MM'),
+        end: z.string().regex(/^\d{2}:\d{2}$/, 'Formato HH:MM'),
+        days: z.array(z.number().int().min(0).max(6)),
+      })
+      .optional(),
+    greetingMessage: z.string().max(2000).nullable().optional(),
+    outOfHoursMessage: z.string().max(2000).nullable().optional(),
+    autoResolveAfterDays: z.number().int().min(0).max(365).nullable().optional(),
+  })
+  .strict();
+
+const patchInboxSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  settings: inboxSettingsSchema.optional(),
+});
+
+inboxesRouter.patch(
+  '/:id',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = patchInboxSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const existing = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+
+    const data: Record<string, unknown> = {};
+    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.settings !== undefined) {
+      // Merge com settings existentes
+      const current = (existing.settings as Record<string, unknown>) ?? {};
+      data.settings = { ...current, ...parsed.data.settings };
+    }
+    const inbox = await prisma.inbox.update({ where: { id }, data });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'inbox.updated',
+      resource: `Inbox:${id}`,
+    });
+    return c.json({ inbox });
+  },
+);
+
+// POST /api/inboxes/:id/reconnect — força stop + start (limpa cache do worker)
+inboxesRouter.post(
+  '/:id/reconnect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox) return c.json({ error: 'not_found' }, 404);
+
+    const { redis } = await import('../redis');
+    await redis.publish(
+      'worker:commands',
+      JSON.stringify({ cmd: 'session.stop', inboxId: id }),
+    );
+    // Pequeno delay pra worker processar stop antes do start
+    setTimeout(() => {
+      redis
+        .publish(
+          'worker:commands',
+          JSON.stringify({ cmd: 'session.start', inboxId: id }),
+        )
+        .catch(() => {});
+    }, 1500);
+    return c.json({ ok: true });
+  },
+);
+
 // POST /api/inboxes/:id/connect — pede pra waworker iniciar sessão (publish em Redis pra worker pegar)
 inboxesRouter.post(
   '/:id/connect',

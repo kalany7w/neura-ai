@@ -11,6 +11,7 @@ import { logger } from '../logger';
 import { publishEvent } from '../redis';
 import type { MessageDirection, MessageType } from '@neura/database';
 import { downloadAndStoreMedia } from './media';
+import { applyInboxRules } from './inbox-rules';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 
@@ -167,7 +168,7 @@ async function persistInboundMessage(
   const type = inferMessageType(messageContent);
   const pushName = msg.pushName ?? null;
 
-  await prisma.$transaction(async (tx) => {
+  const txResult = await prisma.$transaction(async (tx) => {
     // Upsert contact
     const contact = await tx.contact.upsert({
       where: {
@@ -242,7 +243,9 @@ async function persistInboundMessage(
     const existing = msg.key.id
       ? await tx.message.findFirst({ where: { waMessageId: msg.key.id } })
       : null;
-    if (existing) return;
+    if (existing) {
+      return null; // duplicada, skip rules
+    }
 
     const created = await tx.message.create({
       data: {
@@ -298,7 +301,26 @@ async function persistInboundMessage(
     if (type !== 'TEXT' && type !== 'LOCATION' && type !== 'CONTACT' && type !== 'SYSTEM') {
       void downloadStoreAndUpdate(ctx, created.id, msg);
     }
+
+    return {
+      isNewConversation,
+      conversationId: conversation.id,
+      contactPhone: phoneNumber,
+      contactName: contact.name,
+    };
   });
+
+  // Aplica regras da inbox depois da transação (round-robin, saudação, out-of-hours)
+  if (txResult) {
+    void applyInboxRules({
+      workspaceId: ctx.workspaceId,
+      inboxId: ctx.inboxId,
+      conversationId: txResult.conversationId,
+      contactPhone: txResult.contactPhone,
+      contactName: txResult.contactName,
+      isNewConversation: txResult.isNewConversation,
+    });
+  }
 }
 
 async function downloadStoreAndUpdate(
