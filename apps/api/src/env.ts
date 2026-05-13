@@ -12,6 +12,15 @@ const apiEnvSchema = baseEnvSchema.extend({
   RESEND_FROM_NAME: z.string().default('Neura AI'),
   RATE_LIMIT_LOGIN_MAX: z.coerce.number().default(5),
   RATE_LIMIT_LOGIN_WINDOW_SEC: z.coerce.number().default(60),
+  MINIO_ENDPOINT: z.string().default('localhost'),
+  MINIO_PORT: z.coerce.number().int().default(9000),
+  MINIO_ACCESS_KEY: z.string().default('minioadmin'),
+  MINIO_SECRET_KEY: z.string().default('minioadmin'),
+  MINIO_BUCKET: z.string().default('neura-media'),
+  MINIO_USE_SSL: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 export const env = loadEnv(apiEnvSchema);

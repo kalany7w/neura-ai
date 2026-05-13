@@ -92,10 +92,21 @@ conversationsRouter.get('/:id', requireAuth, requireWorkspace, async (c) => {
 });
 
 // POST /api/conversations/:id/messages (envia)
-const sendBody = z.object({
-  type: z.enum(['TEXT']).default('TEXT'),
-  text: z.string().min(1).max(4096),
-});
+const sendBody = z
+  .object({
+    type: z.enum(['TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT']).default('TEXT'),
+    text: z.string().max(4096).optional(),
+    mediaUrl: z.string().url().optional(),
+    mimeType: z.string().max(120).optional(),
+    fileName: z.string().max(255).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.type === 'TEXT') return !!data.text && data.text.length > 0;
+      return !!data.mediaUrl;
+    },
+    { message: 'TEXT requires text; media types require mediaUrl' },
+  );
 
 conversationsRouter.post(
   '/:id/messages',
@@ -129,7 +140,9 @@ conversationsRouter.post(
         conversationId: conv.id,
         direction: 'OUTBOUND',
         type: parsed.data.type,
-        content: parsed.data.text,
+        content: parsed.data.text ?? null,
+        mediaUrl: parsed.data.mediaUrl ?? null,
+        mediaMimeType: parsed.data.mimeType ?? null,
         status: 'PENDING',
       },
     });
@@ -155,6 +168,9 @@ conversationsRouter.post(
       to: conv.contact.phoneNumber,
       type: parsed.data.type,
       text: parsed.data.text,
+      mediaUrl: parsed.data.mediaUrl,
+      mimeType: parsed.data.mimeType,
+      fileName: parsed.data.fileName,
     });
 
     await publishEvent(workspaceId, 'messages', 'message.new', {

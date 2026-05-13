@@ -6,6 +6,7 @@ import { prisma } from '../db';
 import { publishEvent } from '../redis';
 import { logger } from '../logger';
 import { env } from '../env';
+import { getMediaBuffer, keyFromUrl } from '../storage';
 
 // BullMQ exige conexão dedicada com maxRetriesPerRequest=null
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -16,10 +17,27 @@ function toJid(to: string): string {
   return `${digits}@s.whatsapp.net`;
 }
 
+async function fetchMediaBuffer(mediaUrl: string): Promise<Buffer> {
+  const key = keyFromUrl(mediaUrl);
+  if (!key) throw new Error(`Cannot resolve S3 key from URL: ${mediaUrl}`);
+  return getMediaBuffer(key);
+}
+
 export const outboundWorker = new Worker<SendMessageJob>(
   QUEUE_OUTBOUND,
   async (job: Job<SendMessageJob>) => {
-    const { inboxId, workspaceId, conversationId, messageId, to, type, text } = job.data;
+    const {
+      inboxId,
+      workspaceId,
+      conversationId,
+      messageId,
+      to,
+      type,
+      text,
+      mediaUrl,
+      mimeType,
+      fileName,
+    } = job.data;
     const handle = sessionManager.get(inboxId);
     if (!handle) {
       throw new Error(`No active session for inbox ${inboxId}`);
@@ -30,8 +48,40 @@ export const outboundWorker = new Worker<SendMessageJob>(
     if (type === 'TEXT') {
       result = await handle.sock.sendMessage(jid, { text: text ?? '' });
     } else {
-      // Mídia entra na Fase 3 (precisa baixar do MinIO + sock.sendMessage com image/video/audio/document)
-      throw new Error(`Message type ${type} not yet supported (Fase 3)`);
+      if (!mediaUrl) throw new Error(`Media job ${messageId} missing mediaUrl`);
+      const buffer = await fetchMediaBuffer(mediaUrl);
+      const caption = text ?? undefined;
+      switch (type) {
+        case 'IMAGE':
+          result = await handle.sock.sendMessage(jid, {
+            image: buffer,
+            caption,
+            mimetype: mimeType,
+          });
+          break;
+        case 'VIDEO':
+          result = await handle.sock.sendMessage(jid, {
+            video: buffer,
+            caption,
+            mimetype: mimeType,
+          });
+          break;
+        case 'AUDIO':
+          result = await handle.sock.sendMessage(jid, {
+            audio: buffer,
+            mimetype: mimeType ?? 'audio/ogg; codecs=opus',
+            ptt: false,
+          });
+          break;
+        case 'DOCUMENT':
+          result = await handle.sock.sendMessage(jid, {
+            document: buffer,
+            mimetype: mimeType ?? 'application/octet-stream',
+            fileName: fileName ?? 'arquivo',
+            caption,
+          });
+          break;
+      }
     }
 
     const waMessageId = result?.key?.id ?? null;

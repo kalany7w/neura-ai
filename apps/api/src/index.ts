@@ -10,6 +10,7 @@ import { workspacesRouter } from './routes/workspaces';
 import { invitesRouter } from './routes/invites';
 import { inboxesRouter } from './routes/inboxes';
 import { conversationsRouter } from './routes/conversations';
+import { uploadsRouter } from './routes/uploads';
 import { setupWebSocket } from './ws';
 
 const app = new Hono();
@@ -37,6 +38,7 @@ app.route('/api/workspaces', workspacesRouter);
 app.route('/api/invites', invitesRouter);
 app.route('/api/inboxes', inboxesRouter);
 app.route('/api/conversations', conversationsRouter);
+app.route('/api/uploads', uploadsRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
