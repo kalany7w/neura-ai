@@ -91,6 +91,71 @@ conversationsRouter.get('/:id', requireAuth, requireWorkspace, async (c) => {
   return c.json({ conversation: conv });
 });
 
+// PATCH /api/conversations/:id (status / assign)
+const patchBody = z.object({
+  status: z.enum(['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED']).optional(),
+  assignedAgentId: z.string().nullable().optional(),
+});
+
+conversationsRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const role = c.get('role')!;
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => null);
+  const parsed = patchBody.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+  const conv = await prisma.conversation.findFirst({ where: { id, workspaceId } });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+
+  // Agent só atualiza próprias ou sem agente; e não pode mudar assignedAgentId pra outro
+  if (role === 'AGENT') {
+    if (conv.assignedAgentId && conv.assignedAgentId !== userId) {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    if (parsed.data.assignedAgentId && parsed.data.assignedAgentId !== userId) {
+      return c.json({ error: 'forbidden_assignment' }, 403);
+    }
+  }
+
+  const data: Prisma.ConversationUpdateInput = {};
+  if (parsed.data.status !== undefined) data.status = parsed.data.status;
+  if (parsed.data.assignedAgentId !== undefined) {
+    // Set ou unset agent
+    data.assignedAgentId = parsed.data.assignedAgentId;
+  }
+
+  const updated = await prisma.conversation.update({
+    where: { id },
+    data,
+  });
+
+  await publishEvent(workspaceId, 'conversations', 'conversation.updated', {
+    conversationId: updated.id,
+    status: updated.status,
+    assignedAgentId: updated.assignedAgentId,
+  });
+  return c.json({ conversation: updated });
+});
+
+// POST /api/conversations/:id/read — zera unreadCount
+conversationsRouter.post('/:id/read', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({ where: { id, workspaceId } });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (conv.unreadCount === 0) return c.json({ ok: true });
+  const updated = await prisma.conversation.update({
+    where: { id },
+    data: { unreadCount: 0 },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.read', {
+    conversationId: updated.id,
+  });
+  return c.json({ ok: true });
+});
+
 // POST /api/conversations/:id/messages (envia)
 const sendBody = z
   .object({
