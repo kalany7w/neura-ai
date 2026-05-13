@@ -19,6 +19,7 @@ import { notesRouter } from './routes/notes';
 import { templatesRouter } from './routes/templates';
 import { integrationsRouter } from './routes/integrations';
 import { dashboardRouter } from './routes/dashboard';
+import { automationsRouter } from './routes/automations';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
@@ -58,6 +59,7 @@ app.route('/api', notesRouter); // /api/conversations/:id/notes + /api/notes/:id
 app.route('/api/templates', templatesRouter);
 app.route('/api/integrations', integrationsRouter);
 app.route('/api/dashboard', dashboardRouter);
+app.route('/api/automations', automationsRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);

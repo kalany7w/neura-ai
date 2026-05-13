@@ -16,6 +16,7 @@ import {
   WifiOff,
   Settings,
   Zap,
+  Bot,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -59,6 +60,7 @@ const groups: NavGroup[] = [
       { href: '/settings/templates', label: 'Templates', icon: FileText },
       { href: '/settings/labels', label: 'Etiquetas', icon: Tag, roles: ['ADMIN'] },
       { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN'] },
+      { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
     ],
   },
