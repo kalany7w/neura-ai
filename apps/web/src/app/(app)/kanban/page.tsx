@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { CardDetailSheet } from '@/components/kanban/card-detail-sheet';
 import { ManageFunnelDialog } from '@/components/kanban/manage-funnel-dialog';
+import { BulkActionsBar } from '@/components/kanban/bulk-actions-bar';
 
 type StageOutcome = 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
 
@@ -339,11 +340,17 @@ function DraggableCard({
   members,
   funnelId,
   onOpen,
+  selected,
+  onToggleSelect,
+  anySelected,
 }: {
   card: Card;
   members: Member[];
   funnelId: string;
   onOpen: (id: string) => void;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
+  anySelected: boolean;
 }) {
   const activeSnooze = card.snoozes?.[0];
   const isSnoozed = !!activeSnooze;
@@ -369,7 +376,9 @@ function DraggableCard({
       style={style}
       className={`group relative rounded-xl border bg-card p-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition before:absolute before:left-0 before:top-3 before:bottom-3 before:w-1 before:rounded-r-full ${stripeClass} hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:-translate-y-px ${
         isDragging ? 'opacity-50 rotate-1' : ''
-      } ${isSnoozed ? 'bg-gradient-to-br from-amber-50/40 to-card border-amber-200/60' : ''}`}
+      } ${isSnoozed ? 'bg-gradient-to-br from-amber-50/40 to-card border-amber-200/60' : ''} ${
+        selected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
+      }`}
     >
       <div
         {...(isSnoozed ? {} : listeners)}
@@ -473,6 +482,23 @@ function DraggableCard({
         )}
       </div>
 
+      {/* Checkbox de seleção — sempre visível em hover, ou se já há seleção */}
+      <div
+        className={`absolute left-2 top-2 z-10 ${anySelected || selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        data-card-menu
+      >
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(card.id)}
+          className="h-4 w-4 cursor-pointer rounded border-2 bg-card"
+          title="Selecionar pra ação em lote"
+        />
+      </div>
+
       <div className="absolute right-2 top-2" data-card-menu>
         <CardActionsMenu
           card={card}
@@ -491,12 +517,16 @@ function StageColumn({
   members,
   funnelId,
   onOpen,
+  selectedIds,
+  onToggleSelect,
 }: {
   stage: Stage;
   cards: Card[];
   members: Member[];
   funnelId: string;
   onOpen: (id: string) => void;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = cards.length;
@@ -553,6 +583,9 @@ function StageColumn({
             members={members}
             funnelId={funnelId}
             onOpen={onOpen}
+            selected={selectedIds.has(c.id)}
+            onToggleSelect={onToggleSelect}
+            anySelected={selectedIds.size > 0}
           />
         ))}
         {cards.length === 0 && (
@@ -592,6 +625,20 @@ export default function KanbanPage() {
   const [saveFilterOpen, setSaveFilterOpen] = useState(false);
   const [detailCardId, setDetailCardId] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
 
   const { data: funnelsData, isLoading: funnelsLoading } = useQuery<{ funnels: Funnel[] }>({
     queryKey: ['funnels'],
@@ -825,10 +872,23 @@ export default function KanbanPage() {
               members={members}
               funnelId={funnel.id}
               onOpen={setDetailCardId}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>
       </DndContext>
+
+      {funnel && (
+        <BulkActionsBar
+          selectedIds={Array.from(selectedIds)}
+          stages={funnel.stages}
+          members={members}
+          labels={labelsData?.labels ?? []}
+          onClear={clearSelection}
+          funnelId={funnel.id}
+        />
+      )}
 
       <CardDetailSheet
         cardId={detailCardId}

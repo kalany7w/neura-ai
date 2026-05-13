@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Search, Plus, Phone } from 'lucide-react';
+import { Search, Plus, Phone, Upload } from 'lucide-react';
+import { ImportContactsDialog } from '@/components/contacts/import-contacts-dialog';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
@@ -48,6 +49,7 @@ export default function ContactsPage() {
   const [search, setSearch] = useState('');
   const [labelId, setLabelId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [importOpen, setImportOpen] = useState(false);
   const perPage = 25;
 
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
@@ -107,6 +109,11 @@ export default function ContactsPage() {
             Pessoas que conversaram com você. Etiquete pra filtrar.
           </p>
         </div>
+        <div className="flex gap-2">
+        <Button variant="outline" onClick={() => setImportOpen(true)}>
+          <Upload className="h-4 w-4" />
+          Importar CSV
+        </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -141,7 +148,10 @@ export default function ContactsPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
+
+      <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-64 max-w-md">

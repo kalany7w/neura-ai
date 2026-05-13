@@ -153,6 +153,99 @@ contactsRouter.patch(
   },
 );
 
+// POST /api/contacts/import — importa lote de contatos
+const importContactSchema = z.object({
+  phoneNumber: e164,
+  name: z.string().min(1).max(120).optional().nullable(),
+  customAttrs: z.record(z.string(), z.unknown()).optional(),
+});
+const importBodySchema = z.object({
+  contacts: z.array(importContactSchema).min(1).max(5000),
+  skipDuplicates: z.boolean().default(true),
+});
+
+contactsRouter.post(
+  '/import',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('contact.create'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = importBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    }
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const { contacts, skipDuplicates } = parsed.data;
+
+    // Dedup pelo phoneNumber dentro do lote
+    const seen = new Set<string>();
+    const unique = contacts.filter((c) => {
+      if (seen.has(c.phoneNumber)) return false;
+      seen.add(c.phoneNumber);
+      return true;
+    });
+
+    let imported = 0;
+    let skipped = 0;
+    const errors: Array<{ phoneNumber: string; reason: string }> = [];
+
+    // Em lote: createMany com skipDuplicates Prisma — mais rápido
+    if (skipDuplicates) {
+      const result = await prisma.contact.createMany({
+        data: unique.map((u) => ({
+          workspaceId,
+          phoneNumber: u.phoneNumber,
+          name: u.name ?? null,
+          customAttrs: (u.customAttrs ?? undefined) as never,
+        })),
+        skipDuplicates: true,
+      });
+      imported = result.count;
+      skipped = unique.length - imported;
+    } else {
+      // Sem skipDuplicates: itera pra reportar duplicatas individualmente
+      for (const u of unique) {
+        try {
+          await prisma.contact.create({
+            data: {
+              workspaceId,
+              phoneNumber: u.phoneNumber,
+              name: u.name ?? null,
+              customAttrs: (u.customAttrs ?? undefined) as never,
+            },
+          });
+          imported++;
+        } catch (err: unknown) {
+          if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+            errors.push({ phoneNumber: u.phoneNumber, reason: 'phone_taken' });
+          } else {
+            errors.push({
+              phoneNumber: u.phoneNumber,
+              reason: err instanceof Error ? err.message : 'unknown',
+            });
+          }
+        }
+      }
+    }
+
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'contact.imported',
+      metadata: { imported, skipped, total: unique.length },
+    });
+
+    return c.json({
+      total: unique.length,
+      imported,
+      skipped,
+      errors,
+    });
+  },
+);
+
 const mergeSchema = z.object({
   primaryId: z.string().min(1),
   secondaryId: z.string().min(1),
