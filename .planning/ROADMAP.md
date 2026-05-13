@@ -19,7 +19,7 @@
 | 1 | Scaffold + auth + multi-tenant + email + audit log + permissões + CI | 6d | ✅ done |
 | 2 | Baileys worker (sessão única → multi) + WS msgs | 8d | ✅ done |
 | 3 | Mídia (MinIO + envio/recepção + thumbnails) | 5d | ✅ done (thumbnails pendentes) |
-| 4 | Inbox UI (conversas + atribuição + notas + templates) + WS atendimento | 5d | 🟡 essencial done (lista+chat+send; notas/templates pendentes) |
+| 4 | Inbox UI (conversas + atribuição + notas + templates) + WS atendimento | 5d | ✅ done (lista+chat+send+notas internas+templates com shortcuts/placeholders) |
 | 5 | Contatos + labels + custom attrs + WS labels/contato | 2.5d | ✅ done |
 | 6 | Kanban core (funis + stages + drag-drop + modal) + WS cards | 5d | ✅ done + auto-card creation |
 | 7 | Diferenciais kanban (busca + filtro etiqueta + SLA + preview msg + badges + atribuição inline) + WS SLA/unread | 6d | 🟡 SLA periódico + busca + filtro etiqueta + preview + badge done; atribuição inline pendente |
