@@ -120,24 +120,82 @@ conversationsRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
   }
 
   const data: Prisma.ConversationUpdateInput = {};
+  const statusChanged = parsed.data.status !== undefined && parsed.data.status !== conv.status;
+  const assignmentChanged =
+    parsed.data.assignedAgentId !== undefined && parsed.data.assignedAgentId !== conv.assignedAgentId;
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
-  if (parsed.data.assignedAgentId !== undefined) {
-    // Set ou unset agent
-    data.assignedAgentId = parsed.data.assignedAgentId;
+  if (parsed.data.assignedAgentId !== undefined) data.assignedAgentId = parsed.data.assignedAgentId;
+
+  const updated = await prisma.conversation.update({ where: { id }, data });
+
+  if (statusChanged) {
+    await publishEvent(workspaceId, 'conversations', 'conversation.status_changed', {
+      conversationId: updated.id,
+      status: updated.status,
+      previousStatus: conv.status,
+    });
   }
-
-  const updated = await prisma.conversation.update({
-    where: { id },
-    data,
-  });
-
-  await publishEvent(workspaceId, 'conversations', 'conversation.updated', {
-    conversationId: updated.id,
-    status: updated.status,
-    assignedAgentId: updated.assignedAgentId,
-  });
+  if (assignmentChanged) {
+    await publishEvent(workspaceId, 'conversations', 'conversation.assigned', {
+      conversationId: updated.id,
+      assignedAgentId: updated.assignedAgentId,
+      previousAgentId: conv.assignedAgentId,
+    });
+  }
   return c.json({ conversation: updated });
 });
+
+// POST /api/conversations — cria conversa (idempotente: retorna existente se houver pra contact+inbox)
+const createBody = z.object({
+  contactId: z.string().min(1),
+  inboxId: z.string().min(1),
+});
+
+conversationsRouter.post(
+  '/',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('conversation.send_message'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const body = await c.req.json().catch(() => null);
+    const parsed = createBody.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+
+    const [contact, inbox] = await Promise.all([
+      prisma.contact.findFirst({ where: { id: parsed.data.contactId, workspaceId } }),
+      prisma.inbox.findFirst({ where: { id: parsed.data.inboxId, workspaceId } }),
+    ]);
+    if (!contact || !inbox) return c.json({ error: 'not_found' }, 404);
+
+    // Reusa conversa existente OPEN/PENDING/SNOOZED pra mesmo contato+inbox
+    const existing = await prisma.conversation.findFirst({
+      where: {
+        workspaceId,
+        contactId: contact.id,
+        inboxId: inbox.id,
+        status: { in: ['OPEN', 'PENDING', 'SNOOZED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existing) return c.json({ conversation: existing, reused: true });
+
+    const conv = await prisma.conversation.create({
+      data: {
+        workspaceId,
+        contactId: contact.id,
+        inboxId: inbox.id,
+        status: 'OPEN',
+      },
+    });
+    await publishEvent(workspaceId, 'conversations', 'conversation.created', {
+      conversationId: conv.id,
+      contactId: contact.id,
+      inboxId: inbox.id,
+    });
+    return c.json({ conversation: conv, reused: false }, 201);
+  },
+);
 
 // POST /api/conversations/:id/read — zera unreadCount
 conversationsRouter.post('/:id/read', requireAuth, requireWorkspace, async (c) => {

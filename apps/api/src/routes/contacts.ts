@@ -86,19 +86,36 @@ contactsRouter.post(
 
 contactsRouter.get('/:id', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
   const contact = await prisma.contact.findFirst({
-    where: { id: c.req.param('id'), workspaceId },
+    where: { id, workspaceId },
     include: {
       labels: { include: { label: true } },
       conversations: {
         orderBy: { lastMessageAt: 'desc' },
-        include: { inbox: { select: { name: true } } },
+        include: { inbox: { select: { name: true, id: true } } },
         take: 50,
       },
     },
   });
   if (!contact) return c.json({ error: 'not_found' }, 404);
-  return c.json({ contact });
+
+  // Cards kanban vinculados a alguma conversa deste contato
+  const convIds = contact.conversations.map((c) => c.id);
+  const cards =
+    convIds.length === 0
+      ? []
+      : await prisma.card.findMany({
+          where: { workspaceId, conversationId: { in: convIds } },
+          include: {
+            labels: { include: { label: true } },
+            funnel: { select: { id: true, name: true } },
+            stage: { select: { id: true, name: true, color: true, outcome: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+  return c.json({ contact, cards });
 });
 
 const updateSchema = z.object({

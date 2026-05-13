@@ -18,6 +18,7 @@ import { savedFiltersRouter } from './routes/saved-filters';
 import { notesRouter } from './routes/notes';
 import { templatesRouter } from './routes/templates';
 import { integrationsRouter } from './routes/integrations';
+import { dashboardRouter } from './routes/dashboard';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
@@ -55,6 +56,7 @@ app.route('/api/saved-filters', savedFiltersRouter);
 app.route('/api', notesRouter); // /api/conversations/:id/notes + /api/notes/:id
 app.route('/api/templates', templatesRouter);
 app.route('/api/integrations', integrationsRouter);
+app.route('/api/dashboard', dashboardRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
