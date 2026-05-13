@@ -222,6 +222,7 @@ const sendBody = z
     mediaUrl: z.string().url().optional(),
     mimeType: z.string().max(120).optional(),
     fileName: z.string().max(255).optional(),
+    replyToMessageId: z.string().optional(),
   })
   .refine(
     (data) => {
@@ -257,6 +258,17 @@ conversationsRouter.post(
       return c.json({ error: 'inbox_not_connected' }, 409);
     }
 
+    // Se reply, valida que a msg referenciada existe na mesma conversa
+    let quotedWaMessageId: string | undefined;
+    if (parsed.data.replyToMessageId) {
+      const quoted = await prisma.message.findFirst({
+        where: { id: parsed.data.replyToMessageId, conversationId: conv.id },
+        select: { id: true, waMessageId: true },
+      });
+      if (!quoted) return c.json({ error: 'reply_target_not_found' }, 404);
+      quotedWaMessageId = quoted.waMessageId ?? undefined;
+    }
+
     // Cria Message PENDING
     const msg = await prisma.message.create({
       data: {
@@ -266,6 +278,7 @@ conversationsRouter.post(
         content: parsed.data.text ?? null,
         mediaUrl: parsed.data.mediaUrl ?? null,
         mediaMimeType: parsed.data.mimeType ?? null,
+        replyToId: parsed.data.replyToMessageId ?? null,
         status: 'PENDING',
       },
     });
@@ -304,6 +317,7 @@ conversationsRouter.post(
       mediaUrl: parsed.data.mediaUrl,
       mimeType: parsed.data.mimeType,
       fileName: parsed.data.fileName,
+      quotedWaMessageId,
     });
 
     await publishEvent(workspaceId, 'messages', 'message.new', {

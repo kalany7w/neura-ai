@@ -8,15 +8,18 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  CornerDownRight,
   FileText,
   MessageSquare,
   PauseCircle,
   PlayCircle,
+  Reply,
   Send,
   StickyNote,
   Trash2,
   UserCheck,
   UserX,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -131,6 +134,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<'reply' | 'note'>('reply');
   const [showTemplates, setShowTemplates] = useState(false);
+  const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
 
   const { data, isLoading } = useQuery<{ conversation: ConversationDetail }>({
     queryKey: ['conversation', id],
@@ -225,9 +229,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         const expanded = maybeExpandShortcut(text);
         await api(`/api/conversations/${id}/messages`, {
           method: 'POST',
-          body: JSON.stringify({ type: 'TEXT', text: expanded }),
+          body: JSON.stringify({
+            type: 'TEXT',
+            text: expanded,
+            replyToMessageId: replyTo?.id,
+          }),
         });
         setText('');
+        setReplyTo(null);
         await qc.invalidateQueries({ queryKey: ['conversation', id] });
       }
     } catch (err) {
@@ -404,13 +413,27 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           ) : (
             <div
               key={item.id}
-              className={`flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
+              className={`group flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
             >
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTo(item);
+                  setMode('reply');
+                  inputRef.current?.focus();
+                }}
+                title="Responder"
+                className={`order-2 self-center mx-1 rounded-full p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground ${
+                  item.direction === 'OUTBOUND' ? 'order-1' : 'order-2'
+                }`}
+              >
+                <Reply className="h-3.5 w-3.5" />
+              </button>
               <div
                 className={`max-w-[70%] rounded-lg px-3 py-2 text-sm ${
                   item.direction === 'OUTBOUND'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-foreground'
+                    ? 'bg-primary text-primary-foreground order-2'
+                    : 'bg-muted text-foreground order-1'
                 }`}
               >
                 {item.type === 'IMAGE' && item.mediaUrl && (
@@ -459,6 +482,28 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           <p className="text-xs text-amber-600">
             Inbox não conectada — conecte em /inboxes antes de responder.
           </p>
+        )}
+
+        {/* Reply preview */}
+        {replyTo && mode === 'reply' && (
+          <div className="flex items-start gap-2 rounded-md border-l-2 border-primary bg-muted/40 px-2 py-1.5">
+            <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Respondendo {replyTo.direction === 'OUTBOUND' ? 'você' : conv.contact.name ?? 'contato'}
+              </p>
+              <p className="line-clamp-2 text-xs text-muted-foreground">
+                {replyTo.content ?? `[${replyTo.type}]`}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         )}
 
         {showTemplates && templatesData?.templates && (

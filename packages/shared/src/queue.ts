@@ -23,4 +23,8 @@ export interface SendMessageJob {
   mediaUrl?: string;
   mimeType?: string;
   fileName?: string;
+  /** Reply: waMessageId da mensagem original (Baileys key.id) */
+  quotedWaMessageId?: string;
+  /** Reply: participant JID (grupos) — opcional */
+  quotedParticipant?: string;
 }
