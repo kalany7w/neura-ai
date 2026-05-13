@@ -76,18 +76,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Conversas
               </Link>
               <Link
+                href="/contacts"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Contatos
+              </Link>
+              <Link
                 href="/inboxes"
                 className="text-muted-foreground hover:text-foreground"
               >
                 Inboxes
               </Link>
               {activeWorkspace && activeWorkspace.role === 'ADMIN' && (
-                <Link
-                  href="/settings/members"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  Membros
-                </Link>
+                <>
+                  <Link
+                    href="/settings/labels"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Etiquetas
+                  </Link>
+                  <Link
+                    href="/settings/members"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Membros
+                  </Link>
+                </>
               )}
             </nav>
           </div>
