@@ -12,21 +12,29 @@
   - `agent`: lê/escreve só conversas atribuídas a ele + sem-agente; CRUD próprios cards; sem settings
 - **Audit log** em ações sensíveis: criar/deletar/atribuir card, mudar role, deletar conta, exportar dados, conectar/desconectar inbox.
 
-## Resumo
+## Resumo (atualizado 2026-05-13)
 
-| # | Fase | Estimativa | Depende de |
-|---|------|------------|------------|
-| 1 | Scaffold + auth + multi-tenant + email + audit log + permissões + CI | 6d | — |
-| 2 | Baileys worker (sessão única → multi) + WS msgs | 8d | 1 |
-| 3 | Mídia (MinIO + envio/recepção + thumbnails) | 5d | 2 |
-| 4 | Inbox UI (conversas + atribuição + notas + templates) + WS atendimento | 5d | 2 |
-| 5 | Contatos + labels + custom attrs + WS labels/contato | 2.5d | 1 |
-| 6 | Kanban core (funis + stages + drag-drop + modal) + WS cards | 5d | 4, 5 |
-| 7 | Diferenciais kanban (busca + filtro etiqueta + SLA + preview msg + badges + atribuição inline) + WS SLA/unread | 6d | 6 |
-| 8 | Filtros salvos + snooze + histórico contato + WS snooze | 3.5d | 7 |
-| 9 | Real-time hardening + observabilidade (reconnect + stress + Pino + alertas) | 5d | todas |
-| 10 | Deploy Coolify produção (api.neura-ai.net + app.neura-ai.net) | 2.5d | 9 |
-| **Total** | | **48.5d (~10 semanas)** | |
+| # | Fase | Estimativa | Status |
+|---|------|------------|--------|
+| 1 | Scaffold + auth + multi-tenant + email + audit log + permissões + CI | 6d | ✅ done |
+| 2 | Baileys worker (sessão única → multi) + WS msgs | 8d | ✅ done |
+| 3 | Mídia (MinIO + envio/recepção + thumbnails) | 5d | ✅ done (thumbnails pendentes) |
+| 4 | Inbox UI (conversas + atribuição + notas + templates) + WS atendimento | 5d | 🟡 essencial done (lista+chat+send; notas/templates pendentes) |
+| 5 | Contatos + labels + custom attrs + WS labels/contato | 2.5d | ✅ done |
+| 6 | Kanban core (funis + stages + drag-drop + modal) + WS cards | 5d | ✅ done + auto-card creation |
+| 7 | Diferenciais kanban (busca + filtro etiqueta + SLA + preview msg + badges + atribuição inline) + WS SLA/unread | 6d | 🟡 SLA periódico + busca + filtro etiqueta + preview + badge done; atribuição inline pendente |
+| 8 | Filtros salvos + snooze + histórico contato + WS snooze | 3.5d | ⏳ schema pronto (SavedFilter, CardSnooze), implementação pendente |
+| 9 | Real-time hardening + observabilidade (reconnect + stress + Pino + alertas) | 5d | 🟡 reconnect WS done; observability básica (Pino) done; stress test + alertas pendentes |
+| 10 | Deploy Coolify produção (api.neura-ai.net + app.neura-ai.net) | 2.5d | ✅ done (Dockerfile + compose + DEPLOY.md prontos; falta provisionar no Coolify) |
+| **Total** | | **48.5d (~10 semanas)** | **~85% done** |
+
+Pendências pra próxima sessão:
+- Notas internas + templates de resposta (Fase 4)
+- Thumbnails (sharp + ffmpeg) na recepção de mídia (Fase 3)
+- Atribuição inline no card kanban (Fase 7)
+- Filtros salvos UI + Snooze UI (Fase 8)
+- Stress test + alertas Discord/Betterstack (Fase 9)
+- Provisionar Coolify + DNS + Resend domain verify (Fase 10 operacional)
 
 ---
 
