@@ -23,9 +23,12 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members   Membership[]
-  invites   Invite[]
-  auditLogs AuditLog[]
+  members       Membership[]
+  invites       Invite[]
+  auditLogs     AuditLog[]
+  inboxes       Inbox[]
+  contacts      Contact[]
+  conversations Conversation[]
 
   @@map("workspaces")
 }
@@ -162,4 +165,175 @@ model Verification {
   updatedAt  DateTime @updatedAt
 
   @@map("verifications")
+}
+
+// ============================================
+// CHANNELS / INBOXES (Fase 2)
+// ============================================
+
+enum InboxType {
+  WHATSAPP
+}
+
+enum InboxStatus {
+  DISCONNECTED
+  CONNECTING
+  AWAITING_QR
+  CONNECTED
+  BANNED
+  ERROR
+}
+
+model Inbox {
+  id          String      @id @default(cuid())
+  workspaceId String
+  name        String
+  type        InboxType   @default(WHATSAPP)
+  status      InboxStatus @default(DISCONNECTED)
+  // Configurações flexíveis: padrões de auto-roteamento, default funnel, etc.
+  settings    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  waSession     WaSession?
+  conversations Conversation[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@map("inboxes")
+}
+
+model WaSession {
+  id      String @id @default(cuid())
+  inboxId String @unique
+  // Preenchido após conectar (formato E.164 com prefixo "+")
+  phoneNumber String?
+  // Texto grande criptografado AES-256-GCM (formato iv:tag:ciphertext em hex)
+  // Contém credentials.json + keys do Baileys serializados
+  encryptedAuthState String? @db.Text
+  // QR Code temporário (data URL) — limpo ao conectar
+  qrCode             String? @db.Text
+  qrExpiresAt        DateTime?
+  lastConnectedAt    DateTime?
+  lastError          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  inbox Inbox @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+
+  @@map("wa_sessions")
+}
+
+// ============================================
+// CONTACTS (Fase 2/5)
+// ============================================
+
+model Contact {
+  id          String   @id @default(cuid())
+  workspaceId String
+  // Formato E.164 com prefixo "+" (ex: +5511999999999)
+  phoneNumber String
+  name        String?
+  avatarUrl   String?
+  // Custom attributes — populado na Fase 5 com defs por workspace
+  customAttrs Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([workspaceId, phoneNumber])
+  @@index([workspaceId])
+  @@map("contacts")
+}
+
+// ============================================
+// CONVERSATIONS + MESSAGES (Fase 2/4)
+// ============================================
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  SNOOZED
+}
+
+model Conversation {
+  id              String             @id @default(cuid())
+  workspaceId     String
+  inboxId         String
+  contactId       String
+  status          ConversationStatus @default(OPEN)
+  assignedAgentId String?
+  lastMessageAt   DateTime?
+  unreadCount     Int                @default(0)
+  snoozeUntil     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inbox     Inbox     @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@index([workspaceId, status, lastMessageAt])
+  @@index([assignedAgentId])
+  @@index([contactId])
+  @@index([inboxId])
+  @@map("conversations")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  LOCATION
+  CONTACT
+  STICKER
+  SYSTEM
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  // ID retornado pelo Baileys (key.id) — único por sessão/jid
+  waMessageId    String?
+  direction      MessageDirection
+  type           MessageType      @default(TEXT)
+  content        String?          @db.Text
+  // Preenchido pra mídia (Fase 3 vai apontar pro MinIO)
+  mediaUrl       String?
+  mediaMimeType  String?
+  mediaSize      Int?
+  // Resposta a outra mensagem (replied_to no Baileys)
+  replyToId      String?
+  status         MessageStatus    @default(PENDING)
+  error          String?
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([waMessageId])
+  @@map("messages")
 }

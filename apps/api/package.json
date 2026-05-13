@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
+    "@hono/node-ws": "^1.3.1",
     "@neura/database": "workspace:*",
     "@neura/shared": "workspace:*",
     "better-auth": "^1.4.0",
+    "bullmq": "^5.76.8",
     "hono": "^4.8.0",
     "ioredis": "^5.4.1",
     "pino": "^9.5.0",

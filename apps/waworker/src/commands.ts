@@ -1,0 +1,51 @@
+import { Redis } from 'ioredis';
+import { env } from './env';
+import { logger } from './logger';
+import { sessionManager } from './baileys/manager';
+
+const subscriber = new Redis(env.REDIS_URL);
+
+const commandSchema = (() => {
+  // Lazy import to avoid circular issues
+  return null;
+})();
+
+interface Command {
+  cmd: 'session.start' | 'session.stop';
+  inboxId: string;
+}
+
+export function startCommandsListener(): void {
+  subscriber.subscribe('worker:commands', (err) => {
+    if (err) {
+      logger.error({ err }, 'Failed to subscribe worker:commands');
+      return;
+    }
+    logger.info('Subscribed to worker:commands');
+  });
+
+  subscriber.on('message', async (channel, raw) => {
+    if (channel !== 'worker:commands') return;
+    try {
+      const cmd: Command = JSON.parse(raw);
+      logger.info({ cmd }, 'Received command');
+      switch (cmd.cmd) {
+        case 'session.start':
+          await sessionManager.start(cmd.inboxId);
+          break;
+        case 'session.stop':
+          await sessionManager.stop(cmd.inboxId);
+          break;
+        default:
+          logger.warn({ cmd }, 'Unknown command');
+      }
+    } catch (err) {
+      logger.error({ err, raw }, 'Failed to handle command');
+    }
+  });
+}
+
+export async function shutdownCommandsListener(): Promise<void> {
+  await subscriber.unsubscribe('worker:commands');
+  await subscriber.quit();
+}
