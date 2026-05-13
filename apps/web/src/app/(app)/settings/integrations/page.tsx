@@ -442,19 +442,24 @@ function WebhookFormDialog({
           </div>
           <div className="space-y-2">
             <Label>Eventos</Label>
-            <div className="grid grid-cols-1 gap-1.5 rounded-md border p-2 sm:grid-cols-2 max-h-64 overflow-y-auto">
+            <div className="grid grid-cols-1 gap-1 rounded-md border p-1.5 sm:grid-cols-2 max-h-72 overflow-y-auto">
               {availableEvents.map((ev) => (
                 <label
                   key={ev}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted/50"
+                  className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
                 >
                   <input
                     type="checkbox"
                     checked={selected.has(ev)}
                     onChange={() => toggleEvent(ev)}
+                    className="mt-1"
                   />
-                  <span className="flex-1">{EVENT_LABELS[ev] ?? ev}</span>
-                  <code className="font-mono text-[10px] text-muted-foreground">{ev}</code>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="text-sm font-medium">{EVENT_LABELS[ev] ?? ev}</p>
+                    <code className="block font-mono text-[10px] text-muted-foreground truncate">
+                      {ev}
+                    </code>
+                  </div>
                 </label>
               ))}
             </div>
