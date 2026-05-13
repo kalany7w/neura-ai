@@ -13,6 +13,7 @@ import { conversationsRouter } from './routes/conversations';
 import { uploadsRouter } from './routes/uploads';
 import { labelsRouter } from './routes/labels';
 import { contactsRouter } from './routes/contacts';
+import { kanbanRouter } from './routes/kanban';
 import { setupWebSocket } from './ws';
 
 const app = new Hono();
@@ -43,6 +44,7 @@ app.route('/api/conversations', conversationsRouter);
 app.route('/api/uploads', uploadsRouter);
 app.route('/api/labels', labelsRouter);
 app.route('/api/contacts', contactsRouter);
+app.route('/api/kanban', kanbanRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);

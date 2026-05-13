@@ -76,6 +76,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 Conversas
               </Link>
               <Link
+                href="/kanban"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Kanban
+              </Link>
+              <Link
                 href="/contacts"
                 className="text-muted-foreground hover:text-foreground"
               >
