@@ -35,6 +35,7 @@ model Workspace {
   cards               Card[]
   messageTemplates    MessageTemplate[]
   webhooks            Webhook[]
+  automationRules     AutomationRule[]
 
   @@map("workspaces")
 }
@@ -648,4 +649,30 @@ model Webhook {
 
   @@index([workspaceId])
   @@map("webhooks")
+}
+
+// ============================================
+// AUTOMATION RULES (regras "se X então Y")
+// ============================================
+
+model AutomationRule {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  trigger     String   // 'conversation.created' | 'message.new' | 'card.moved' | ...
+  conditions  Json     // [{ field: 'message.text', op: 'contains', value: 'preço' }, ...]
+  actions     Json     // [{ kind: 'assign_agent', userId: 'xxx' }, ...]
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0) // maior = roda primeiro
+  runCount    Int      @default(0)
+  lastFiredAt DateTime?
+  lastError   String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, trigger, enabled])
+  @@map("automation_rules")
 }
