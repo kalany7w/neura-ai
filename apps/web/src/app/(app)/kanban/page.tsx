@@ -23,6 +23,7 @@ import {
   Plus,
   Save,
   Search,
+  Settings2,
   SlidersHorizontal,
   Trash2,
   TrendingUp,
@@ -57,6 +58,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { CardDetailSheet } from '@/components/kanban/card-detail-sheet';
+import { ManageFunnelDialog } from '@/components/kanban/manage-funnel-dialog';
 
 interface Stage {
   id: string;
@@ -573,6 +575,7 @@ export default function KanbanPage() {
   const [createFunnelOpen, setCreateFunnelOpen] = useState(false);
   const [saveFilterOpen, setSaveFilterOpen] = useState(false);
   const [detailCardId, setDetailCardId] = useState<string | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const { data: funnelsData, isLoading: funnelsLoading } = useQuery<{ funnels: Funnel[] }>({
     queryKey: ['funnels'],
@@ -737,6 +740,10 @@ export default function KanbanPage() {
             funnelId={funnelId}
             onChange={setFunnelId}
           />
+          <Button size="sm" variant="outline" onClick={() => setManageOpen(true)} title="Gerenciar funil">
+            <Settings2 className="h-3.5 w-3.5" />
+            Gerenciar
+          </Button>
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
           <div className="hidden md:flex items-center gap-4 pl-3 ml-1 border-l text-[11px] text-muted-foreground">
             <span>
@@ -813,6 +820,12 @@ export default function KanbanPage() {
         onOpenChange={(v) => !v && setDetailCardId(null)}
         members={members}
         allLabels={labelsData?.labels ?? []}
+      />
+
+      <ManageFunnelDialog
+        funnel={funnel ?? null}
+        open={manageOpen}
+        onOpenChange={setManageOpen}
       />
     </div>
   );
