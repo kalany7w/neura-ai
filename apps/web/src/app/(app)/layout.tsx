@@ -8,6 +8,7 @@ import { LogOut } from 'lucide-react';
 import { signOut, useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { RealtimeProvider } from '@/components/realtime-provider';
 
 interface WorkspaceListItem {
   id: string;
@@ -50,6 +51,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeWorkspace = workspaces?.workspaces[0];
 
   return (
+    <RealtimeProvider>
     <div className="flex min-h-screen flex-col">
       <header className="border-b bg-background">
         <div className="container flex h-14 items-center justify-between">
@@ -66,6 +68,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 className="text-muted-foreground hover:text-foreground"
               >
                 Dashboard
+              </Link>
+              <Link
+                href="/inboxes"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Inboxes
               </Link>
               {activeWorkspace && activeWorkspace.role === 'ADMIN' && (
                 <Link
@@ -96,5 +104,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </header>
       <main className="flex-1 container py-8">{children}</main>
     </div>
+    </RealtimeProvider>
   );
 }

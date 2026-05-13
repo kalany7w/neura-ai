@@ -1,7 +1,32 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": ["**/.env"],
-  "globalEnv": ["NODE_ENV"],
+  "globalEnv": [
+    "NODE_ENV",
+    "LOG_LEVEL",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "ENCRYPTION_KEY",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "TRUSTED_ORIGINS",
+    "RESEND_API_KEY",
+    "RESEND_FROM",
+    "RESEND_FROM_NAME",
+    "API_PORT",
+    "WEB_PORT",
+    "WAWORKER_PORT",
+    "RATE_LIMIT_LOGIN_MAX",
+    "RATE_LIMIT_LOGIN_WINDOW_SEC",
+    "MINIO_ENDPOINT",
+    "MINIO_PORT",
+    "MINIO_ACCESS_KEY",
+    "MINIO_SECRET_KEY",
+    "MINIO_BUCKET",
+    "MINIO_USE_SSL",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_WS_URL"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

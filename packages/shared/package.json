@@ -19,6 +19,14 @@
     "./env": {
       "types": "./src/env.ts",
       "default": "./src/env.ts"
+    },
+    "./crypto": {
+      "types": "./src/crypto.ts",
+      "default": "./src/crypto.ts"
+    },
+    "./queue": {
+      "types": "./src/queue.ts",
+      "default": "./src/queue.ts"
     }
   },
   "scripts": {

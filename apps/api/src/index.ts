@@ -8,6 +8,9 @@ import { logger } from './logger';
 import { healthRouter } from './routes/health';
 import { workspacesRouter } from './routes/workspaces';
 import { invitesRouter } from './routes/invites';
+import { inboxesRouter } from './routes/inboxes';
+import { conversationsRouter } from './routes/conversations';
+import { setupWebSocket } from './ws';
 
 const app = new Hono();
 
@@ -32,6 +35,11 @@ app.route('/health', healthRouter);
 // Domain routes
 app.route('/api/workspaces', workspacesRouter);
 app.route('/api/invites', invitesRouter);
+app.route('/api/inboxes', inboxesRouter);
+app.route('/api/conversations', conversationsRouter);
+
+// WebSocket /ws — setup antes do serve()
+const { injectWebSocket } = setupWebSocket(app);
 
 // 404
 app.notFound((c) => c.json({ error: 'not_found' }, 404));
@@ -43,8 +51,9 @@ app.onError((err, c) => {
 });
 
 const port = env.API_PORT;
-serve({ fetch: app.fetch, port }, (info) => {
+const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port, env: env.NODE_ENV }, '🚀 Neura API ready');
 });
+injectWebSocket(server);
 
 export { app };

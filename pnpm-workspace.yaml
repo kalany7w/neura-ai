@@ -9,3 +9,9 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
+  "@whiskeysockets/baileys": true
+  msgpackr-extract: true
+  protobufjs: true
+
+# Baileys traz libsignal via git repo (subdep) — pnpm 11 bloqueia por default
+blockExoticSubdeps: false
