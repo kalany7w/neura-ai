@@ -52,6 +52,7 @@ interface Card {
   assignedAgentId: string | null;
   slaStatus: string;
   lastMessageAt: string | null;
+  lastMessagePreview: string | null;
   unreadCount: number;
   labels: Array<{ label: { id: string; name: string; color: string } }>;
 }
@@ -84,8 +85,13 @@ function DraggableCard({ card }: { card: Card }) {
       } ${isDragging ? 'opacity-50' : ''}`}
     >
       <p className="font-medium line-clamp-2">{card.title}</p>
+      {card.lastMessagePreview && (
+        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+          {card.lastMessagePreview}
+        </p>
+      )}
       {card.value && (
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
           {Number(card.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
         </p>
       )}

@@ -195,6 +195,7 @@ async function persistInboundMessage(
       orderBy: { lastMessageAt: 'desc' },
     });
 
+    const isNewConversation = !conversation;
     if (!conversation) {
       conversation = await tx.conversation.create({
         data: {
@@ -204,7 +205,38 @@ async function persistInboundMessage(
           status: 'OPEN',
         },
       });
+
+      // Auto-cria card no funil default (primeira stage não-Won/Lost)
+      const defaultFunnel = await tx.funnel.findFirst({
+        where: { workspaceId: ctx.workspaceId, isDefault: true },
+        include: {
+          stages: {
+            where: { isWon: false, isLost: false },
+            orderBy: { order: 'asc' },
+            take: 1,
+          },
+        },
+      });
+      const firstStage = defaultFunnel?.stages[0];
+      if (defaultFunnel && firstStage) {
+        const maxPos = await tx.card.aggregate({
+          where: { stageId: firstStage.id },
+          _max: { position: true },
+        });
+        await tx.card.create({
+          data: {
+            workspaceId: ctx.workspaceId,
+            funnelId: defaultFunnel.id,
+            stageId: firstStage.id,
+            conversationId: conversation.id,
+            title: contact.name ?? phoneNumber,
+            position: (maxPos._max.position ?? -1) + 1,
+          },
+        });
+        // is_new_conversation eventual log via publishEvent fora da tx
+      }
     }
+    void isNewConversation;
 
     // Insere mensagem (idempotente via waMessageId)
     const existing = msg.key.id
