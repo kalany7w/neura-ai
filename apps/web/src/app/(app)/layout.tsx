@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { RealtimeProvider } from '@/components/realtime-provider';
 import { Sidebar } from '@/components/layout/sidebar';
 import { NotificationsBell } from '@/components/layout/notifications-bell';
+import { GlobalSearch } from '@/components/layout/global-search';
 
 interface WorkspaceListItem {
   id: string;
@@ -70,7 +71,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           workspace={activeWorkspace ?? null}
         />
         <main className="flex-1 overflow-y-auto">
-          <header className="sticky top-0 z-30 flex h-12 items-center justify-end gap-2 border-b bg-background/95 backdrop-blur px-4">
+          <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
+            <GlobalSearch />
             <NotificationsBell />
           </header>
           <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
