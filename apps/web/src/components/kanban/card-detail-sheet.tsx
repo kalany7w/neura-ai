@@ -73,13 +73,20 @@ interface CardSnooze {
   reason: string | null;
 }
 
+type StageOutcome = 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+
 interface CardStage {
   id: string;
   name: string;
   color: string;
-  isWon: boolean;
-  isLost: boolean;
+  outcome: StageOutcome;
 }
+
+const OUTCOME_COLOR: Record<Exclude<StageOutcome, null>, string> = {
+  POSITIVE: '#10b981',
+  NEGATIVE: '#ef4444',
+  RISK: '#f59e0b',
+};
 
 interface CardFunnel {
   id: string;
@@ -243,7 +250,7 @@ function CardDetailBody({
   const { card, conversation, history } = data;
   const assignee = members.find((m) => m.userId === card.assignedAgentId);
   const activeSnooze = card.snoozes[0];
-  const stageColor = card.stage.isWon ? '#10b981' : card.stage.isLost ? '#ef4444' : card.stage.color;
+  const stageColor = card.stage.outcome ? OUTCOME_COLOR[card.stage.outcome] : card.stage.color;
   const appliedLabelIds = new Set(card.labels.map((cl) => cl.label.id));
   const availableLabels = allLabels.filter((l) => !appliedLabelIds.has(l.id));
 
@@ -578,7 +585,7 @@ function StageDropdown({
           <span
             className="h-1.5 w-1.5 rounded-full"
             style={{
-              backgroundColor: current.isWon ? '#10b981' : current.isLost ? '#ef4444' : current.color,
+              backgroundColor: current.outcome ? OUTCOME_COLOR[current.outcome] : current.color,
             }}
           />
           {current.name}
@@ -592,7 +599,7 @@ function StageDropdown({
             <span
               className="h-2 w-2 rounded-full"
               style={{
-                backgroundColor: s.isWon ? '#10b981' : s.isLost ? '#ef4444' : s.color,
+                backgroundColor: s.outcome ? OUTCOME_COLOR[s.outcome] : s.color,
               }}
             />
             {s.name}

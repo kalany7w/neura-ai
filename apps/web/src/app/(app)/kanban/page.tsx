@@ -60,14 +60,33 @@ import {
 import { CardDetailSheet } from '@/components/kanban/card-detail-sheet';
 import { ManageFunnelDialog } from '@/components/kanban/manage-funnel-dialog';
 
+type StageOutcome = 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+
 interface Stage {
   id: string;
   name: string;
   color: string;
   order: number;
-  isWon: boolean;
-  isLost: boolean;
+  outcome: StageOutcome;
 }
+
+const OUTCOME_COLOR: Record<Exclude<StageOutcome, null>, string> = {
+  POSITIVE: '#10b981',
+  NEGATIVE: '#ef4444',
+  RISK: '#f59e0b',
+};
+
+const OUTCOME_LABEL: Record<Exclude<StageOutcome, null>, string> = {
+  POSITIVE: 'Positivo',
+  NEGATIVE: 'Negativo',
+  RISK: 'Risco',
+};
+
+const OUTCOME_BADGE_CLASS: Record<Exclude<StageOutcome, null>, string> = {
+  POSITIVE: 'bg-emerald-100 text-emerald-700',
+  NEGATIVE: 'bg-red-100 text-red-700',
+  RISK: 'bg-amber-100 text-amber-800',
+};
 
 interface Funnel {
   id: string;
@@ -482,7 +501,7 @@ function StageColumn({
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = cards.length;
   const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
-  const accent = stage.isWon ? '#10b981' : stage.isLost ? '#ef4444' : stage.color;
+  const accent = stage.outcome ? OUTCOME_COLOR[stage.outcome] : stage.color;
 
   return (
     <div
@@ -508,14 +527,11 @@ function StageColumn({
               {total}
             </span>
           </div>
-          {stage.isWon && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-              Ganho
-            </span>
-          )}
-          {stage.isLost && (
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
-              Perdido
+          {stage.outcome && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${OUTCOME_BADGE_CLASS[stage.outcome]}`}
+            >
+              {OUTCOME_LABEL[stage.outcome]}
             </span>
           )}
         </div>

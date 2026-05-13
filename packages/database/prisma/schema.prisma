@@ -435,16 +435,21 @@ model Funnel {
   @@map("funnels")
 }
 
+enum StageOutcome {
+  POSITIVE // ganho — outcome final positivo (substitui isWon)
+  NEGATIVE // perda — outcome final negativo (substitui isLost)
+  RISK     // risco — alerta, card continua ativo (não fecha)
+}
+
 model Stage {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   funnelId  String
   name      String
-  color     String   @default("#94a3b8")
-  order     Int      @default(0)
-  isWon     Boolean  @default(false)
-  isLost    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  color     String        @default("#94a3b8")
+  order     Int           @default(0)
+  outcome   StageOutcome?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   funnel Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   cards  Card[]

@@ -36,10 +36,11 @@ export const slaQueue = new Queue(QUEUE_SLA, {
 });
 
 async function recalcSla(job: Job): Promise<void> {
-  // Carrega cards ativos (sem isWon/isLost) com conversa associada
+  // Carrega cards ativos (stage sem outcome final POSITIVE/NEGATIVE) com conversa
+  // RISK também é considerado ativo — só fecha quem virou outcome final.
   const cards = await prisma.card.findMany({
     where: {
-      stage: { isWon: false, isLost: false },
+      stage: { NOT: { outcome: { in: ['POSITIVE', 'NEGATIVE'] } } },
       conversationId: { not: null },
     },
     select: {
