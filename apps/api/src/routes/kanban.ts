@@ -188,6 +188,7 @@ const listCardsQuery = z.object({
   labelId: z.string().optional(),
   assignedAgentId: z.string().optional(),
   unassigned: z.coerce.boolean().optional(),
+  showSnoozed: z.coerce.boolean().optional(),
 });
 
 kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
@@ -196,7 +197,7 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
   const role = c.get('role')!;
   const userId = c.get('userId');
-  const { funnelId, search, labelId, assignedAgentId, unassigned } = parsed.data;
+  const { funnelId, search, labelId, assignedAgentId, unassigned, showSnoozed } = parsed.data;
 
   const where: Prisma.CardWhereInput = { workspaceId, funnelId };
   if (unassigned) where.assignedAgentId = null;
@@ -212,16 +213,23 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
   }
   if (labelId) where.labels = { some: { labelId } };
 
-  // Hide snoozed (snoozeUntil > now)
+  // Snoozes ativos: snoozeUntil > now AND reactivatedAt = null
   const now = new Date();
-  where.snoozes = {
-    none: { snoozeUntil: { gt: now }, reactivatedAt: null },
-  };
+  if (!showSnoozed) {
+    where.snoozes = {
+      none: { snoozeUntil: { gt: now }, reactivatedAt: null },
+    };
+  }
 
   const cards = await prisma.card.findMany({
     where,
     include: {
       labels: { include: { label: true } },
+      snoozes: {
+        where: { snoozeUntil: { gt: now }, reactivatedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
     },
     orderBy: [{ stageId: 'asc' }, { position: 'asc' }],
   });
@@ -356,6 +364,83 @@ kanbanRouter.delete(
     if (!card) return c.json({ error: 'not_found' }, 404);
     await prisma.card.delete({ where: { id } });
     await publishEvent(workspaceId, 'cards', 'card.deleted', { cardId: id });
+    return c.json({ ok: true });
+  },
+);
+
+// ==================== SNOOZE ====================
+
+const snoozeSchema = z.object({
+  minutes: z.number().int().min(1).max(60 * 24 * 30), // até 30 dias
+  reason: z.string().max(200).optional(),
+});
+
+kanbanRouter.post(
+  '/cards/:id/snooze',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = snoozeSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const card = await prisma.card.findFirst({ where: { id, workspaceId } });
+    if (!card) return c.json({ error: 'not_found' }, 404);
+
+    const now = new Date();
+    const snoozeUntil = new Date(now.getTime() + parsed.data.minutes * 60 * 1000);
+
+    // Desativa snooze ativo anterior (se houver) e cria novo
+    await prisma.$transaction([
+      prisma.cardSnooze.updateMany({
+        where: { cardId: id, reactivatedAt: null, snoozeUntil: { gt: now } },
+        data: { reactivatedAt: now },
+      }),
+      prisma.cardSnooze.create({
+        data: { cardId: id, snoozeUntil, reason: parsed.data.reason },
+      }),
+    ]);
+
+    await publishEvent(workspaceId, 'cards', 'card.snoozed', {
+      cardId: id,
+      snoozeUntil: snoozeUntil.toISOString(),
+    });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'card.snoozed',
+      resource: `Card:${id}`,
+      metadata: { snoozeUntil: snoozeUntil.toISOString(), minutes: parsed.data.minutes },
+    });
+    return c.json({ ok: true, snoozeUntil: snoozeUntil.toISOString() }, 201);
+  },
+);
+
+kanbanRouter.delete(
+  '/cards/:id/snooze',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const card = await prisma.card.findFirst({ where: { id, workspaceId } });
+    if (!card) return c.json({ error: 'not_found' }, 404);
+    const now = new Date();
+    const result = await prisma.cardSnooze.updateMany({
+      where: { cardId: id, reactivatedAt: null, snoozeUntil: { gt: now } },
+      data: { reactivatedAt: now },
+    });
+    if (result.count === 0) return c.json({ error: 'no_active_snooze' }, 404);
+    await publishEvent(workspaceId, 'cards', 'card.snooze_expired', { cardId: id });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'card.snooze_cancelled',
+      resource: `Card:${id}`,
+    });
     return c.json({ ok: true });
   },
 );
