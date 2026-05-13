@@ -337,11 +337,13 @@ async function downloadStoreAndUpdate(
         mediaUrl: result.url,
         mediaMimeType: result.mimeType,
         mediaSize: result.size,
+        thumbnailUrl: result.thumbnailUrl ?? null,
       },
     });
     await publishEvent(ctx.workspaceId, 'messages', 'message.media_ready', {
       messageId: updated.id,
       mediaUrl: updated.mediaUrl,
+      thumbnailUrl: updated.thumbnailUrl,
       mimeType: updated.mediaMimeType,
       size: updated.mediaSize,
     });

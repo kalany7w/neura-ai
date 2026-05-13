@@ -78,6 +78,7 @@ interface MessageItem {
   content: string | null;
   mediaUrl: string | null;
   mediaMimeType: string | null;
+  thumbnailUrl: string | null;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
   createdAt: string;
 }
@@ -414,7 +415,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               >
                 {item.type === 'IMAGE' && item.mediaUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.mediaUrl} alt="" className="mb-1 max-h-64 rounded-md" />
+                  <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="block">
+                    <img
+                      src={item.thumbnailUrl ?? item.mediaUrl}
+                      alt="imagem"
+                      className="mb-1 max-h-64 rounded-md cursor-zoom-in hover:opacity-90"
+                      loading="lazy"
+                    />
+                  </a>
                 )}
                 {item.type === 'AUDIO' && item.mediaUrl && (
                   <audio controls src={item.mediaUrl} className="mb-1 w-full" />
