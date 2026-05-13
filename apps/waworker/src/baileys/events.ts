@@ -10,6 +10,7 @@ import { prisma } from '../db';
 import { logger } from '../logger';
 import { publishEvent } from '../redis';
 import type { MessageDirection, MessageType } from '@neura/database';
+import { downloadAndStoreMedia } from './media';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 
@@ -135,7 +136,10 @@ export async function handleMessagesUpsert(
   }
 }
 
-async function persistInboundMessage(ctx: MessagesContext, msg: WAMessage): Promise<void> {
+async function persistInboundMessage(
+  ctx: MessagesContext,
+  msg: WAMessage,
+): Promise<void> {
   if (!msg.key.remoteJid) return;
   if (msg.key.remoteJid === 'status@broadcast') return; // ignora status
   if (msg.key.fromMe) {
@@ -216,7 +220,9 @@ async function persistInboundMessage(ctx: MessagesContext, msg: WAMessage): Prom
         type,
         content: text,
         status: 'DELIVERED',
-        sentAt: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000) : new Date(),
+        sentAt: msg.messageTimestamp
+          ? new Date(Number(msg.messageTimestamp) * 1000)
+          : new Date(),
       },
     });
 
@@ -238,7 +244,39 @@ async function persistInboundMessage(ctx: MessagesContext, msg: WAMessage): Prom
       lastMessageAt: created.createdAt,
       unreadDelta: 1,
     });
+
+    // Fire-and-forget: baixa e armazena mídia em background
+    if (type !== 'TEXT' && type !== 'LOCATION' && type !== 'CONTACT' && type !== 'SYSTEM') {
+      void downloadStoreAndUpdate(ctx, created.id, msg);
+    }
   });
+}
+
+async function downloadStoreAndUpdate(
+  ctx: MessagesContext,
+  messageId: string,
+  msg: WAMessage,
+): Promise<void> {
+  try {
+    const result = await downloadAndStoreMedia(ctx.workspaceId, messageId, msg);
+    if (!result) return;
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: {
+        mediaUrl: result.url,
+        mediaMimeType: result.mimeType,
+        mediaSize: result.size,
+      },
+    });
+    await publishEvent(ctx.workspaceId, 'messages', 'message.media_ready', {
+      messageId: updated.id,
+      mediaUrl: updated.mediaUrl,
+      mimeType: updated.mediaMimeType,
+      size: updated.mediaSize,
+    });
+  } catch (err) {
+    logger.error({ err, messageId }, 'Failed to download/store media (background)');
+  }
 }
 
 function inferMessageType(content: proto.IMessage): MessageType {

@@ -12,10 +12,12 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
     "@neura/database": "workspace:*",
     "@neura/shared": "workspace:*",
     "@whiskeysockets/baileys": "6.7.21",
     "bullmq": "^5.76.8",
+    "file-type": "^22.0.1",
     "ioredis": "^5.4.1",
     "pino": "^9.5.0",
     "qrcode": "^1.5.4",
