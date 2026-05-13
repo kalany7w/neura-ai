@@ -10,7 +10,10 @@ export interface WorkspaceVars extends AuthVars {
 
 /**
  * Resolve workspace ativo da sessão e injeta no contexto.
- * Prioridade: header `X-Workspace-Id` > `Session.activeWorkspaceId`.
+ * Prioridade:
+ *  1) header `X-Workspace-Id`
+ *  2) Session.activeWorkspaceId
+ *  3) primeira membership do user — auto-seleciona e persiste na sessão
  * Valida que o user é membro do workspace.
  */
 export const requireWorkspace = createMiddleware<{ Variables: WorkspaceVars }>(async (c, next) => {
@@ -27,20 +30,35 @@ export const requireWorkspace = createMiddleware<{ Variables: WorkspaceVars }>(a
     workspaceId = session?.activeWorkspaceId ?? null;
   }
 
-  if (!workspaceId) {
-    return c.json({ error: 'no_workspace_selected' }, 400);
-  }
+  let role: Role | null = null;
 
-  const membership = await prisma.membership.findUnique({
-    where: { userId_workspaceId: { userId, workspaceId } },
-    select: { role: true },
-  });
-
-  if (!membership) {
-    return c.json({ error: 'forbidden_workspace' }, 403);
+  if (workspaceId) {
+    const membership = await prisma.membership.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+      select: { role: true },
+    });
+    if (!membership) return c.json({ error: 'forbidden_workspace' }, 403);
+    role = membership.role;
+  } else {
+    // Fallback: pega a primeira membership do user (mais antiga primeiro)
+    const firstMembership = await prisma.membership.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'asc' },
+      select: { workspaceId: true, role: true },
+    });
+    if (!firstMembership) {
+      return c.json({ error: 'no_workspace_selected' }, 400);
+    }
+    workspaceId = firstMembership.workspaceId;
+    role = firstMembership.role;
+    // Persiste pra próximas requests não precisarem do fallback
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { activeWorkspaceId: workspaceId },
+    }).catch(() => {});
   }
 
   c.set('workspaceId', workspaceId);
-  c.set('role', membership.role);
+  c.set('role', role);
   await next();
 });
