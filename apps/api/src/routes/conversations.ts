@@ -224,6 +224,16 @@ conversationsRouter.post(
       });
     }
 
+    // Sync cards linkados — reseta SLA porque agente respondeu agora
+    await prisma.card.updateMany({
+      where: { conversationId: conv.id },
+      data: {
+        lastAgentReplyAt: msg.createdAt,
+        slaStatus: 'green',
+        unreadCount: 0,
+      },
+    });
+
     // Enfileira pra waworker enviar via Baileys
     await outboundQueue.add('send', {
       inboxId: conv.inboxId,

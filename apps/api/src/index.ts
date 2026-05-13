@@ -15,6 +15,7 @@ import { labelsRouter } from './routes/labels';
 import { contactsRouter } from './routes/contacts';
 import { kanbanRouter } from './routes/kanban';
 import { setupWebSocket } from './ws';
+import { startSlaScheduler } from './sla';
 
 const app = new Hono();
 
@@ -63,5 +64,8 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   logger.info({ port: info.port, env: env.NODE_ENV }, '🚀 Neura API ready');
 });
 injectWebSocket(server);
+
+// SLA scheduler — recalcula slaStatus dos cards a cada 60s
+startSlaScheduler().catch((err) => logger.error({ err }, 'Failed to start SLA scheduler'));
 
 export { app };
