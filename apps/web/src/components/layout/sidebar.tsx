@@ -17,6 +17,7 @@ import {
   Settings,
   Zap,
   Bot,
+  BarChart3,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -52,6 +53,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/contacts', label: 'Contatos', icon: Users },
       { href: '/inboxes', label: 'Inboxes', icon: Inbox },
+      { href: '/reports', label: 'Relatórios', icon: BarChart3 },
     ],
   },
   {
