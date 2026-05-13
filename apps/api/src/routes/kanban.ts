@@ -81,6 +81,33 @@ kanbanRouter.post(
   },
 );
 
+kanbanRouter.patch(
+  '/funnels/:id',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('funnel.manage'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = funnelSchema.partial().safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const f = await prisma.funnel.findFirst({ where: { id, workspaceId } });
+    if (!f) return c.json({ error: 'not_found' }, 404);
+    if (parsed.data.isDefault) {
+      await prisma.funnel.updateMany({
+        where: { workspaceId, id: { not: id } },
+        data: { isDefault: false },
+      });
+    }
+    const updated = await prisma.funnel.update({
+      where: { id },
+      data: parsed.data,
+    });
+    return c.json({ funnel: updated });
+  },
+);
+
 kanbanRouter.delete(
   '/funnels/:id',
   requireAuth,
