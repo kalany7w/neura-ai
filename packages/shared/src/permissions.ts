@@ -41,6 +41,10 @@ export const PERMISSIONS = {
   'label.apply': ['ADMIN', 'SUPERVISOR', 'AGENT'],
   'custom_attr.manage': ['ADMIN'],
 
+  // Templates (canned responses)
+  'template.manage': ['ADMIN', 'SUPERVISOR'],
+  'template.use': ['ADMIN', 'SUPERVISOR', 'AGENT'],
+
   // Kanban (Fase 6+)
   'funnel.manage': ['ADMIN', 'SUPERVISOR'],
   'stage.manage': ['ADMIN', 'SUPERVISOR'],

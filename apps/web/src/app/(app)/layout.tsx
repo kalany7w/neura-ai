@@ -93,6 +93,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               >
                 Inboxes
               </Link>
+              {activeWorkspace && (
+                <Link
+                  href="/settings/templates"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Templates
+                </Link>
+              )}
               {activeWorkspace && activeWorkspace.role === 'ADMIN' && (
                 <>
                   <Link

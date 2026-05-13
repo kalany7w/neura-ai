@@ -15,6 +15,8 @@ import { labelsRouter } from './routes/labels';
 import { contactsRouter } from './routes/contacts';
 import { kanbanRouter } from './routes/kanban';
 import { savedFiltersRouter } from './routes/saved-filters';
+import { notesRouter } from './routes/notes';
+import { templatesRouter } from './routes/templates';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
@@ -49,6 +51,8 @@ app.route('/api/labels', labelsRouter);
 app.route('/api/contacts', contactsRouter);
 app.route('/api/kanban', kanbanRouter);
 app.route('/api/saved-filters', savedFiltersRouter);
+app.route('/api', notesRouter); // /api/conversations/:id/notes + /api/notes/:id
+app.route('/api/templates', templatesRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
