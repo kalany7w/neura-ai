@@ -10,11 +10,14 @@ import {
   Clock,
   CornerDownRight,
   FileText,
+  Mic,
+  Paperclip,
   MessageSquare,
   PauseCircle,
   PlayCircle,
   Reply,
   Send,
+  Square,
   StickyNote,
   Trash2,
   UserCheck,
@@ -135,6 +138,110 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [mode, setMode] = useState<'reply' | 'note'>('reply');
   const [showTemplates, setShowTemplates] = useState(false);
   const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [recording, setRecording] = useState(false);
+  const [recordingMs, setRecordingMs] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  async function uploadAndSend(
+    file: File | Blob,
+    filename: string,
+    contentType: string,
+    type: 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT',
+  ) {
+    try {
+      const presigned = await api<{ uploadUrl: string; publicUrl: string }>(
+        '/api/uploads/sign',
+        {
+          method: 'POST',
+          body: JSON.stringify({ filename, contentType, size: file.size }),
+        },
+      );
+      const putRes = await fetch(presigned.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': contentType },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error(`Upload falhou: HTTP ${putRes.status}`);
+      await api(`/api/conversations/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          type,
+          mediaUrl: presigned.publicUrl,
+          mimeType: contentType,
+          fileName: filename,
+          replyToMessageId: replyTo?.id,
+        }),
+      });
+      setReplyTo(null);
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao enviar mídia');
+    }
+  }
+
+  function detectType(mime: string): 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' {
+    if (mime.startsWith('image/')) return 'IMAGE';
+    if (mime.startsWith('video/')) return 'VIDEO';
+    if (mime.startsWith('audio/')) return 'AUDIO';
+    return 'DOCUMENT';
+  }
+
+  async function handleFiles(files: FileList | File[]) {
+    const arr = Array.from(files).slice(0, 5); // limit 5 por vez
+    for (const f of arr) {
+      const t = detectType(f.type || 'application/octet-stream');
+      await uploadAndSend(f, f.name, f.type || 'application/octet-stream', t);
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeCandidates = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/webm'];
+      const supported = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? '';
+      const rec = new MediaRecorder(stream, supported ? { mimeType: supported } : undefined);
+      recordChunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) recordChunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(recordChunksRef.current, { type: supported || 'audio/webm' });
+        const ext = supported.includes('ogg') ? '.ogg' : '.webm';
+        const filename = `audio-${Date.now()}${ext}`;
+        const contentType = supported || 'audio/webm';
+        await uploadAndSend(blob, filename, contentType, 'AUDIO');
+      };
+      recorderRef.current = rec;
+      rec.start();
+      setRecording(true);
+      setRecordingMs(0);
+      recordTimerRef.current = setInterval(() => setRecordingMs((v) => v + 100), 100);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Microfone bloqueado');
+    }
+  }
+
+  function stopRecording(send: boolean) {
+    const rec = recorderRef.current;
+    if (rec && rec.state !== 'inactive') {
+      if (!send) {
+        // cancela: limpa chunks antes do onstop disparar upload
+        recordChunksRef.current = [];
+      }
+      rec.stop();
+    }
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    setRecording(false);
+    setRecordingMs(0);
+  }
 
   const { data, isLoading } = useQuery<{ conversation: ConversationDetail }>({
     queryKey: ['conversation', id],
@@ -287,7 +394,35 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const CurStatusIcon = currentStatusOpt.Icon;
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] gap-0">
+    <div
+      className="flex h-[calc(100vh-7rem)] gap-0 relative"
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          e.preventDefault();
+          setDragging(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        const files = e.dataTransfer.files;
+        if (files.length > 0) handleFiles(files);
+      }}
+    >
+      {dragging && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-4 border-dashed border-primary bg-primary/10 backdrop-blur-sm">
+          <div className="text-center">
+            <Paperclip className="mx-auto h-10 w-10 text-primary" />
+            <p className="mt-2 font-semibold">Solte pra anexar</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Imagens, vídeos, áudios e PDFs até 100 MB
+            </p>
+          </div>
+        </div>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -558,15 +693,74 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           </div>
 
           {mode === 'reply' && (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowTemplates((v) => !v)}
-              title="Templates de resposta"
-            >
-              <FileText className="h-4 w-4" />
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowTemplates((v) => !v)}
+                title="Templates de resposta"
+              >
+                <FileText className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={conv.inbox.status !== 'CONNECTED'}
+                title="Anexar arquivo"
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*,audio/*,application/pdf,application/zip"
+                className="hidden"
+                onChange={(e) => {
+                  const files = e.target.files;
+                  if (files && files.length > 0) handleFiles(files);
+                  e.target.value = '';
+                }}
+              />
+              {!recording ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={startRecording}
+                  disabled={conv.inbox.status !== 'CONNECTED'}
+                  title="Gravar áudio"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+              ) : (
+                <div className="ml-1 flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950 dark:border-red-700 dark:text-red-200">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                  <span className="font-mono">
+                    {Math.floor(recordingMs / 1000)}.{String(Math.floor((recordingMs % 1000) / 100))}s
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => stopRecording(false)}
+                    title="Cancelar"
+                    className="ml-1 rounded p-0.5 hover:bg-red-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => stopRecording(true)}
+                    title="Enviar áudio"
+                    className="rounded p-0.5 hover:bg-red-100"
+                  >
+                    <Square className="h-3 w-3 fill-current" />
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
