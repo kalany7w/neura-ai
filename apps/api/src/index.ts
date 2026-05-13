@@ -14,8 +14,10 @@ import { uploadsRouter } from './routes/uploads';
 import { labelsRouter } from './routes/labels';
 import { contactsRouter } from './routes/contacts';
 import { kanbanRouter } from './routes/kanban';
+import { savedFiltersRouter } from './routes/saved-filters';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
+import { startSnoozeScheduler } from './snooze';
 
 const app = new Hono();
 
@@ -46,6 +48,7 @@ app.route('/api/uploads', uploadsRouter);
 app.route('/api/labels', labelsRouter);
 app.route('/api/contacts', contactsRouter);
 app.route('/api/kanban', kanbanRouter);
+app.route('/api/saved-filters', savedFiltersRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
@@ -67,5 +70,7 @@ injectWebSocket(server);
 
 // SLA scheduler — recalcula slaStatus dos cards a cada 60s
 startSlaScheduler().catch((err) => logger.error({ err }, 'Failed to start SLA scheduler'));
+// Snooze scheduler — desativa snoozes vencidos a cada 30s
+startSnoozeScheduler().catch((err) => logger.error({ err }, 'Failed to start Snooze scheduler'));
 
 export { app };
