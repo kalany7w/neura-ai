@@ -56,6 +56,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { CardDetailSheet } from '@/components/kanban/card-detail-sheet';
 
 interface Stage {
   id: string;
@@ -316,10 +317,12 @@ function DraggableCard({
   card,
   members,
   funnelId,
+  onOpen,
 }: {
   card: Card;
   members: Member[];
   funnelId: string;
+  onOpen: (id: string) => void;
 }) {
   const activeSnooze = card.snoozes?.[0];
   const isSnoozed = !!activeSnooze;
@@ -350,7 +353,13 @@ function DraggableCard({
       <div
         {...(isSnoozed ? {} : listeners)}
         {...attributes}
-        className={isSnoozed ? '' : 'cursor-grab active:cursor-grabbing'}
+        onClick={(e) => {
+          if (isDragging) return;
+          // Ignora click vindo do menu de ações
+          if ((e.target as HTMLElement).closest('[data-card-menu]')) return;
+          onOpen(card.id);
+        }}
+        className={isSnoozed ? 'cursor-pointer' : 'cursor-pointer active:cursor-grabbing'}
       >
         {/* Header: avatar contato + título + valor */}
         <div className="flex items-start gap-2.5 pl-2 pr-7">
@@ -443,7 +452,7 @@ function DraggableCard({
         )}
       </div>
 
-      <div className="absolute right-2 top-2">
+      <div className="absolute right-2 top-2" data-card-menu>
         <CardActionsMenu
           card={card}
           members={members}
@@ -460,11 +469,13 @@ function StageColumn({
   cards,
   members,
   funnelId,
+  onOpen,
 }: {
   stage: Stage;
   cards: Card[];
   members: Member[];
   funnelId: string;
+  onOpen: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = cards.length;
@@ -518,7 +529,13 @@ function StageColumn({
         style={{ borderTop: `1px solid ${accent}25` }}
       >
         {cards.map((c) => (
-          <DraggableCard key={c.id} card={c} members={members} funnelId={funnelId} />
+          <DraggableCard
+            key={c.id}
+            card={c}
+            members={members}
+            funnelId={funnelId}
+            onOpen={onOpen}
+          />
         ))}
         {cards.length === 0 && (
           <div className="flex h-32 flex-col items-center justify-center rounded-xl border border-dashed bg-background/40 px-3 text-center">
@@ -555,6 +572,7 @@ export default function KanbanPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createFunnelOpen, setCreateFunnelOpen] = useState(false);
   const [saveFilterOpen, setSaveFilterOpen] = useState(false);
+  const [detailCardId, setDetailCardId] = useState<string | null>(null);
 
   const { data: funnelsData, isLoading: funnelsLoading } = useQuery<{ funnels: Funnel[] }>({
     queryKey: ['funnels'],
@@ -783,10 +801,19 @@ export default function KanbanPage() {
               cards={cardsByStage.get(stage.id) ?? []}
               members={members}
               funnelId={funnel.id}
+              onOpen={setDetailCardId}
             />
           ))}
         </div>
       </DndContext>
+
+      <CardDetailSheet
+        cardId={detailCardId}
+        open={!!detailCardId}
+        onOpenChange={(v) => !v && setDetailCardId(null)}
+        members={members}
+        allLabels={labelsData?.labels ?? []}
+      />
     </div>
   );
 }
