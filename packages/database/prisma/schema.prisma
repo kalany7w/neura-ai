@@ -23,12 +23,14 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members       Membership[]
-  invites       Invite[]
-  auditLogs     AuditLog[]
-  inboxes       Inbox[]
-  contacts      Contact[]
-  conversations Conversation[]
+  members            Membership[]
+  invites            Invite[]
+  auditLogs          AuditLog[]
+  inboxes            Inbox[]
+  contacts           Contact[]
+  conversations      Conversation[]
+  labels             Label[]
+  customAttributeDefs CustomAttributeDef[]
 
   @@map("workspaces")
 }
@@ -243,6 +245,7 @@ model Contact {
 
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversations Conversation[]
+  labels        ContactLabel[]
 
   @@unique([workspaceId, phoneNumber])
   @@index([workspaceId])
@@ -277,12 +280,92 @@ model Conversation {
   inbox     Inbox     @relation(fields: [inboxId], references: [id], onDelete: Cascade)
   contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   messages  Message[]
+  labels    ConversationLabel[]
 
   @@index([workspaceId, status, lastMessageAt])
   @@index([assignedAgentId])
   @@index([contactId])
   @@index([inboxId])
   @@map("conversations")
+}
+
+// ============================================
+// LABELS + CUSTOM ATTRIBUTES (Fase 5)
+// ============================================
+
+enum LabelScope {
+  CONTACT
+  CONVERSATION
+  BOTH
+}
+
+model Label {
+  id          String     @id @default(cuid())
+  workspaceId String
+  name        String
+  color       String     @default("#94a3b8") // slate-400
+  scope       LabelScope @default(BOTH)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contactLabels      ContactLabel[]
+  conversationLabels ConversationLabel[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("labels")
+}
+
+model ContactLabel {
+  contactId String
+  labelId   String
+  createdAt DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label   Label   @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, labelId])
+  @@index([labelId])
+  @@map("contact_labels")
+}
+
+model ConversationLabel {
+  conversationId String
+  labelId        String
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  label        Label        @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, labelId])
+  @@index([labelId])
+  @@map("conversation_labels")
+}
+
+enum CustomAttributeType {
+  STRING
+  NUMBER
+  DATE
+  SELECT
+}
+
+model CustomAttributeDef {
+  id          String              @id @default(cuid())
+  workspaceId String
+  key         String // identificador estável (snake_case)
+  label       String // human-readable
+  type        CustomAttributeType @default(STRING)
+  options     Json? // SELECT: { values: ["A", "B", "C"] }
+  appliesTo   String              @default("CONTACT") // CONTACT, CONVERSATION
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+  @@map("custom_attribute_defs")
 }
 
 enum MessageDirection {
