@@ -3,14 +3,22 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Phone, QrCode, PlugZap, Power, Trash2 } from 'lucide-react';
+import { Phone, QrCode, PlugZap, Power, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { InboxSettingsDialog } from './inbox-settings-dialog';
 
 export interface InboxItem {
   id: string;
   name: string;
   status: 'DISCONNECTED' | 'CONNECTING' | 'AWAITING_QR' | 'CONNECTED' | 'BANNED' | 'ERROR';
+  settings?: {
+    roundRobinEnabled?: boolean;
+    businessHours?: { enabled: boolean; start: string; end: string; days: number[] };
+    greetingMessage?: string | null;
+    outOfHoursMessage?: string | null;
+    autoResolveAfterDays?: number | null;
+  } | null;
   waSession?: {
     phoneNumber: string | null;
     qrCode: string | null;
@@ -40,6 +48,7 @@ const STATUS_COLOR: Record<InboxItem['status'], string> = {
 export function InboxCard({ inbox }: { inbox: InboxItem }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   async function connect() {
     setBusy(true);
@@ -62,6 +71,19 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao desconectar');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reconnect() {
+    setBusy(true);
+    try {
+      await api(`/api/inboxes/${inbox.id}/reconnect`, { method: 'POST' });
+      toast.success('Reconectando — pode demorar uns segundos');
+      await qc.invalidateQueries({ queryKey: ['inboxes'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
     } finally {
       setBusy(false);
     }
@@ -123,16 +145,37 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
           </Button>
         )}
         {(inbox.status === 'CONNECTED' || inbox.status === 'CONNECTING' || inbox.status === 'AWAITING_QR') && (
-          <Button size="sm" variant="outline" onClick={disconnect} disabled={busy}>
-            <Power className="h-4 w-4" />
-            Desconectar
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={reconnect} disabled={busy} title="Reconectar">
+              <RefreshCw className="h-4 w-4" />
+              Reconectar
+            </Button>
+            <Button size="sm" variant="outline" onClick={disconnect} disabled={busy}>
+              <Power className="h-4 w-4" />
+              Desconectar
+            </Button>
+          </>
         )}
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setSettingsOpen(true)}
+          disabled={busy}
+          title="Configurações"
+        >
+          <Settings2 className="h-4 w-4" />
+          Config
+        </Button>
         <Button size="sm" variant="ghost" onClick={remove} disabled={busy}>
           <Trash2 className="h-4 w-4" />
-          Remover
         </Button>
       </div>
+
+      <InboxSettingsDialog
+        inbox={inbox}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+      />
     </div>
   );
 }

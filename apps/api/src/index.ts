@@ -22,6 +22,7 @@ import { dashboardRouter } from './routes/dashboard';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
+import { startAutoResolveScheduler } from './auto-resolve';
 
 const app = new Hono();
 
@@ -80,5 +81,9 @@ injectWebSocket(server);
 startSlaScheduler().catch((err) => logger.error({ err }, 'Failed to start SLA scheduler'));
 // Snooze scheduler — desativa snoozes vencidos a cada 30s
 startSnoozeScheduler().catch((err) => logger.error({ err }, 'Failed to start Snooze scheduler'));
+// Auto-resolve scheduler — fecha conversas inativas (config por inbox) a cada 30min
+startAutoResolveScheduler().catch((err) =>
+  logger.error({ err }, 'Failed to start AutoResolve scheduler'),
+);
 
 export { app };
