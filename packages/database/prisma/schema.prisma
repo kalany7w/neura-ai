@@ -33,6 +33,7 @@ model Workspace {
   customAttributeDefs CustomAttributeDef[]
   funnels             Funnel[]
   cards               Card[]
+  messageTemplates    MessageTemplate[]
 
   @@map("workspaces")
 }
@@ -278,17 +279,54 @@ model Conversation {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  inbox     Inbox     @relation(fields: [inboxId], references: [id], onDelete: Cascade)
-  contact   Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inbox     Inbox               @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  contact   Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
   messages  Message[]
   labels    ConversationLabel[]
+  notes     ConversationNote[]
 
   @@index([workspaceId, status, lastMessageAt])
   @@index([assignedAgentId])
   @@index([contactId])
   @@index([inboxId])
   @@map("conversations")
+}
+
+// ============================================
+// CONVERSATION NOTES + TEMPLATES (Fase 4 follow-up)
+// ============================================
+
+model ConversationNote {
+  id             String   @id @default(cuid())
+  conversationId String
+  authorId       String
+  body           String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("conversation_notes")
+}
+
+model MessageTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  // Atalho tipo /saudacao
+  shortcut    String?
+  // Suporta placeholders {{contact.name}}, {{contact.phoneNumber}}
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("message_templates")
 }
 
 // ============================================
