@@ -3,13 +3,73 @@
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Send, StickyNote, MessageSquare, FileText, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  FileText,
+  MessageSquare,
+  PauseCircle,
+  PlayCircle,
+  Send,
+  StickyNote,
+  Trash2,
+  UserCheck,
+  UserX,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
+
+interface Member {
+  userId: string;
+  role: string;
+  user: { id: string; name: string | null; email: string };
+}
+
+type ConvStatus = 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED';
+
+const STATUS_OPTIONS: Array<{
+  value: ConvStatus;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  className: string;
+}> = [
+  { value: 'OPEN', label: 'Aberta', Icon: PlayCircle, className: 'text-blue-600' },
+  { value: 'PENDING', label: 'Pendente', Icon: Clock, className: 'text-amber-600' },
+  { value: 'RESOLVED', label: 'Resolvida', Icon: CheckCircle2, className: 'text-emerald-600' },
+  { value: 'SNOOZED', label: 'Adiada', Icon: PauseCircle, className: 'text-slate-600' },
+];
+
+const STATUS_BADGE_CLASS: Record<ConvStatus, string> = {
+  OPEN: 'bg-blue-100 text-blue-700',
+  PENDING: 'bg-amber-100 text-amber-800',
+  RESOLVED: 'bg-emerald-100 text-emerald-700',
+  SNOOZED: 'bg-slate-200 text-slate-700',
+};
+
+function initialsFromName(s: string | null | undefined): string {
+  if (!s) return '?';
+  return s
+    .split(/[\s.@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
+}
 
 interface MessageItem {
   id: string;
@@ -38,7 +98,8 @@ interface TemplateItem {
 
 interface ConversationDetail {
   id: string;
-  status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED';
+  status: ConvStatus;
+  assignedAgentId: string | null;
   unreadCount: number;
   contact: { id: string; name: string | null; phoneNumber: string; avatarUrl: string | null };
   inbox: { id: string; name: string; status: string };
@@ -85,6 +146,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     queryFn: () => api('/api/templates'),
   });
 
+  const { data: wsData } = useQuery<{ workspace: { members: Member[] } }>({
+    queryKey: ['workspace-me'],
+    queryFn: () => api('/api/workspaces/me'),
+  });
+  const members = wsData?.workspace.members ?? [];
+
   useEffect(() => {
     if (!data?.conversation) return;
     if (data.conversation.unreadCount > 0) {
@@ -102,7 +169,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     if (
       event.event === 'message.new' ||
       event.event === 'message.status' ||
-      event.event === 'message.media_ready'
+      event.event === 'message.media_ready' ||
+      event.event === 'conversation.status_changed' ||
+      event.event === 'conversation.assigned'
     ) {
       qc.invalidateQueries({ queryKey: ['conversation', id] });
     }
@@ -110,6 +179,25 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       qc.invalidateQueries({ queryKey: ['conversation', id, 'notes'] });
     }
   });
+
+  async function updateConversation(payload: { status?: ConvStatus; assignedAgentId?: string | null }) {
+    try {
+      await api(`/api/conversations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      toast.success(
+        payload.status
+          ? `Status: ${STATUS_OPTIONS.find((s) => s.value === payload.status)?.label}`
+          : payload.assignedAgentId === null
+            ? 'Atribuição removida'
+            : 'Atribuído',
+      );
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
 
   // Atalhos de template: digitou /nome → expande
   function maybeExpandShortcut(value: string): string {
@@ -184,24 +272,108 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
   const conv = data.conversation;
   const currentUserId = session?.user?.id;
+  const assignee = members.find((m) => m.userId === conv.assignedAgentId);
+  const currentStatusOpt = STATUS_OPTIONS.find((s) => s.value === conv.status) ?? STATUS_OPTIONS[0]!;
+  const CurStatusIcon = currentStatusOpt.Icon;
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="flex items-center justify-between gap-2 border-b pb-3">
-        <div className="flex items-center gap-3">
+    <div className="flex h-[calc(100vh-7rem)] gap-0">
+      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+        <div className="flex items-center gap-3 min-w-0">
           <Button asChild size="icon" variant="ghost">
             <Link href="/inbox">
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
-          <div>
-            <h1 className="font-semibold">{conv.contact.name ?? conv.contact.phoneNumber}</h1>
-            <p className="text-xs text-muted-foreground">
+          <div className="min-w-0">
+            <h1 className="truncate font-semibold">{conv.contact.name ?? conv.contact.phoneNumber}</h1>
+            <p className="truncate text-xs text-muted-foreground">
               {conv.contact.phoneNumber} · {conv.inbox.name}
             </p>
           </div>
         </div>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{conv.status}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status switcher */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium hover:opacity-90 ${STATUS_BADGE_CLASS[conv.status]}`}
+              >
+                <CurStatusIcon className="h-3.5 w-3.5" />
+                {currentStatusOpt.label}
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Mudar status</DropdownMenuLabel>
+              {STATUS_OPTIONS.map((opt) => {
+                const Icon = opt.Icon;
+                return (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onSelect={() => updateConversation({ status: opt.value })}
+                    disabled={opt.value === conv.status}
+                  >
+                    <Icon className={`h-3.5 w-3.5 ${opt.className}`} />
+                    {opt.label}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Assignee switcher */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-md border bg-card px-2 py-1 text-xs hover:bg-accent"
+              >
+                {assignee ? (
+                  <>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-semibold uppercase text-white">
+                      {initialsFromName(assignee.user.name ?? assignee.user.email)}
+                    </span>
+                    <span className="max-w-[140px] truncate font-medium">
+                      {assignee.user.name ?? assignee.user.email}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <UserX className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">Sem agente</span>
+                  </>
+                )}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
+              <DropdownMenuLabel>Atribuir conversa</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => updateConversation({ assignedAgentId: null })}>
+                <UserX className="h-3.5 w-3.5" />
+                Remover atribuição
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {members.map((m) => (
+                <DropdownMenuItem
+                  key={m.userId}
+                  onSelect={() => updateConversation({ assignedAgentId: m.userId })}
+                  className={conv.assignedAgentId === m.userId ? 'bg-accent/60' : ''}
+                >
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-semibold uppercase text-white">
+                    {initialsFromName(m.user.name ?? m.user.email)}
+                  </span>
+                  {m.user.name ?? m.user.email}
+                  {conv.assignedAgentId === m.userId && (
+                    <UserCheck className="ml-auto h-3.5 w-3.5" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
@@ -376,6 +548,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <Send className="h-4 w-4" />
           </Button>
         </form>
+      </div>
+      </div>
+
+      {/* Side panel: info do contato + conversas anteriores + cards */}
+      <div className="hidden lg:block">
+        <ConversationSidePanel
+          contactId={conv.contact.id}
+          currentConversationId={conv.id}
+        />
       </div>
     </div>
   );
