@@ -23,14 +23,16 @@ model Workspace {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members            Membership[]
-  invites            Invite[]
-  auditLogs          AuditLog[]
-  inboxes            Inbox[]
-  contacts           Contact[]
-  conversations      Conversation[]
-  labels             Label[]
+  members             Membership[]
+  invites             Invite[]
+  auditLogs           AuditLog[]
+  inboxes             Inbox[]
+  contacts            Contact[]
+  conversations       Conversation[]
+  labels              Label[]
   customAttributeDefs CustomAttributeDef[]
+  funnels             Funnel[]
+  cards               Card[]
 
   @@map("workspaces")
 }
@@ -311,6 +313,7 @@ model Label {
   workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   contactLabels      ContactLabel[]
   conversationLabels ConversationLabel[]
+  cardLabels         CardLabel[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -366,6 +369,164 @@ model CustomAttributeDef {
   @@unique([workspaceId, key])
   @@index([workspaceId])
   @@map("custom_attribute_defs")
+}
+
+// ============================================
+// KANBAN (Fase 6)
+// ============================================
+
+model Funnel {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  name          String
+  color         String   @default("#3b82f6")
+  order         Int      @default(0)
+  isDefault     Boolean  @default(false)
+  // SLA limiares (segundos sem resposta agente) — override do default
+  slaThresholds Json? // { yellow: 900, red: 1800, blink: 3600 }
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stages    Stage[]
+  cards     Card[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+  @@map("funnels")
+}
+
+model Stage {
+  id        String   @id @default(cuid())
+  funnelId  String
+  name      String
+  color     String   @default("#94a3b8")
+  order     Int      @default(0)
+  isWon     Boolean  @default(false)
+  isLost    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  funnel Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  cards  Card[]
+
+  @@index([funnelId])
+  @@map("stages")
+}
+
+model Card {
+  id                 String    @id @default(cuid())
+  workspaceId        String
+  funnelId           String
+  stageId            String
+  conversationId     String?
+  title              String
+  description        String?   @db.Text
+  value              Decimal?  @db.Decimal(12, 2)
+  currency           String    @default("USD")
+  assignedAgentId    String?
+  dueDate            DateTime?
+  startDate          DateTime?
+  position           Int       @default(0)
+  customAttrs        Json?
+  // SLA derivado — recalculado periodicamente
+  slaStatus          String    @default("green") // green/yellow/red/blink
+  lastAgentReplyAt   DateTime?
+  // Última msg da conversa (cache pra preview no card)
+  lastMessagePreview String?   @db.Text
+  lastMessageAt      DateTime?
+  unreadCount        Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  funnel    Funnel        @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  stage     Stage         @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  labels    CardLabel[]
+  products  CardProduct[]
+  snoozes   CardSnooze[]
+  notes     CardNote[]
+
+  @@index([workspaceId])
+  @@index([funnelId, stageId, position])
+  @@index([conversationId])
+  @@index([assignedAgentId])
+  @@index([slaStatus])
+  @@map("cards")
+}
+
+model CardLabel {
+  cardId    String
+  labelId   String
+  createdAt DateTime @default(now())
+
+  card  Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([cardId, labelId])
+  @@index([labelId])
+  @@map("card_labels")
+}
+
+model CardProduct {
+  id        String   @id @default(cuid())
+  cardId    String
+  name      String
+  price     Decimal? @db.Decimal(12, 2)
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@map("card_products")
+}
+
+model CardSnooze {
+  id            String    @id @default(cuid())
+  cardId        String
+  snoozeUntil   DateTime
+  reason        String?
+  reactivatedAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@index([snoozeUntil])
+  @@map("card_snoozes")
+}
+
+model CardNote {
+  id        String   @id @default(cuid())
+  cardId    String
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([cardId, createdAt])
+  @@map("card_notes")
+}
+
+// ============================================
+// SAVED FILTERS (Fase 8)
+// ============================================
+
+model SavedFilter {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  query       Json // serialização dos filtros
+  context     String // 'inbox' ou 'kanban'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, workspaceId, context, name])
+  @@index([userId])
+  @@map("saved_filters")
 }
 
 enum MessageDirection {
