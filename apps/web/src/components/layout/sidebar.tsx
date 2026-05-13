@@ -14,6 +14,8 @@ import {
   LogOut,
   Wifi,
   WifiOff,
+  Settings,
+  Zap,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -57,6 +59,7 @@ const groups: NavGroup[] = [
       { href: '/settings/templates', label: 'Templates', icon: FileText },
       { href: '/settings/labels', label: 'Etiquetas', icon: Tag, roles: ['ADMIN'] },
       { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN'] },
+      { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
     ],
   },
 ];
@@ -174,14 +177,27 @@ export function Sidebar({ user, workspace }: SidebarProps) {
 
       {/* User footer */}
       <div className="border-t p-2">
-        <div className="flex items-center gap-2 rounded-md p-1.5 hover:bg-muted/50">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-            {initials || '?'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{user.name ?? 'Sem nome'}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
-          </div>
+        <div className="flex items-center gap-1 rounded-md p-1 hover:bg-muted/50">
+          <Link
+            href="/settings/profile"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1.5 hover:bg-muted"
+            title="Meu perfil"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+              {initials || '?'}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{user.name ?? 'Sem nome'}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
+            </div>
+          </Link>
+          <Link
+            href="/settings/profile"
+            title="Configurações do perfil"
+            className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
           <button
             type="button"
             onClick={handleSignOut}

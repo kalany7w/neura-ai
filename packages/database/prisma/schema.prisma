@@ -34,6 +34,7 @@ model Workspace {
   funnels             Funnel[]
   cards               Card[]
   messageTemplates    MessageTemplate[]
+  webhooks            Webhook[]
 
   @@map("workspaces")
 }
@@ -618,4 +619,28 @@ model Message {
   @@index([conversationId, createdAt])
   @@index([waMessageId])
   @@map("messages")
+}
+
+// ============================================
+// WEBHOOKS (Integrações externas — n8n, Zapier, etc.)
+// ============================================
+
+model Webhook {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  url         String
+  events      String[] // ['message.new', 'conversation.created', 'card.moved', ...]
+  secret      String?  // pra assinar payload com HMAC-SHA256
+  enabled     Boolean   @default(true)
+  lastFiredAt DateTime?
+  lastStatus  Int?
+  lastError   String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("webhooks")
 }

@@ -15,14 +15,21 @@ import {
   AlarmClock,
   AlarmClockOff,
   BookmarkCheck,
+  ChevronDown,
   Clock,
-  MoreVertical,
+  Filter,
+  MessageSquare,
+  MoreHorizontal,
   Plus,
   Save,
   Search,
+  SlidersHorizontal,
   Trash2,
+  TrendingUp,
   UserCheck,
   UserX,
+  Users,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -101,11 +108,25 @@ interface SavedFilter {
   query: Record<string, unknown>;
 }
 
-const SLA_BORDER: Record<string, string> = {
-  green: 'border-l-emerald-500',
-  yellow: 'border-l-amber-500',
-  red: 'border-l-red-500',
-  blink: 'border-l-red-600 animate-pulse',
+const SLA_STRIPE: Record<string, string> = {
+  green: 'before:bg-emerald-400',
+  yellow: 'before:bg-amber-400',
+  red: 'before:bg-red-500',
+  blink: 'before:bg-red-600 before:animate-pulse',
+};
+
+const SLA_DOT: Record<string, string> = {
+  green: 'bg-emerald-500',
+  yellow: 'bg-amber-500',
+  red: 'bg-red-500',
+  blink: 'bg-red-600 animate-pulse',
+};
+
+const SLA_LABEL: Record<string, string> = {
+  green: 'No prazo',
+  yellow: 'Atenção',
+  red: 'Atrasado',
+  blink: 'Crítico',
 };
 
 const SNOOZE_PRESETS: Array<{ label: string; minutes: number }> = [
@@ -116,6 +137,24 @@ const SNOOZE_PRESETS: Array<{ label: string; minutes: number }> = [
   { label: '3 dias', minutes: 60 * 24 * 3 },
   { label: '1 semana', minutes: 60 * 24 * 7 },
 ];
+
+function initialsFrom(s: string | null | undefined): string {
+  if (!s) return '?';
+  return s
+    .split(/[\s.@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
+}
+
+function formatBRL(n: number): string {
+  return n.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  });
+}
 
 function formatSnoozeUntil(iso: string): string {
   const d = new Date(iso);
@@ -199,9 +238,9 @@ function CardActionsMenu({
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="rounded-md p-1 text-muted-foreground/60 opacity-0 transition group-hover:opacity-100 hover:bg-background hover:text-foreground"
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreHorizontal className="h-4 w-4" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -241,17 +280,15 @@ function CardActionsMenu({
               Remover atribuição
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {members.length === 0 && (
-              <DropdownMenuLabel>Nenhum agente</DropdownMenuLabel>
-            )}
+            {members.length === 0 && <DropdownMenuLabel>Nenhum agente</DropdownMenuLabel>}
             {members.map((m) => (
               <DropdownMenuItem
                 key={m.userId}
                 onSelect={() => assign(m.userId)}
                 className={card.assignedAgentId === m.userId ? 'bg-accent/60' : ''}
               >
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase">
-                  {(m.user.name ?? m.user.email).charAt(0)}
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold uppercase text-primary-foreground">
+                  {initialsFrom(m.user.name ?? m.user.email)}
                 </span>
                 <span className="truncate">{m.user.name ?? m.user.email}</span>
                 {card.assignedAgentId === m.userId && (
@@ -293,76 +330,120 @@ function DraggableCard({
   const style = transform
     ? {
         transform: `translate(${transform.x}px, ${transform.y}px)`,
-        zIndex: isDragging ? 10 : undefined,
+        zIndex: isDragging ? 20 : undefined,
       }
     : undefined;
 
   const assignee = members.find((m) => m.userId === card.assignedAgentId);
+  const stripeClass = SLA_STRIPE[card.slaStatus] ?? 'before:bg-slate-300';
+  const value = card.value ? Number(card.value) : null;
+  const hasUnread = card.unreadCount > 0;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`relative rounded-md border border-l-4 bg-card p-3 text-sm shadow-sm hover:shadow ${
-        SLA_BORDER[card.slaStatus] ?? 'border-l-slate-300'
-      } ${isDragging ? 'opacity-50' : ''} ${
-        isSnoozed ? 'opacity-60 bg-muted/40' : ''
-      }`}
+      className={`group relative rounded-xl border bg-card p-3 text-sm shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition before:absolute before:left-0 before:top-3 before:bottom-3 before:w-1 before:rounded-r-full ${stripeClass} hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:-translate-y-px ${
+        isDragging ? 'opacity-50 rotate-1' : ''
+      } ${isSnoozed ? 'bg-gradient-to-br from-amber-50/40 to-card border-amber-200/60' : ''}`}
     >
       <div
         {...(isSnoozed ? {} : listeners)}
         {...attributes}
         className={isSnoozed ? '' : 'cursor-grab active:cursor-grabbing'}
       >
-        <div className="flex items-start gap-2">
-          <p className="flex-1 font-medium line-clamp-2 pr-1">{card.title}</p>
+        {/* Header: avatar contato + título + valor */}
+        <div className="flex items-start gap-2.5 pl-2 pr-7">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-[11px] font-semibold uppercase text-slate-700 ring-1 ring-inset ring-white">
+            {initialsFrom(card.title)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium leading-snug text-foreground line-clamp-2">{card.title}</p>
+            {value !== null && value > 0 && (
+              <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                <TrendingUp className="h-3 w-3" />
+                {formatBRL(value)}
+              </p>
+            )}
+          </div>
         </div>
+
+        {/* Preview da última mensagem */}
         {card.lastMessagePreview && (
-          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-            {card.lastMessagePreview}
-          </p>
+          <div className="mt-2.5 flex items-start gap-1.5 rounded-md bg-muted/40 px-2 py-1.5 pl-2 ml-2">
+            <MessageSquare className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground/70" />
+            <p className="text-[11.5px] leading-snug text-muted-foreground line-clamp-2">
+              {card.lastMessagePreview}
+            </p>
+          </div>
         )}
-        {card.value && (
-          <p className="mt-1 text-xs font-medium text-muted-foreground">
-            {Number(card.value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-          </p>
-        )}
+
+        {/* Etiquetas */}
         {card.labels.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {card.labels.map((cl) => (
+          <div className="mt-2 flex flex-wrap gap-1 pl-2">
+            {card.labels.slice(0, 3).map((cl) => (
               <span
                 key={cl.label.id}
-                style={{ backgroundColor: cl.label.color }}
-                className="rounded-full px-1.5 py-0.5 text-[10px] text-white"
+                style={{
+                  backgroundColor: cl.label.color + '22',
+                  color: cl.label.color,
+                  borderColor: cl.label.color + '40',
+                }}
+                className="rounded-md border px-1.5 py-0.5 text-[10px] font-medium"
               >
                 {cl.label.name}
               </span>
             ))}
+            {card.labels.length > 3 && (
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                +{card.labels.length - 3}
+              </span>
+            )}
           </div>
         )}
-        <div className="mt-2 flex flex-wrap items-center gap-1">
-          {assignee && (
+
+        {/* Footer: SLA + assignee + unread */}
+        <div className="mt-2.5 flex items-center justify-between gap-2 pl-2">
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span
-              title={assignee.user.name ?? assignee.user.email}
-              className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold uppercase text-primary-foreground"
-            >
-              {(assignee.user.name ?? assignee.user.email).charAt(0)}
-            </span>
-          )}
-          {card.unreadCount > 0 && (
-            <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] text-primary-foreground">
-              {card.unreadCount} nova(s)
-            </span>
-          )}
-          {isSnoozed && activeSnooze && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900">
-              <Clock className="h-3 w-3" />
-              {formatSnoozeUntil(activeSnooze.snoozeUntil)}
-            </span>
-          )}
+              className={`inline-block h-1.5 w-1.5 rounded-full ${SLA_DOT[card.slaStatus] ?? 'bg-slate-400'}`}
+              title={SLA_LABEL[card.slaStatus] ?? card.slaStatus}
+            />
+            <span>{SLA_LABEL[card.slaStatus] ?? card.slaStatus}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {hasUnread && (
+              <span className="inline-flex items-center justify-center min-w-[20px] h-5 rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {card.unreadCount > 9 ? '9+' : card.unreadCount}
+              </span>
+            )}
+            {assignee ? (
+              <div
+                title={assignee.user.name ?? assignee.user.email}
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[10px] font-semibold uppercase text-white ring-2 ring-card"
+              >
+                {initialsFrom(assignee.user.name ?? assignee.user.email)}
+              </div>
+            ) : (
+              <div
+                title="Sem agente"
+                className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 text-muted-foreground/40"
+              >
+                <UserX className="h-3 w-3" />
+              </div>
+            )}
+          </div>
         </div>
+
+        {isSnoozed && activeSnooze && (
+          <div className="mt-2.5 -mx-3 -mb-3 rounded-b-xl border-t border-amber-200/60 bg-amber-100/60 px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-900">
+            <Clock className="h-3 w-3" />
+            Adiado até {formatSnoozeUntil(activeSnooze.snoozeUntil)}
+          </div>
+        )}
       </div>
-      <div className="absolute right-1 top-1">
+
+      <div className="absolute right-2 top-2">
         <CardActionsMenu
           card={card}
           members={members}
@@ -386,33 +467,65 @@ function StageColumn({
   funnelId: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
+  const total = cards.length;
+  const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
+  const accent = stage.isWon ? '#10b981' : stage.isLost ? '#ef4444' : stage.color;
+
   return (
     <div
       ref={setNodeRef}
-      className={`flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30 ${
-        isOver ? 'ring-2 ring-primary' : ''
+      className={`flex w-[320px] shrink-0 flex-col rounded-2xl bg-muted/40 transition ${
+        isOver ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5' : ''
       }`}
     >
       <div
-        className="flex items-center justify-between rounded-t-lg p-3"
+        className="rounded-t-2xl px-3 pt-3 pb-2.5"
         style={{
-          background: `linear-gradient(180deg, ${stage.color}22, transparent)`,
-          borderBottom: `2px solid ${stage.color}`,
+          background: `linear-gradient(180deg, ${accent}18 0%, ${accent}05 100%)`,
         }}
       >
-        <h3 className="text-sm font-semibold">{stage.name}</h3>
-        <span className="rounded-full bg-background px-2 py-0.5 text-xs">
-          {cards.length}
-        </span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: accent }}
+            />
+            <h3 className="truncate text-sm font-semibold tracking-tight">{stage.name}</h3>
+            <span className="rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+              {total}
+            </span>
+          </div>
+          {stage.isWon && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              Ganho
+            </span>
+          )}
+          {stage.isLost && (
+            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+              Perdido
+            </span>
+          )}
+        </div>
+        {sumValue > 0 && (
+          <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+            Total: <span className="text-foreground">{formatBRL(sumValue)}</span>
+          </p>
+        )}
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-2 min-h-[60vh]">
+
+      <div
+        className="flex-1 space-y-2 overflow-y-auto p-2 min-h-[55vh]"
+        style={{ borderTop: `1px solid ${accent}25` }}
+      >
         {cards.map((c) => (
           <DraggableCard key={c.id} card={c} members={members} funnelId={funnelId} />
         ))}
         {cards.length === 0 && (
-          <p className="px-2 pt-2 text-center text-xs text-muted-foreground">
-            Arraste cards aqui
-          </p>
+          <div className="flex h-32 flex-col items-center justify-center rounded-xl border border-dashed bg-background/40 px-3 text-center">
+            <p className="text-[11px] text-muted-foreground">
+              {isOver ? 'Solte aqui ↓' : 'Vazio — arraste um card pra cá'}
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -512,6 +625,14 @@ export default function KanbanPage() {
     return map;
   }, [cardsData, funnel]);
 
+  const totals = useMemo(() => {
+    const cards = cardsData?.cards ?? [];
+    const total = cards.length;
+    const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
+    const unread = cards.reduce((acc, c) => acc + c.unreadCount, 0);
+    return { total, sumValue, unread };
+  }, [cardsData]);
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   async function handleDragEnd(e: DragEndEvent) {
@@ -575,151 +696,74 @@ export default function KanbanPage() {
 
   if (!funnelsData?.funnels.length) {
     return (
-      <div className="rounded-lg border border-dashed bg-muted/30 p-12 text-center">
-        <h3 className="font-semibold">Nenhum funil criado</h3>
+      <div className="rounded-2xl border border-dashed bg-gradient-to-br from-muted/40 to-muted/10 p-12 text-center">
+        <LayoutEmptyIcon />
+        <h3 className="mt-3 font-semibold">Nenhum funil criado</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Crie um funil pra começar a organizar conversas em estágios.
         </p>
-        <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
+        <div className="mt-4">
+          <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col space-y-4">
+    <div className="flex h-[calc(100vh-7rem)] flex-col gap-4">
+      {/* Top bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <select
-            value={funnelId ?? ''}
-            onChange={(e) => setFunnelId(e.target.value)}
-            className="rounded-md border px-3 py-2 text-sm font-medium"
-          >
-            {funnelsData.funnels.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-3 min-w-0">
+          <FunnelSwitcher
+            funnels={funnelsData.funnels}
+            funnelId={funnelId}
+            onChange={setFunnelId}
+          />
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
+          <div className="hidden md:flex items-center gap-4 pl-3 ml-1 border-l text-[11px] text-muted-foreground">
+            <span>
+              <span className="font-semibold text-foreground">{totals.total}</span> cards
+            </span>
+            {totals.sumValue > 0 && (
+              <span>
+                <span className="font-semibold text-emerald-600">{formatBRL(totals.sumValue)}</span>{' '}
+                em pipeline
+              </span>
+            )}
+            {totals.unread > 0 && (
+              <span>
+                <span className="font-semibold text-primary">{totals.unread}</span> não lidas
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
               placeholder="Buscar card…"
-              className="w-56 pl-8"
+              className="w-60 pl-8"
             />
           </div>
-          {labelsData?.labels && labelsData.labels.length > 0 && (
-            <select
-              value={filters.labelId ?? ''}
-              onChange={(e) => setFilters((f) => ({ ...f, labelId: e.target.value || null }))}
-              className="rounded-md border px-3 py-2 text-sm"
-            >
-              <option value="">Todas etiquetas</option>
-              {labelsData.labels.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <select
-            value={
-              filters.unassigned
-                ? '__unassigned'
-                : filters.assignedAgentId ?? ''
-            }
-            onChange={(e) => {
-              const v = e.target.value;
-              if (v === '__unassigned') {
-                setFilters((f) => ({ ...f, unassigned: true, assignedAgentId: null }));
-              } else if (v === '') {
-                setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: null }));
-              } else {
-                setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: v }));
-              }
-            }}
-            className="rounded-md border px-3 py-2 text-sm"
-          >
-            <option value="">Todos agentes</option>
-            <option value="__unassigned">Sem atribuição</option>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.user.name ?? m.user.email}
-              </option>
-            ))}
-          </select>
-          <label className="flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              checked={filters.showSnoozed}
-              onChange={(e) => setFilters((f) => ({ ...f, showSnoozed: e.target.checked }))}
-            />
-            Adiados
-          </label>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="outline">
-                <BookmarkCheck className="h-3.5 w-3.5" />
-                Filtros
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel>Filtros salvos</DropdownMenuLabel>
-              {(!savedFiltersData?.filters || savedFiltersData.filters.length === 0) && (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  Nenhum filtro salvo
-                </p>
-              )}
-              {savedFiltersData?.filters.map((f) => (
-                <div
-                  key={f.id}
-                  className="flex items-center gap-1 rounded-sm hover:bg-accent"
-                >
-                  <button
-                    type="button"
-                    onClick={() => applySavedFilter(f)}
-                    className="flex-1 px-2 py-1.5 text-left text-sm"
-                  >
-                    {f.name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteSavedFilter(f)}
-                    aria-label="Excluir filtro"
-                    className="rounded p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => setSaveFilterOpen(true)}
-                disabled={!hasActiveFilters}
-              >
-                <Save className="h-3.5 w-3.5" />
-                Salvar filtro atual
-              </DropdownMenuItem>
-              {hasActiveFilters && (
-                <DropdownMenuItem onSelect={() => setFilters(EMPTY_FILTERS)}>
-                  Limpar filtros
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
+          <FilterChips
+            filters={filters}
+            setFilters={setFilters}
+            labels={labelsData?.labels ?? []}
+            members={members}
+          />
+          <SavedFiltersMenu
+            saved={savedFiltersData?.filters ?? []}
+            applySavedFilter={applySavedFilter}
+            deleteSavedFilter={deleteSavedFilter}
+            hasActiveFilters={hasActiveFilters}
+            onSaveCurrent={() => setSaveFilterOpen(true)}
+            onClearAll={() => setFilters(EMPTY_FILTERS)}
+          />
           {funnel && (
-            <CreateCardDialog
-              funnel={funnel}
-              open={createOpen}
-              onOpenChange={setCreateOpen}
-            />
+            <CreateCardDialog funnel={funnel} open={createOpen} onOpenChange={setCreateOpen} />
           )}
         </div>
       </div>
@@ -731,7 +775,7 @@ export default function KanbanPage() {
       />
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto pb-4">
+        <div className="flex flex-1 gap-4 overflow-x-auto pb-4 -mx-1 px-1">
           {funnel?.stages.map((stage) => (
             <StageColumn
               key={stage.id}
@@ -743,6 +787,252 @@ export default function KanbanPage() {
           ))}
         </div>
       </DndContext>
+    </div>
+  );
+}
+
+function FunnelSwitcher({
+  funnels,
+  funnelId,
+  onChange,
+}: {
+  funnels: Funnel[];
+  funnelId: string | null;
+  onChange: (id: string) => void;
+}) {
+  const current = funnels.find((f) => f.id === funnelId);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent"
+        >
+          {current && (
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: current.color }}
+            />
+          )}
+          <span className="truncate max-w-[180px]">{current?.name ?? 'Selecione'}</span>
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-[220px]">
+        <DropdownMenuLabel>Funis</DropdownMenuLabel>
+        {funnels.map((f) => (
+          <DropdownMenuItem key={f.id} onSelect={() => onChange(f.id)}>
+            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />
+            <span className="flex-1 truncate">{f.name}</span>
+            {f.id === funnelId && <BookmarkCheck className="h-3.5 w-3.5 text-muted-foreground" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function FilterChips({
+  filters,
+  setFilters,
+  labels,
+  members,
+}: {
+  filters: KanbanFilters;
+  setFilters: React.Dispatch<React.SetStateAction<KanbanFilters>>;
+  labels: Array<{ id: string; name: string; color: string }>;
+  members: Member[];
+}) {
+  const labelObj = labels.find((l) => l.id === filters.labelId);
+  const memberObj = members.find((m) => m.userId === filters.assignedAgentId);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+              filters.labelId
+                ? 'border-foreground bg-accent text-foreground'
+                : 'bg-card text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            {labelObj && (
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: labelObj.color }}
+              />
+            )}
+            {labelObj ? labelObj.name : 'Etiqueta'}
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+          <DropdownMenuItem onSelect={() => setFilters((f) => ({ ...f, labelId: null }))}>
+            <X className="h-3.5 w-3.5" />
+            Todas
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {labels.length === 0 && <DropdownMenuLabel>Nenhuma etiqueta</DropdownMenuLabel>}
+          {labels.map((l) => (
+            <DropdownMenuItem key={l.id} onSelect={() => setFilters((f) => ({ ...f, labelId: l.id }))}>
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: l.color }} />
+              {l.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+              filters.assignedAgentId || filters.unassigned
+                ? 'border-foreground bg-accent text-foreground'
+                : 'bg-card text-muted-foreground hover:bg-accent'
+            }`}
+          >
+            <Users className="h-3 w-3" />
+            {filters.unassigned
+              ? 'Sem agente'
+              : memberObj
+                ? memberObj.user.name ?? memberObj.user.email
+                : 'Agente'}
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+          <DropdownMenuItem
+            onSelect={() =>
+              setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: null }))
+            }
+          >
+            <X className="h-3.5 w-3.5" />
+            Todos
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() =>
+              setFilters((f) => ({ ...f, unassigned: true, assignedAgentId: null }))
+            }
+          >
+            <UserX className="h-3.5 w-3.5" />
+            Sem atribuição
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {members.map((m) => (
+            <DropdownMenuItem
+              key={m.userId}
+              onSelect={() =>
+                setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: m.userId }))
+              }
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-semibold uppercase text-white">
+                {initialsFrom(m.user.name ?? m.user.email)}
+              </span>
+              {m.user.name ?? m.user.email}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <button
+        type="button"
+        onClick={() => setFilters((f) => ({ ...f, showSnoozed: !f.showSnoozed }))}
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+          filters.showSnoozed
+            ? 'border-amber-400 bg-amber-100 text-amber-900'
+            : 'bg-card text-muted-foreground hover:bg-accent'
+        }`}
+      >
+        <AlarmClock className="h-3 w-3" />
+        Adiados
+      </button>
+    </div>
+  );
+}
+
+function SavedFiltersMenu({
+  saved,
+  applySavedFilter,
+  deleteSavedFilter,
+  hasActiveFilters,
+  onSaveCurrent,
+  onClearAll,
+}: {
+  saved: SavedFilter[];
+  applySavedFilter: (f: SavedFilter) => void;
+  deleteSavedFilter: (f: SavedFilter) => void;
+  hasActiveFilters: boolean;
+  onSaveCurrent: () => void;
+  onClearAll: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline" className="gap-1.5">
+          <Filter className="h-3.5 w-3.5" />
+          Filtros
+          {hasActiveFilters && (
+            <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+              !
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel className="flex items-center justify-between">
+          <span>Filtros salvos</span>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="text-[10px] font-medium text-muted-foreground hover:text-foreground"
+            >
+              limpar tudo
+            </button>
+          )}
+        </DropdownMenuLabel>
+        {saved.length === 0 && (
+          <p className="px-2 py-1.5 text-xs text-muted-foreground">
+            Nenhum filtro salvo. Aplique filtros e salve a combinação.
+          </p>
+        )}
+        {saved.map((f) => (
+          <div key={f.id} className="flex items-center gap-1 rounded-sm hover:bg-accent">
+            <button
+              type="button"
+              onClick={() => applySavedFilter(f)}
+              className="flex-1 truncate px-2 py-1.5 text-left text-sm"
+            >
+              <SlidersHorizontal className="mr-1.5 inline h-3 w-3 text-muted-foreground" />
+              {f.name}
+            </button>
+            <button
+              type="button"
+              onClick={() => deleteSavedFilter(f)}
+              aria-label="Excluir filtro"
+              className="rounded p-1 text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onSaveCurrent} disabled={!hasActiveFilters}>
+          <Save className="h-3.5 w-3.5" />
+          Salvar filtro atual
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function LayoutEmptyIcon() {
+  return (
+    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 text-primary">
+      <Plus className="h-7 w-7" />
     </div>
   );
 }
