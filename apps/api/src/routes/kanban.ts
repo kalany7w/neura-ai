@@ -57,8 +57,8 @@ kanbanRouter.post(
             stages: {
               create: [
                 { name: 'New Lead', color: '#94a3b8', order: 0 },
-                { name: 'Won', color: '#10b981', order: 100, isWon: true },
-                { name: 'Lost', color: '#ef4444', order: 101, isLost: true },
+                { name: 'Ganho', color: '#10b981', order: 100, outcome: 'POSITIVE' },
+                { name: 'Perda', color: '#ef4444', order: 101, outcome: 'NEGATIVE' },
               ],
             },
           },
@@ -128,8 +128,7 @@ kanbanRouter.delete(
 const stageSchema = z.object({
   name: z.string().min(1).max(60),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#94a3b8'),
-  isWon: z.boolean().default(false),
-  isLost: z.boolean().default(false),
+  outcome: z.enum(['POSITIVE', 'NEGATIVE', 'RISK']).nullable().optional(),
   order: z.number().int().optional(),
 });
 

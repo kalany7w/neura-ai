@@ -3,14 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   Check,
+  CircleDashed,
   GripVertical,
+  Minus,
   Plus,
   Trash2,
   Trophy,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -25,14 +27,52 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+type StageOutcome = 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+
 interface Stage {
   id: string;
   name: string;
   color: string;
   order: number;
-  isWon: boolean;
-  isLost: boolean;
+  outcome: StageOutcome;
 }
+
+const OUTCOME_OPTIONS: Array<{
+  value: StageOutcome;
+  label: string;
+  hint: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  classes: string;
+}> = [
+  {
+    value: null,
+    label: 'Aberto',
+    hint: 'Etapa normal do pipeline — card ativo',
+    Icon: CircleDashed,
+    classes: 'text-slate-600',
+  },
+  {
+    value: 'POSITIVE',
+    label: 'Positivo',
+    hint: 'Outcome final positivo (ganho/sucesso)',
+    Icon: Trophy,
+    classes: 'text-emerald-600',
+  },
+  {
+    value: 'NEGATIVE',
+    label: 'Negativo',
+    hint: 'Outcome final negativo (perda/cancelado)',
+    Icon: Minus,
+    classes: 'text-red-600',
+  },
+  {
+    value: 'RISK',
+    label: 'Risco',
+    hint: 'Alerta — card ainda ativo mas em perigo',
+    Icon: AlertTriangle,
+    classes: 'text-amber-600',
+  },
+];
 
 interface Funnel {
   id: string;
@@ -237,20 +277,18 @@ function StageRow({
 }) {
   const [name, setName] = useState(stage.name);
   const [color, setColor] = useState(stage.color);
-  const [isWon, setIsWon] = useState(stage.isWon);
-  const [isLost, setIsLost] = useState(stage.isLost);
+  const [outcome, setOutcome] = useState<StageOutcome>(stage.outcome);
   const [editingColor, setEditingColor] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setName(stage.name);
     setColor(stage.color);
-    setIsWon(stage.isWon);
-    setIsLost(stage.isLost);
-  }, [stage.id, stage.name, stage.color, stage.isWon, stage.isLost]);
+    setOutcome(stage.outcome);
+  }, [stage.id, stage.name, stage.color, stage.outcome]);
 
   const dirty =
-    name !== stage.name || color !== stage.color || isWon !== stage.isWon || isLost !== stage.isLost;
+    name !== stage.name || color !== stage.color || outcome !== stage.outcome;
 
   async function patch(payload: Record<string, unknown>) {
     setBusy(true);
@@ -269,7 +307,7 @@ function StageRow({
 
   async function save() {
     if (!name.trim() || !dirty || busy) return;
-    await patch({ name: name.trim(), color, isWon, isLost });
+    await patch({ name: name.trim(), color, outcome });
   }
 
   async function remove() {
@@ -366,31 +404,27 @@ function StageRow({
               }}
             />
           )}
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={isWon}
-                onChange={(e) => {
-                  setIsWon(e.target.checked);
-                  if (e.target.checked) setIsLost(false);
-                }}
-              />
-              <Trophy className="h-3 w-3 text-emerald-500" />
-              <span>Stage de ganho</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={isLost}
-                onChange={(e) => {
-                  setIsLost(e.target.checked);
-                  if (e.target.checked) setIsWon(false);
-                }}
-              />
-              <X className="h-3 w-3 text-red-500" />
-              <span>Stage de perda</span>
-            </label>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+            {OUTCOME_OPTIONS.map((opt) => {
+              const Icon = opt.Icon;
+              const active = outcome === opt.value;
+              return (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setOutcome(opt.value)}
+                  title={opt.hint}
+                  className={`flex flex-col items-center gap-0.5 rounded-md border px-2 py-1.5 text-[11px] transition ${
+                    active
+                      ? 'border-foreground bg-accent font-medium'
+                      : 'border-input bg-background hover:bg-muted/50'
+                  }`}
+                >
+                  <Icon className={`h-3.5 w-3.5 ${opt.classes}`} />
+                  <span className={opt.classes}>{opt.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -431,12 +465,12 @@ function NewStageRow({
     if (!name.trim() || submitting) return;
     setSubmitting(true);
     try {
-      // Insere antes do primeiro stage isWon/isLost se houver, senão no fim
-      const winLossOrder = stages.find((s) => s.isWon || s.isLost)?.order;
+      // Insere antes do primeiro stage com outcome (POSITIVE/NEGATIVE), senão no fim
+      const outcomeOrder = stages.find((s) => s.outcome === 'POSITIVE' || s.outcome === 'NEGATIVE')?.order;
       const lastNormal = stages
-        .filter((s) => !s.isWon && !s.isLost)
+        .filter((s) => s.outcome !== 'POSITIVE' && s.outcome !== 'NEGATIVE')
         .reduce((acc, s) => Math.max(acc, s.order), -1);
-      const newOrder = winLossOrder !== undefined ? lastNormal + 1 : stages.length;
+      const newOrder = outcomeOrder !== undefined ? lastNormal + 1 : stages.length;
       await api(`/api/kanban/funnels/${funnelId}/stages`, {
         method: 'POST',
         body: JSON.stringify({ name: name.trim(), color, order: newOrder }),

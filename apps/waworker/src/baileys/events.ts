@@ -206,12 +206,12 @@ async function persistInboundMessage(
         },
       });
 
-      // Auto-cria card no funil default (primeira stage não-Won/Lost)
+      // Auto-cria card no funil default (primeira stage sem outcome POSITIVE/NEGATIVE)
       const defaultFunnel = await tx.funnel.findFirst({
         where: { workspaceId: ctx.workspaceId, isDefault: true },
         include: {
           stages: {
-            where: { isWon: false, isLost: false },
+            where: { NOT: { outcome: { in: ['POSITIVE', 'NEGATIVE'] } } },
             orderBy: { order: 'asc' },
             take: 1,
           },
