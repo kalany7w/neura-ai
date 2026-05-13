@@ -611,6 +611,8 @@ model Message {
   mediaUrl       String?
   mediaMimeType  String?
   mediaSize      Int?
+  // Thumbnail 240x240 gerado pra imagens (sharp) — usado em preview/inbox
+  thumbnailUrl   String?
   // Resposta a outra mensagem (replied_to no Baileys)
   replyToId      String?
   status         MessageStatus    @default(PENDING)
