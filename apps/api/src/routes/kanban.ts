@@ -503,6 +503,138 @@ kanbanRouter.delete(
   },
 );
 
+// ==================== BULK ACTIONS ====================
+
+const bulkActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('move'),
+    cardIds: z.array(z.string()).min(1).max(200),
+    stageId: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('assign'),
+    cardIds: z.array(z.string()).min(1).max(200),
+    assignedAgentId: z.string().nullable(),
+  }),
+  z.object({
+    action: z.literal('snooze'),
+    cardIds: z.array(z.string()).min(1).max(200),
+    minutes: z.number().int().min(1).max(60 * 24 * 30),
+  }),
+  z.object({
+    action: z.literal('delete'),
+    cardIds: z.array(z.string()).min(1).max(200),
+  }),
+  z.object({
+    action: z.literal('apply_label'),
+    cardIds: z.array(z.string()).min(1).max(200),
+    labelId: z.string(),
+  }),
+]);
+
+kanbanRouter.post(
+  '/cards/bulk',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = bulkActionSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    }
+    const workspaceId = c.get('workspaceId') as string;
+    const { cardIds, action } = parsed.data;
+
+    // Garante que todos os cards pertencem ao workspace
+    const owned = await prisma.card.findMany({
+      where: { id: { in: cardIds }, workspaceId },
+      select: { id: true, funnelId: true },
+    });
+    const validIds = owned.map((c) => c.id);
+    if (validIds.length === 0) return c.json({ error: 'no_cards' }, 404);
+
+    let affected = 0;
+    if (action === 'move') {
+      // Valida que o stage pertence ao mesmo funil dos cards (heurística: usa funil do 1º card)
+      const firstFunnel = owned[0]!.funnelId;
+      const stage = await prisma.stage.findFirst({
+        where: { id: parsed.data.stageId, funnelId: firstFunnel },
+      });
+      if (!stage) return c.json({ error: 'stage_not_found_in_funnel' }, 404);
+      const r = await prisma.card.updateMany({
+        where: { id: { in: validIds }, funnelId: firstFunnel },
+        data: { stageId: stage.id, position: 0 },
+      });
+      affected = r.count;
+      for (const id of validIds) {
+        await publishEvent(workspaceId, 'cards', 'card.moved', {
+          cardId: id,
+          stageId: stage.id,
+          reason: 'bulk',
+        });
+      }
+    } else if (action === 'assign') {
+      const r = await prisma.card.updateMany({
+        where: { id: { in: validIds } },
+        data: { assignedAgentId: parsed.data.assignedAgentId },
+      });
+      affected = r.count;
+      for (const id of validIds) {
+        await publishEvent(workspaceId, 'cards', 'card.updated', { cardId: id });
+      }
+    } else if (action === 'snooze') {
+      const now = new Date();
+      const snoozeUntil = new Date(now.getTime() + parsed.data.minutes * 60 * 1000);
+      // Desativa snoozes ativos + cria novos numa única transação
+      await prisma.$transaction([
+        prisma.cardSnooze.updateMany({
+          where: { cardId: { in: validIds }, reactivatedAt: null, snoozeUntil: { gt: now } },
+          data: { reactivatedAt: now },
+        }),
+        prisma.cardSnooze.createMany({
+          data: validIds.map((cardId) => ({ cardId, snoozeUntil })),
+        }),
+      ]);
+      affected = validIds.length;
+      for (const id of validIds) {
+        await publishEvent(workspaceId, 'cards', 'card.snoozed', {
+          cardId: id,
+          snoozeUntil: snoozeUntil.toISOString(),
+        });
+      }
+    } else if (action === 'delete') {
+      const r = await prisma.card.deleteMany({ where: { id: { in: validIds } } });
+      affected = r.count;
+      for (const id of validIds) {
+        await publishEvent(workspaceId, 'cards', 'card.deleted', { cardId: id });
+      }
+    } else if (action === 'apply_label') {
+      const label = await prisma.label.findFirst({
+        where: { id: parsed.data.labelId, workspaceId },
+      });
+      if (!label) return c.json({ error: 'label_not_found' }, 404);
+      // upsert em lote — Prisma não tem upsertMany, vai pelo skipDuplicates
+      await prisma.cardLabel.createMany({
+        data: validIds.map((cardId) => ({ cardId, labelId: label.id })),
+        skipDuplicates: true,
+      });
+      affected = validIds.length;
+      for (const id of validIds) {
+        await publishEvent(workspaceId, 'cards', 'card.updated', { cardId: id });
+      }
+    }
+
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: `card.bulk_${action}`,
+      metadata: { count: affected, cardIds: validIds },
+    });
+    return c.json({ ok: true, affected });
+  },
+);
+
 // ==================== SNOOZE ====================
 
 const snoozeSchema = z.object({
