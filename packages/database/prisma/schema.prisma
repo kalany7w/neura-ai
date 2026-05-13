@@ -36,6 +36,7 @@ model Workspace {
   messageTemplates    MessageTemplate[]
   webhooks            Webhook[]
   automationRules     AutomationRule[]
+  notifications       Notification[]
 
   @@map("workspaces")
 }
@@ -115,9 +116,10 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  memberships Membership[]
-  sessions    Session[]
-  accounts    Account[]
+  memberships   Membership[]
+  sessions      Session[]
+  accounts      Account[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -677,4 +679,28 @@ model AutomationRule {
 
   @@index([workspaceId, trigger, enabled])
   @@map("automation_rules")
+}
+
+// ============================================
+// NOTIFICATIONS (sino do topbar)
+// ============================================
+
+model Notification {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  kind        String   // 'message.new' | 'conversation.assigned' | 'sla.critical' | 'card.outcome'
+  title       String
+  body        String?  @db.Text
+  link        String?  // ex: /inbox/abc123
+  metadata    Json?
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@index([workspaceId])
+  @@map("notifications")
 }

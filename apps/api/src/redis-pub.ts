@@ -1,6 +1,7 @@
 import { redis } from './redis';
 import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/webhooks';
 import { dispatchAutomationRules } from './services/automation';
+import { dispatchNotifications } from './services/notification-hooks';
 
 const KNOWN_EVENTS = new Set<string>(WEBHOOK_EVENTS);
 
@@ -29,4 +30,7 @@ export async function publishEvent(
 
   // Automation rules — engine interno (não rebobina se já veio de automation)
   dispatchAutomationRules(event, workspaceId, data);
+
+  // Notifications — cria notif persistente + publica em canal user:<id>
+  dispatchNotifications(event, workspaceId, data);
 }

@@ -7,6 +7,7 @@ import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { RealtimeProvider } from '@/components/realtime-provider';
 import { Sidebar } from '@/components/layout/sidebar';
+import { NotificationsBell } from '@/components/layout/notifications-bell';
 
 interface WorkspaceListItem {
   id: string;
@@ -69,6 +70,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           workspace={activeWorkspace ?? null}
         />
         <main className="flex-1 overflow-y-auto">
+          <header className="sticky top-0 z-30 flex h-12 items-center justify-end gap-2 border-b bg-background/95 backdrop-blur px-4">
+            <NotificationsBell />
+          </header>
           <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
         </main>
       </div>

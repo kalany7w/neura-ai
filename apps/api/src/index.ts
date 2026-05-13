@@ -21,6 +21,7 @@ import { integrationsRouter } from './routes/integrations';
 import { dashboardRouter } from './routes/dashboard';
 import { automationsRouter } from './routes/automations';
 import { reportsRouter } from './routes/reports';
+import { notificationsRouter } from './routes/notifications';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
@@ -62,6 +63,7 @@ app.route('/api/integrations', integrationsRouter);
 app.route('/api/dashboard', dashboardRouter);
 app.route('/api/automations', automationsRouter);
 app.route('/api/reports', reportsRouter);
+app.route('/api/notifications', notificationsRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
