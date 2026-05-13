@@ -37,6 +37,8 @@ export const outboundWorker = new Worker<SendMessageJob>(
       mediaUrl,
       mimeType,
       fileName,
+      quotedWaMessageId,
+      quotedParticipant,
     } = job.data;
     const handle = sessionManager.get(inboxId);
     if (!handle) {
@@ -44,42 +46,60 @@ export const outboundWorker = new Worker<SendMessageJob>(
     }
     const jid = toJid(to);
 
+    // Monta `quoted` se foi um reply — Baileys exige WAMessage stub mínimo
+    const quoted = quotedWaMessageId
+      ? ({
+          key: {
+            id: quotedWaMessageId,
+            remoteJid: jid,
+            fromMe: false,
+            participant: quotedParticipant,
+          },
+          message: { conversation: '' }, // body fica vazio; Baileys usa só o ID
+        } as never)
+      : undefined;
+    const sendOpts = quoted ? { quoted } : {};
+
     let result: { key: { id?: string | null } } | undefined;
     if (type === 'TEXT') {
-      result = await handle.sock.sendMessage(jid, { text: text ?? '' });
+      result = await handle.sock.sendMessage(jid, { text: text ?? '' }, sendOpts);
     } else {
       if (!mediaUrl) throw new Error(`Media job ${messageId} missing mediaUrl`);
       const buffer = await fetchMediaBuffer(mediaUrl);
       const caption = text ?? undefined;
       switch (type) {
         case 'IMAGE':
-          result = await handle.sock.sendMessage(jid, {
-            image: buffer,
-            caption,
-            mimetype: mimeType,
-          });
+          result = await handle.sock.sendMessage(
+            jid,
+            { image: buffer, caption, mimetype: mimeType },
+            sendOpts,
+          );
           break;
         case 'VIDEO':
-          result = await handle.sock.sendMessage(jid, {
-            video: buffer,
-            caption,
-            mimetype: mimeType,
-          });
+          result = await handle.sock.sendMessage(
+            jid,
+            { video: buffer, caption, mimetype: mimeType },
+            sendOpts,
+          );
           break;
         case 'AUDIO':
-          result = await handle.sock.sendMessage(jid, {
-            audio: buffer,
-            mimetype: mimeType ?? 'audio/ogg; codecs=opus',
-            ptt: false,
-          });
+          result = await handle.sock.sendMessage(
+            jid,
+            { audio: buffer, mimetype: mimeType ?? 'audio/ogg; codecs=opus', ptt: false },
+            sendOpts,
+          );
           break;
         case 'DOCUMENT':
-          result = await handle.sock.sendMessage(jid, {
-            document: buffer,
-            mimetype: mimeType ?? 'application/octet-stream',
-            fileName: fileName ?? 'arquivo',
-            caption,
-          });
+          result = await handle.sock.sendMessage(
+            jid,
+            {
+              document: buffer,
+              mimetype: mimeType ?? 'application/octet-stream',
+              fileName: fileName ?? 'arquivo',
+              caption,
+            },
+            sendOpts,
+          );
           break;
       }
     }
