@@ -234,6 +234,18 @@ async function persistInboundMessage(
       },
     });
 
+    // Sync cards linkados — atualiza preview/badge unread/lastMessageAt
+    // (slaStatus deixa pro SLA scheduler recalcular)
+    const preview = text ? text.slice(0, 60) : `[${type}]`;
+    await tx.card.updateMany({
+      where: { conversationId: conversation.id },
+      data: {
+        lastMessageAt: created.createdAt,
+        lastMessagePreview: preview,
+        unreadCount: { increment: 1 },
+      },
+    });
+
     // Eventos real-time
     await publishEvent(ctx.workspaceId, 'messages', 'message.new', {
       conversationId: conversation.id,
@@ -243,6 +255,11 @@ async function persistInboundMessage(
       conversationId: conversation.id,
       lastMessageAt: created.createdAt,
       unreadDelta: 1,
+    });
+    await publishEvent(ctx.workspaceId, 'cards', 'card.unread_changed', {
+      conversationId: conversation.id,
+      lastMessageAt: created.createdAt,
+      preview,
     });
 
     // Fire-and-forget: baixa e armazena mídia em background
