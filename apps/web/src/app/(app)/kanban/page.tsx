@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -204,6 +205,7 @@ function CardActionsMenu({
   isSnoozed: boolean;
 }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
 
   async function snooze(minutes: number) {
     try {
@@ -242,7 +244,15 @@ function CardActionsMenu({
   }
 
   async function remove() {
-    if (!confirm('Excluir este card?')) return;
+    if (
+      !(await confirm({
+        title: 'Excluir este card?',
+        description: `"${card.title}" será removido junto com etiquetas e notas.`,
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/kanban/cards/${card.id}`, { method: 'DELETE' });
       toast.success('Card excluído');
@@ -618,6 +628,7 @@ const EMPTY_FILTERS: KanbanFilters = {
 
 export default function KanbanPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [funnelId, setFunnelId] = useState<string | null>(null);
   const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
   const [createOpen, setCreateOpen] = useState(false);
@@ -757,7 +768,14 @@ export default function KanbanPage() {
   }
 
   async function deleteSavedFilter(f: SavedFilter) {
-    if (!confirm(`Excluir filtro "${f.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: `Excluir filtro "${f.name}"?`,
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/saved-filters/${f.id}`, { method: 'DELETE' });
       toast.success('Filtro excluído');

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,6 +97,7 @@ function StatusBadge({ webhook }: { webhook: Webhook }) {
 
 export default function IntegrationsPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Webhook | null>(null);
 
@@ -118,7 +120,15 @@ export default function IntegrationsPage() {
   }
 
   async function remove(w: Webhook) {
-    if (!confirm(`Excluir webhook "${w.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: `Excluir webhook "${w.name}"?`,
+        description: 'Eventos do workspace deixam de ser enviados pra esta URL.',
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/integrations/webhooks/${w.id}`, { method: 'DELETE' });
       toast.success('Webhook excluído');

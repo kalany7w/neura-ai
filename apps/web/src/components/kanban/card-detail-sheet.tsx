@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -248,6 +249,7 @@ function CardDetailBody({
   onClose: () => void;
 }) {
   const { card, conversation, history } = data;
+  const confirm = useConfirm();
   const assignee = members.find((m) => m.userId === card.assignedAgentId);
   const activeSnooze = card.snoozes[0];
   const stageColor = card.stage.outcome ? OUTCOME_COLOR[card.stage.outcome] : card.stage.color;
@@ -316,7 +318,14 @@ function CardDetailBody({
   }
 
   async function removeNote(noteId: string) {
-    if (!confirm('Remover esta nota?')) return;
+    if (
+      !(await confirm({
+        title: 'Remover esta nota?',
+        confirmLabel: 'Remover',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/kanban/notes/${noteId}`, { method: 'DELETE' });
       refresh();
@@ -349,7 +358,15 @@ function CardDetailBody({
   }
 
   async function remove() {
-    if (!confirm(`Excluir o card "${card.title}"?`)) return;
+    if (
+      !(await confirm({
+        title: `Excluir o card "${card.title}"?`,
+        description: 'Notas, etiquetas e snoozes são removidos junto.',
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/kanban/cards/${card.id}`, { method: 'DELETE' });
       toast.success('Card excluído');
