@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   Check,
   CircleDashed,
   GripVertical,
@@ -15,6 +13,21 @@ import {
   Trophy,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
@@ -221,19 +234,15 @@ export function ManageFunnelDialog({
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Listas (stages) — {funnel.stages.length}
             </h3>
+            <span className="text-[10px] text-muted-foreground">
+              Arraste pelo punho ⋮⋮ pra reordenar
+            </span>
           </div>
-          <ul className="space-y-2">
-            {funnel.stages.map((s, idx) => (
-              <StageRow
-                key={s.id}
-                stage={s}
-                index={idx}
-                total={funnel.stages.length}
-                stages={funnel.stages}
-                refresh={refresh}
-              />
-            ))}
-          </ul>
+          <SortableStagesList
+            funnelId={funnel.id}
+            stages={funnel.stages}
+            refresh={refresh}
+          />
           <NewStageRow funnelId={funnel.id} stages={funnel.stages} refresh={refresh} />
         </section>
       </DialogContent>
@@ -268,18 +277,85 @@ function ColorPicker({
   );
 }
 
-function StageRow({
-  stage,
-  index,
-  total,
+function SortableStagesList({
+  funnelId,
   stages,
   refresh,
 }: {
-  stage: Stage;
-  index: number;
-  total: number;
+  funnelId: string;
   stages: Stage[];
   refresh: () => void;
+}) {
+  // Cópia local pra reordenação otimista — sincroniza quando server confirma
+  const [localOrder, setLocalOrder] = useState<Stage[]>(stages);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setLocalOrder(stages);
+  }, [stages]);
+
+  // PointerSensor com distance pra não disparar drag em clique acidental (8px)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
+  async function handleDragEnd(ev: DragEndEvent) {
+    const { active, over } = ev;
+    if (!over || active.id === over.id || busy) return;
+    const oldIdx = localOrder.findIndex((s) => s.id === active.id);
+    const newIdx = localOrder.findIndex((s) => s.id === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+
+    const next = arrayMove(localOrder, oldIdx, newIdx);
+    setLocalOrder(next); // otimista
+    setBusy(true);
+    try {
+      await api(`/api/kanban/funnels/${funnelId}/stages/reorder`, {
+        method: 'POST',
+        body: JSON.stringify({ stageIds: next.map((s) => s.id) }),
+      });
+      refresh();
+    } catch (err) {
+      // Rollback se server rejeitar
+      setLocalOrder(stages);
+      toast.error(err instanceof Error ? err.message : 'Erro ao reordenar');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext
+        items={localOrder.map((s) => s.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <ul className="space-y-2">
+          {localOrder.map((s) => (
+            <SortableStageRow
+              key={s.id}
+              stage={s}
+              stagesCount={localOrder.length}
+              refresh={refresh}
+              disabled={busy}
+            />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableStageRow({
+  stage,
+  stagesCount,
+  refresh,
+  disabled,
+}: {
+  stage: Stage;
+  stagesCount: number;
+  refresh: () => void;
+  disabled: boolean;
 }) {
   const confirm = useConfirm();
   const [name, setName] = useState(stage.name);
@@ -287,6 +363,20 @@ function StageRow({
   const [outcome, setOutcome] = useState<StageOutcome>(stage.outcome);
   const [editingColor, setEditingColor] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: stage.id, disabled });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   useEffect(() => {
     setName(stage.name);
@@ -318,7 +408,7 @@ function StageRow({
   }
 
   async function remove() {
-    if (stages.length <= 1) {
+    if (stagesCount <= 1) {
       toast.error('Funil precisa ter pelo menos 1 lista');
       return;
     }
@@ -343,56 +433,26 @@ function StageRow({
     }
   }
 
-  async function swapOrderWith(other: Stage | undefined) {
-    if (!other) return;
-    setBusy(true);
-    try {
-      await Promise.all([
-        api(`/api/kanban/stages/${stage.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ order: other.order }),
-        }),
-        api(`/api/kanban/stages/${other.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ order: stage.order }),
-        }),
-      ]);
-      refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const moveUp = () => (index > 0 ? swapOrderWith(stages[index - 1]) : Promise.resolve());
-  const moveDown = () =>
-    index < total - 1 ? swapOrderWith(stages[index + 1]) : Promise.resolve();
-
   return (
-    <li className="rounded-lg border bg-card p-3">
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-lg border bg-card p-3 ${
+        isDragging ? 'opacity-50 shadow-lg ring-2 ring-primary' : ''
+      }`}
+    >
       <div className="flex items-start gap-2">
-        <div className="flex flex-col gap-0.5 mt-1">
-          <button
-            type="button"
-            onClick={moveUp}
-            disabled={index === 0 || busy}
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-            title="Mover pra cima"
-          >
-            <ArrowUp className="h-3 w-3" />
-          </button>
-          <GripVertical className="h-3 w-3 text-muted-foreground/40" />
-          <button
-            type="button"
-            onClick={moveDown}
-            disabled={index === total - 1 || busy}
-            className="rounded p-0.5 text-muted-foreground hover:bg-muted disabled:opacity-30"
-            title="Mover pra baixo"
-          >
-            <ArrowDown className="h-3 w-3" />
-          </button>
-        </div>
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          disabled={disabled}
+          aria-label="Arrastar pra reordenar"
+          title="Arrastar pra reordenar"
+          className="mt-1 cursor-grab touch-none rounded p-1 text-muted-foreground/60 transition hover:bg-muted hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
 
         <button
           type="button"

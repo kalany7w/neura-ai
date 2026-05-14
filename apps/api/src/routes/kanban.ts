@@ -194,6 +194,55 @@ kanbanRouter.delete(
   },
 );
 
+// POST /api/kanban/funnels/:id/stages/reorder — reordena todas as listas de uma vez.
+// Body: { stageIds: [...] } em ordem desejada (índice 0 = topo).
+// Valida que TODOS os ids batem com TODAS as stages do funil (sem omissão, sem extras).
+const reorderBody = z.object({
+  stageIds: z.array(z.string().min(1)).min(1).max(50),
+});
+
+kanbanRouter.post(
+  '/funnels/:id/stages/reorder',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('stage.manage'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = reorderBody.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const funnelId = c.req.param('id');
+
+    const funnel = await prisma.funnel.findFirst({
+      where: { id: funnelId, workspaceId },
+      include: { stages: { select: { id: true } } },
+    });
+    if (!funnel) return c.json({ error: 'not_found' }, 404);
+
+    const dbIds = new Set(funnel.stages.map((s) => s.id));
+    const inputIds = parsed.data.stageIds;
+    const inputSet = new Set(inputIds);
+    if (inputIds.length !== dbIds.size || [...dbIds].some((id) => !inputSet.has(id))) {
+      return c.json(
+        {
+          error: 'incomplete_reorder',
+          message: 'Reorder precisa incluir TODOS os stages do funil exatamente uma vez',
+        },
+        400,
+      );
+    }
+
+    // Update em transaction: 1 query por stage. N pequeno (50 max).
+    await prisma.$transaction(
+      inputIds.map((id, idx) =>
+        prisma.stage.update({ where: { id }, data: { order: idx } }),
+      ),
+    );
+
+    return c.json({ ok: true });
+  },
+);
+
 // ==================== CARDS ====================
 
 const cardSchema = z.object({
