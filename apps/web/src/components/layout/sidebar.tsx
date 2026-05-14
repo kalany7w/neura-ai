@@ -77,6 +77,7 @@ const groups: NavGroup[] = [
       { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN'] },
       { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
+      { href: '/settings/custom-attributes', label: 'Atributos', icon: Tag, roles: ['ADMIN'] },
       { href: '/settings/api-keys', label: 'API Keys', icon: Key, roles: ['ADMIN'] },
       { href: '/settings/audit', label: 'Audit log', icon: ScrollText, roles: ['ADMIN'] },
     ],
