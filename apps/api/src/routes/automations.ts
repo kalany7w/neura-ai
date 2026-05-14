@@ -200,3 +200,62 @@ automationsRouter.delete(
     return c.json({ ok: true });
   },
 );
+
+// GET /api/automations/:id/runs — histórico paginado, mais recente primeiro
+const runsQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  perPage: z.coerce.number().int().min(1).max(100).default(25),
+  status: z.enum(['MATCHED', 'PARTIAL', 'FAILED', 'SKIPPED']).optional(),
+});
+
+automationsRouter.get(
+  '/:id/runs',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.read'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const parsed = runsQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
+    if (!parsed.success) return c.json({ error: 'invalid_query' }, 400);
+    const { page, perPage, status } = parsed.data;
+
+    const rule = await prisma.automationRule.findFirst({
+      where: { id, workspaceId },
+      select: { id: true, name: true, trigger: true },
+    });
+    if (!rule) return c.json({ error: 'not_found' }, 404);
+
+    const where = {
+      ruleId: rule.id,
+      ...(status ? { status } : {}),
+    };
+    const [total, runs, counts] = await Promise.all([
+      prisma.automationRun.count({ where }),
+      prisma.automationRun.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * perPage,
+        take: perPage,
+      }),
+      // Summary global (não filtrado por status, mas filtrado pela rule)
+      prisma.automationRun.groupBy({
+        by: ['status'],
+        where: { ruleId: rule.id },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const summary = {
+      MATCHED: 0,
+      PARTIAL: 0,
+      FAILED: 0,
+      SKIPPED: 0,
+    } as Record<'MATCHED' | 'PARTIAL' | 'FAILED' | 'SKIPPED', number>;
+    for (const c of counts) {
+      summary[c.status as keyof typeof summary] = c._count._all;
+    }
+
+    return c.json({ rule, runs, total, page, perPage, summary });
+  },
+);

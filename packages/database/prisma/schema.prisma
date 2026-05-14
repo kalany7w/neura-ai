@@ -39,6 +39,7 @@ model Workspace {
   webhooks            Webhook[]
   inboundWebhooks     InboundWebhook[]
   automationRules     AutomationRule[]
+  automationRuns      AutomationRun[]
   notifications       Notification[]
   apiKeys             ApiKey[]
   scheduledMessages   ScheduledMessage[]
@@ -834,10 +835,47 @@ model AutomationRule {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      AutomationRun[]
 
   @@index([workspaceId, trigger, enabled])
   @@map("automation_rules")
+}
+
+// Histórico de execução das automation rules — uma linha por (rule, event).
+// SKIPPED: conditions não passaram (rule não fez nada).
+// MATCHED: conditions passaram + todas actions executaram OK.
+// PARTIAL: conditions passaram mas alguma action falhou.
+// FAILED:  erro fatal antes/durante actions.
+enum AutomationRunStatus {
+  MATCHED
+  PARTIAL
+  FAILED
+  SKIPPED
+}
+
+model AutomationRun {
+  id               String              @id @default(cuid())
+  ruleId           String
+  workspaceId      String
+  trigger          String
+  status           AutomationRunStatus
+  // Recurso que disparou (ex: "Conversation:abc", "Card:xyz", "Message:def")
+  resource         String?
+  // [{ field, op, value, actual, matched }] — snapshot da avaliação
+  conditionsResult Json?
+  // [{ kind, status: 'ok'|'error', error?, durationMs }]
+  actionsResult    Json?
+  errorMessage     String?             @db.Text
+  durationMs       Int?
+  createdAt        DateTime            @default(now())
+
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@map("automation_runs")
 }
 
 // ============================================

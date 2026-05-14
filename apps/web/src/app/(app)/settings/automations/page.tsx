@@ -4,16 +4,22 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
+  AlertTriangle,
   ArrowRight,
   Bot,
+  CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Clock,
+  History,
   Pencil,
   Plus,
   Power,
+  SkipForward,
   Trash2,
   Wand2,
   X,
+  XCircle,
   Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -173,6 +179,7 @@ export default function AutomationsPage() {
   const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
+  const [runsRule, setRunsRule] = useState<Rule | null>(null);
 
   const { data, isLoading } = useQuery<RulesResponse>({
     queryKey: ['automations'],
@@ -323,6 +330,7 @@ export default function AutomationsPage() {
               onToggle={toggle}
               onEdit={() => setEditing(rule)}
               onRemove={remove}
+              onShowRuns={() => setRunsRule(rule)}
             />
           ))}
         </div>
@@ -339,6 +347,11 @@ export default function AutomationsPage() {
         availableTriggers={data?.availableTriggers ?? []}
         editing={editing}
       />
+      <RunsDialog
+        open={!!runsRule}
+        onOpenChange={(v) => !v && setRunsRule(null)}
+        rule={runsRule}
+      />
     </div>
   );
 }
@@ -348,11 +361,13 @@ function RuleRow({
   onToggle,
   onEdit,
   onRemove,
+  onShowRuns,
 }: {
   rule: Rule;
   onToggle: (r: Rule) => void;
   onEdit: () => void;
   onRemove: (r: Rule) => void;
+  onShowRuns: () => void;
 }) {
   return (
     <div className={`rounded-lg border bg-card p-4 ${!rule.enabled ? 'opacity-60' : ''}`}>
@@ -397,6 +412,15 @@ function RuleRow({
           )}
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onShowRuns}
+            title="Ver execuções"
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Execuções</span>
+          </Button>
           <Button
             size="icon"
             variant="ghost"
@@ -893,4 +917,437 @@ function ActionEditor({
     );
   }
   return null;
+}
+
+// ============================================================
+// RUNS DIALOG (histórico de execução)
+// ============================================================
+
+type RunStatus = 'MATCHED' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+
+interface ConditionEvalDetail {
+  field: string;
+  op: ConditionOp;
+  value: string | string[];
+  actual: string;
+  matched: boolean;
+}
+
+interface ActionExecDetail {
+  kind: ActionKind;
+  status: 'ok' | 'error';
+  error?: string;
+  durationMs: number;
+}
+
+interface AutomationRun {
+  id: string;
+  ruleId: string;
+  workspaceId: string;
+  trigger: string;
+  status: RunStatus;
+  resource: string | null;
+  conditionsResult: ConditionEvalDetail[] | null;
+  actionsResult: ActionExecDetail[] | null;
+  errorMessage: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+interface RunsResponse {
+  rule: { id: string; name: string; trigger: string };
+  runs: AutomationRun[];
+  total: number;
+  page: number;
+  perPage: number;
+  summary: Record<RunStatus, number>;
+}
+
+const STATUS_STYLE: Record<RunStatus, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+  MATCHED: {
+    label: 'Executou',
+    cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+    Icon: CheckCircle2,
+  },
+  PARTIAL: {
+    label: 'Parcial',
+    cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+    Icon: AlertTriangle,
+  },
+  FAILED: {
+    label: 'Falhou',
+    cls: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+    Icon: XCircle,
+  },
+  SKIPPED: {
+    label: 'Pulou',
+    cls: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+    Icon: SkipForward,
+  },
+};
+
+const PER_PAGE_OPTIONS = [10, 25, 50, 100] as const;
+
+function formatDurationMs(ms: number | null): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function formatRunDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function describeConditionValue(v: string | string[]): string {
+  return Array.isArray(v) ? v.join(', ') : v;
+}
+
+function RunsDialog({
+  open,
+  onOpenChange,
+  rule,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  rule: Rule | null;
+}) {
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<(typeof PER_PAGE_OPTIONS)[number]>(25);
+  const [status, setStatus] = useState<RunStatus | 'ALL'>('ALL');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (open) {
+      setPage(1);
+      setStatus('ALL');
+      setExpanded(new Set());
+    }
+  }, [open, rule?.id]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [status, perPage]);
+
+  const { data, isLoading, refetch, isFetching } = useQuery<RunsResponse>({
+    queryKey: ['automation-runs', rule?.id, page, perPage, status],
+    queryFn: () =>
+      api(
+        `/api/automations/${rule!.id}/runs?page=${page}&perPage=${perPage}${
+          status !== 'ALL' ? `&status=${status}` : ''
+        }`,
+      ),
+    enabled: open && !!rule,
+  });
+
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.perPage)) : 1;
+  const summary = data?.summary ?? { MATCHED: 0, PARTIAL: 0, FAILED: 0, SKIPPED: 0 };
+  const totalRuns = summary.MATCHED + summary.PARTIAL + summary.FAILED + summary.SKIPPED;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-5 w-5 text-indigo-500" />
+            Execuções — {rule?.name}
+          </DialogTitle>
+          <DialogDescription>
+            Cada vez que o gatilho{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{rule?.trigger}</code>{' '}
+            disparou, uma linha foi gravada. Pulou = condições não passaram. Falhou = erro fatal.
+            Parcial = pelo menos uma ação falhou.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <SummaryCard
+              label="Total"
+              value={totalRuns}
+              active={status === 'ALL'}
+              onClick={() => setStatus('ALL')}
+            />
+            {(Object.keys(STATUS_STYLE) as RunStatus[]).map((s) => (
+              <SummaryCard
+                key={s}
+                label={STATUS_STYLE[s].label}
+                value={summary[s]}
+                Icon={STATUS_STYLE[s].Icon}
+                cls={STATUS_STYLE[s].cls}
+                active={status === s}
+                onClick={() => setStatus(s)}
+              />
+            ))}
+          </div>
+
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Mostrando</span>
+              <select
+                value={perPage}
+                onChange={(e) => setPerPage(Number(e.target.value) as (typeof PER_PAGE_OPTIONS)[number])}
+                className="rounded-md border border-input bg-background px-2 py-1 text-xs"
+              >
+                {PER_PAGE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              <span>por página</span>
+              {status !== 'ALL' && (
+                <>
+                  <span>·</span>
+                  <span>
+                    Filtrado: <strong>{STATUS_STYLE[status].label}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('ALL')}
+                    className="rounded p-0.5 hover:bg-accent"
+                    title="Limpar filtro"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </>
+              )}
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Recarregar"
+            >
+              {isFetching ? 'Atualizando…' : 'Atualizar'}
+            </Button>
+          </div>
+
+          {/* Runs list */}
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando execuções…</p>
+          ) : !data || data.runs.length === 0 ? (
+            <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+              {totalRuns === 0
+                ? 'Esta regra ainda não foi avaliada nenhuma vez. As execuções aparecem aqui assim que o gatilho dispara.'
+                : 'Nenhuma execução com este filtro.'}
+            </div>
+          ) : (
+            <ul className="divide-y rounded-lg border">
+              {data.runs.map((run) => {
+                const meta = STATUS_STYLE[run.status];
+                const Icon = meta.Icon;
+                const isExpanded = expanded.has(run.id);
+                return (
+                  <li key={run.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(run.id)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent/40"
+                    >
+                      <ChevronRight
+                        className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition ${isExpanded ? 'rotate-90' : ''}`}
+                      />
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {meta.label}
+                      </span>
+                      <span className="text-[11px] font-mono text-muted-foreground">
+                        {formatRunDate(run.createdAt)}
+                      </span>
+                      {run.resource && (
+                        <span className="truncate font-mono text-[11px] text-muted-foreground">
+                          {run.resource}
+                        </span>
+                      )}
+                      <span className="ml-auto text-[11px] text-muted-foreground">
+                        {formatDurationMs(run.durationMs)}
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="space-y-3 border-t bg-muted/20 px-4 py-3 text-xs">
+                        {run.conditionsResult && run.conditionsResult.length > 0 && (
+                          <div>
+                            <h4 className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
+                              Condições
+                            </h4>
+                            <ul className="space-y-1">
+                              {run.conditionsResult.map((cd, i) => (
+                                <li
+                                  key={i}
+                                  className={`flex items-start gap-2 rounded-md border bg-background px-2 py-1 ${
+                                    cd.matched
+                                      ? 'border-emerald-200'
+                                      : 'border-amber-300'
+                                  }`}
+                                >
+                                  {cd.matched ? (
+                                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-emerald-500" />
+                                  ) : (
+                                    <XCircle className="mt-0.5 h-3.5 w-3.5 text-amber-500" />
+                                  )}
+                                  <div className="min-w-0 flex-1 break-words">
+                                    <code className="text-[11px]">{cd.field}</code>{' '}
+                                    <span className="text-muted-foreground">{OP_LABEL[cd.op]}</span>{' '}
+                                    <code className="text-[11px]">
+                                      {describeConditionValue(cd.value)}
+                                    </code>
+                                    <span className="ml-2 text-muted-foreground">
+                                      atual:{' '}
+                                      <code className="text-[11px]">{cd.actual || '∅'}</code>
+                                    </span>
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {run.conditionsResult && run.conditionsResult.length === 0 && (
+                          <p className="text-[11px] text-muted-foreground">
+                            Sem condições — disparo direto.
+                          </p>
+                        )}
+                        {run.actionsResult && run.actionsResult.length > 0 && (
+                          <div>
+                            <h4 className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
+                              Ações
+                            </h4>
+                            <ul className="space-y-1">
+                              {run.actionsResult.map((ar, i) => (
+                                <li
+                                  key={i}
+                                  className={`flex items-start gap-2 rounded-md border bg-background px-2 py-1 ${
+                                    ar.status === 'ok'
+                                      ? 'border-emerald-200'
+                                      : 'border-red-300'
+                                  }`}
+                                >
+                                  {ar.status === 'ok' ? (
+                                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-emerald-500" />
+                                  ) : (
+                                    <XCircle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium">{ACTION_KIND_LABEL[ar.kind]}</p>
+                                    {ar.error && (
+                                      <p className="break-words text-red-600 dark:text-red-400">
+                                        {ar.error}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="text-muted-foreground">
+                                    {formatDurationMs(ar.durationMs)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {run.errorMessage && (
+                          <div>
+                            <h4 className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
+                              Erro fatal
+                            </h4>
+                            <p className="break-words rounded-md border border-red-300 bg-red-50 px-2 py-1 text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                              {run.errorMessage}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {/* Pagination */}
+          {data && data.total > 0 && (
+            <div className="flex items-center justify-between border-t pt-3 text-xs">
+              <p className="text-muted-foreground">
+                Página {data.page} de {totalPages} · {data.total} execução(ões)
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1 || isFetching}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || isFetching}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  Icon,
+  cls,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  Icon?: React.ComponentType<{ className?: string }>;
+  cls?: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border p-2 text-left transition hover:border-foreground/40 ${
+        active ? 'border-foreground bg-accent/40' : 'bg-card'
+      }`}
+    >
+      <div className="flex items-center gap-1.5">
+        {Icon && (
+          <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${cls ?? ''}`}>
+            <Icon className="h-3 w-3" />
+          </span>
+        )}
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+      </div>
+      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+    </button>
+  );
 }

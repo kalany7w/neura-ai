@@ -1,3 +1,4 @@
+import type { Prisma } from '@neura/database';
 import { prisma } from '../db';
 import { logger } from '../logger';
 import { outboundQueue } from '../queue';
@@ -55,31 +56,55 @@ function getField(payload: Record<string, unknown>, field: string): unknown {
   return cur;
 }
 
-function evalCondition(cond: Condition, payload: Record<string, unknown>): boolean {
-  const actual = getField(payload, cond.field);
-  const str = typeof actual === 'string' ? actual : actual == null ? '' : String(actual);
+function evalCondition(cond: Condition, payload: Record<string, unknown>): { matched: boolean; actual: string } {
+  const raw = getField(payload, cond.field);
+  const str = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
   const lower = str.toLowerCase();
+  let matched = false;
   switch (cond.op) {
     case 'equals':
-      return str === (cond.value as string);
+      matched = str === (cond.value as string);
+      break;
     case 'contains':
-      return typeof cond.value === 'string' && lower.includes(cond.value.toLowerCase());
+      matched = typeof cond.value === 'string' && lower.includes(cond.value.toLowerCase());
+      break;
     case 'not_contains':
-      return typeof cond.value === 'string' && !lower.includes(cond.value.toLowerCase());
+      matched = typeof cond.value === 'string' && !lower.includes(cond.value.toLowerCase());
+      break;
     case 'starts_with':
-      return typeof cond.value === 'string' && lower.startsWith(cond.value.toLowerCase());
+      matched = typeof cond.value === 'string' && lower.startsWith(cond.value.toLowerCase());
+      break;
     case 'in':
-      return Array.isArray(cond.value) && cond.value.includes(str);
+      matched = Array.isArray(cond.value) && cond.value.includes(str);
+      break;
     case 'not_in':
-      return Array.isArray(cond.value) && !cond.value.includes(str);
-    default:
-      return false;
+      matched = Array.isArray(cond.value) && !cond.value.includes(str);
+      break;
   }
+  return { matched, actual: str };
 }
 
-function evalConditions(conds: Condition[], payload: Record<string, unknown>): boolean {
-  if (conds.length === 0) return true; // sem condições = sempre passa
-  return conds.every((c) => evalCondition(c, payload));
+export interface ConditionEvalResult {
+  field: string;
+  op: Condition['op'];
+  value: Condition['value'];
+  actual: string;
+  matched: boolean;
+}
+
+function evaluateConditions(
+  conds: Condition[],
+  payload: Record<string, unknown>,
+): { passed: boolean; details: ConditionEvalResult[] } {
+  if (conds.length === 0) return { passed: true, details: [] };
+  const details = conds.map((c) => ({
+    field: c.field,
+    op: c.op,
+    value: c.value,
+    ...evalCondition(c, payload),
+  }));
+  const passed = details.every((d) => d.matched);
+  return { passed, details };
 }
 
 // ============================================================
@@ -235,6 +260,20 @@ async function enqueueOutbound(
 
 const KNOWN_TRIGGERS = new Set<string>(AUTOMATION_TRIGGERS);
 
+interface ActionRunResult {
+  kind: Action['kind'];
+  status: 'ok' | 'error';
+  error?: string;
+  durationMs: number;
+}
+
+function resourceFromPayload(payload: Record<string, unknown>): string | null {
+  if (typeof payload.cardId === 'string') return `Card:${payload.cardId}`;
+  if (typeof payload.messageId === 'string') return `Message:${payload.messageId}`;
+  if (typeof payload.conversationId === 'string') return `Conversation:${payload.conversationId}`;
+  return null;
+}
+
 /**
  * Resolve IDs do contexto a partir do payload + DB:
  *  - conversationId direto no payload
@@ -288,40 +327,131 @@ export function dispatchAutomationRules(
       if (rules.length === 0) return;
 
       const ctx = await buildContext(workspaceId, payload);
+      const resource = resourceFromPayload(payload);
 
       for (const rule of rules) {
+        const ruleStart = Date.now();
+        const config = {
+          conditions: (rule.conditions as Condition[] | null) ?? [],
+          actions: (rule.actions as Action[] | null) ?? [],
+        } satisfies RuleConfig;
+
+        const evalRes = evaluateConditions(config.conditions, payload);
+
+        // SKIPPED: conditions não passaram
+        if (!evalRes.passed) {
+          await recordRun({
+            ruleId: rule.id,
+            workspaceId,
+            trigger: event,
+            status: 'SKIPPED',
+            resource,
+            conditionsResult: evalRes.details,
+            actionsResult: null,
+            errorMessage: null,
+            durationMs: Date.now() - ruleStart,
+          });
+          continue;
+        }
+
+        // Executa actions individualmente, capturando status per-action
+        const actionsResult: ActionRunResult[] = [];
+        let anyError = false;
+        let fatalError: string | null = null;
+
         try {
-          const config = {
-            conditions: (rule.conditions as Condition[] | null) ?? [],
-            actions: (rule.actions as Action[] | null) ?? [],
-          } satisfies RuleConfig;
-          if (!evalConditions(config.conditions, payload)) continue;
-
           for (const action of config.actions) {
-            await executeAction(action, ctx);
+            const actionStart = Date.now();
+            try {
+              await executeAction(action, ctx);
+              actionsResult.push({
+                kind: action.kind,
+                status: 'ok',
+                durationMs: Date.now() - actionStart,
+              });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              anyError = true;
+              actionsResult.push({
+                kind: action.kind,
+                status: 'error',
+                error: message,
+                durationMs: Date.now() - actionStart,
+              });
+              logger.error(
+                { err, ruleId: rule.id, action: action.kind, event },
+                'Automation action failed',
+              );
+            }
           }
+        } catch (err) {
+          fatalError = err instanceof Error ? err.message : String(err);
+          logger.error({ err, ruleId: rule.id, event }, 'Automation rule fatal error');
+        }
 
-          await prisma.automationRule.update({
+        const status: 'MATCHED' | 'PARTIAL' | 'FAILED' = fatalError
+          ? 'FAILED'
+          : anyError
+            ? 'PARTIAL'
+            : 'MATCHED';
+
+        const lastError = fatalError ?? (anyError ? 'one or more actions failed' : null);
+
+        await prisma.automationRule
+          .update({
             where: { id: rule.id },
             data: {
               runCount: { increment: 1 },
               lastFiredAt: new Date(),
-              lastError: null,
+              lastError,
             },
-          });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          logger.error({ err, ruleId: rule.id, event }, 'Automation rule failed');
-          await prisma.automationRule
-            .update({
-              where: { id: rule.id },
-              data: { lastError: message, lastFiredAt: new Date() },
-            })
-            .catch(() => {});
-        }
+          })
+          .catch(() => {});
+
+        await recordRun({
+          ruleId: rule.id,
+          workspaceId,
+          trigger: event,
+          status,
+          resource,
+          conditionsResult: evalRes.details,
+          actionsResult,
+          errorMessage: fatalError,
+          durationMs: Date.now() - ruleStart,
+        });
       }
     } catch (err) {
       logger.error({ err, event }, 'automation dispatch failed');
     }
   });
+}
+
+async function recordRun(input: {
+  ruleId: string;
+  workspaceId: string;
+  trigger: string;
+  status: 'MATCHED' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+  resource: string | null;
+  conditionsResult: ConditionEvalResult[] | null;
+  actionsResult: ActionRunResult[] | null;
+  errorMessage: string | null;
+  durationMs: number;
+}): Promise<void> {
+  try {
+    await prisma.automationRun.create({
+      data: {
+        ruleId: input.ruleId,
+        workspaceId: input.workspaceId,
+        trigger: input.trigger,
+        status: input.status,
+        resource: input.resource,
+        conditionsResult: (input.conditionsResult ?? undefined) as Prisma.InputJsonValue | undefined,
+        actionsResult: (input.actionsResult ?? undefined) as Prisma.InputJsonValue | undefined,
+        errorMessage: input.errorMessage,
+        durationMs: input.durationMs,
+      },
+    });
+  } catch (err) {
+    logger.error({ err, ruleId: input.ruleId }, 'failed to record automation run');
+  }
 }
