@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -39,6 +40,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
+import { ScheduleMessageDialog } from '@/components/inbox/schedule-message-dialog';
 
 interface Member {
   userId: string;
@@ -147,6 +149,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [mode, setMode] = useState<'reply' | 'note'>('reply');
   const [showTemplates, setShowTemplates] = useState(false);
   const [replyTo, setReplyTo] = useState<MessageItem | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = useState(false);
   const [recordingMs, setRecordingMs] = useState(0);
@@ -780,6 +783,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   e.target.value = '';
                 }}
               />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setScheduleOpen(true)}
+                title="Agendar mensagem"
+              >
+                <CalendarClock className="h-4 w-4" />
+              </Button>
               {!recording ? (
                 <Button
                   type="button"
@@ -860,6 +872,17 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           currentConversationId={conv.id}
         />
       </div>
+
+      <ScheduleMessageDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        conversationId={conv.id}
+        initialText={text}
+        onScheduled={() => {
+          setText('');
+          setScheduleOpen(false);
+        }}
+      />
     </div>
   );
 }
