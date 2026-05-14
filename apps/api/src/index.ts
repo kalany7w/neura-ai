@@ -27,6 +27,8 @@ import { reactionsRouter } from './routes/reactions';
 import { apiKeysRouter } from './routes/api-keys';
 import { auditRouter } from './routes/audit';
 import { customAttributesRouter } from './routes/custom-attributes';
+import { scheduledMessagesRouter } from './routes/scheduled-messages';
+import { startScheduledMsgsScheduler } from './scheduled-messages';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
@@ -74,6 +76,7 @@ app.route('/api', reactionsRouter); // /api/messages/:id/react
 app.route('/api/api-keys', apiKeysRouter);
 app.route('/api/audit-log', auditRouter);
 app.route('/api/custom-attributes', customAttributesRouter);
+app.route('/api/scheduled-messages', scheduledMessagesRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
@@ -100,6 +103,10 @@ startSnoozeScheduler().catch((err) => logger.error({ err }, 'Failed to start Sno
 // Auto-resolve scheduler — fecha conversas inativas (config por inbox) a cada 30min
 startAutoResolveScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start AutoResolve scheduler'),
+);
+// Scheduled messages scheduler — verifica msgs agendadas a cada 30s
+startScheduledMsgsScheduler().catch((err) =>
+  logger.error({ err }, 'Failed to start ScheduledMessages scheduler'),
 );
 
 export { app };

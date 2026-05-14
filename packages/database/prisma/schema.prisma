@@ -38,6 +38,7 @@ model Workspace {
   automationRules     AutomationRule[]
   notifications       Notification[]
   apiKeys             ApiKey[]
+  scheduledMessages   ScheduledMessage[]
 
   @@map("workspaces")
 }
@@ -670,6 +671,41 @@ model ApiKey {
 
   @@index([workspaceId])
   @@map("api_keys")
+}
+
+// ============================================
+// SCHEDULED MESSAGES (envios agendados)
+// ============================================
+
+enum ScheduledMessageStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model ScheduledMessage {
+  id             String                 @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  scheduledFor   DateTime
+  type           MessageType            @default(TEXT)
+  content        String?                @db.Text
+  mediaUrl       String?
+  mediaMimeType  String?
+  fileName       String?
+  status         ScheduledMessageStatus @default(PENDING)
+  sentMessageId  String?                // Message.id criado ao disparar
+  failedReason   String?                @db.Text
+  createdBy      String
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([status, scheduledFor])
+  @@map("scheduled_messages")
 }
 
 // ============================================
