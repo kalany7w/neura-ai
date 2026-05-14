@@ -258,10 +258,28 @@ model Contact {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   conversations Conversation[]
   labels        ContactLabel[]
+  notes         ContactNote[]
 
   @@unique([workspaceId, phoneNumber])
   @@index([workspaceId])
   @@map("contacts")
+}
+
+// Notas long-term em um contato (separadas de ConversationNote / CardNote).
+// Persistem mesmo se conversas/cards forem fechados/arquivados/excluídos.
+// Visíveis pra todos os roles do workspace; autor ou ADMIN podem editar/excluir.
+model ContactNote {
+  id        String   @id @default(cuid())
+  contactId String
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId, createdAt])
+  @@map("contact_notes")
 }
 
 // ============================================

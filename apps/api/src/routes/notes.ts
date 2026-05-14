@@ -102,3 +102,144 @@ notesRouter.delete(
     return c.json({ ok: true });
   },
 );
+
+// ============================================
+// CONTACT NOTES (long-term — sobrevivem ao fim de conversation/card)
+// ============================================
+
+// GET /api/contacts/:id/notes — lista notas do contato (com info do autor)
+notesRouter.get(
+  '/contacts/:id/notes',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const contactId = c.req.param('id');
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, workspaceId },
+      select: { id: true },
+    });
+    if (!contact) return c.json({ error: 'not_found' }, 404);
+    const notes = await prisma.contactNote.findMany({
+      where: { contactId: contact.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    // Enriquece com info do autor (1 query batch)
+    const authorIds = Array.from(new Set(notes.map((n) => n.authorId)));
+    const authors = authorIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: authorIds } },
+          select: { id: true, name: true, email: true, image: true },
+        })
+      : [];
+    const authorMap = new Map(authors.map((a) => [a.id, a]));
+    const enriched = notes.map((n) => ({
+      ...n,
+      author: authorMap.get(n.authorId) ?? null,
+    }));
+    return c.json({ notes: enriched });
+  },
+);
+
+// POST /api/contacts/:id/notes — cria nota
+notesRouter.post(
+  '/contacts/:id/notes',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('contact.add_note'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = createSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const contactId = c.req.param('id');
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, workspaceId },
+      select: { id: true },
+    });
+    if (!contact) return c.json({ error: 'not_found' }, 404);
+    const note = await prisma.contactNote.create({
+      data: {
+        contactId: contact.id,
+        authorId: userId,
+        body: parsed.data.body,
+      },
+    });
+    const author = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, image: true },
+    });
+    await publishEvent(workspaceId, 'contacts', 'note.added', {
+      contactId: contact.id,
+      note: { ...note, author },
+    });
+    return c.json({ note: { ...note, author } }, 201);
+  },
+);
+
+// PATCH /api/contact-notes/:id — autor ou admin edita body
+const updateSchema = z.object({
+  body: z.string().min(1).max(2000),
+});
+
+notesRouter.patch(
+  '/contact-notes/:id',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const role = c.get('role')!;
+    const id = c.req.param('id');
+    const body = await c.req.json().catch(() => null);
+    const parsed = updateSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const note = await prisma.contactNote.findFirst({
+      where: { id, contact: { workspaceId } },
+    });
+    if (!note) return c.json({ error: 'not_found' }, 404);
+    if (note.authorId !== userId && role !== 'ADMIN') {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    const updated = await prisma.contactNote.update({
+      where: { id },
+      data: { body: parsed.data.body },
+    });
+    const author = await prisma.user.findUnique({
+      where: { id: updated.authorId },
+      select: { id: true, name: true, email: true, image: true },
+    });
+    await publishEvent(workspaceId, 'contacts', 'note.updated', {
+      contactId: updated.contactId,
+      note: { ...updated, author },
+    });
+    return c.json({ note: { ...updated, author } });
+  },
+);
+
+// DELETE /api/contact-notes/:id — autor ou admin
+notesRouter.delete(
+  '/contact-notes/:id',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const role = c.get('role')!;
+    const id = c.req.param('id');
+    const note = await prisma.contactNote.findFirst({
+      where: { id, contact: { workspaceId } },
+    });
+    if (!note) return c.json({ error: 'not_found' }, 404);
+    if (note.authorId !== userId && role !== 'ADMIN') {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    await prisma.contactNote.delete({ where: { id } });
+    await publishEvent(workspaceId, 'contacts', 'note.removed', {
+      contactId: note.contactId,
+      noteId: id,
+    });
+    return c.json({ ok: true });
+  },
+);

@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Check,
   ChevronRight,
   Edit3,
   LayoutGrid,
   MessageCircle,
   MessageSquarePlus,
   Phone,
+  StickyNote,
   Tag,
   Trash2,
   X,
@@ -117,7 +119,24 @@ function formatBRL(n: number): string {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
-type Tab = 'overview' | 'conversations' | 'cards';
+interface NoteAuthor {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+interface ContactNoteItem {
+  id: string;
+  contactId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  author: NoteAuthor | null;
+}
+
+type Tab = 'overview' | 'conversations' | 'cards' | 'notes';
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -138,7 +157,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     queryFn: () => api('/api/labels'),
   });
 
+  const { data: notesData, isLoading: notesLoading } = useQuery<{ notes: ContactNoteItem[] }>({
+    queryKey: ['contact-notes', id],
+    queryFn: () => api(`/api/contacts/${id}/notes`),
+    enabled: tab === 'notes',
+  });
+
   const refresh = () => qc.invalidateQueries({ queryKey: ['contact-detail', id] });
+  const refreshNotes = () => qc.invalidateQueries({ queryKey: ['contact-notes', id] });
 
   async function applyLabel(labelId: string) {
     try {
@@ -229,11 +255,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'conversations', 'cards'] as const).map((t) => {
+        {(['overview', 'conversations', 'cards', 'notes'] as const).map((t) => {
+          const notesCount = notesData?.notes.length;
           const labels: Record<Tab, string> = {
             overview: 'Visão geral',
             conversations: `Conversas (${contact.conversations.length})`,
             cards: `Cards (${cards.length})`,
+            notes: notesCount === undefined ? 'Notas' : `Notas (${notesCount})`,
           };
           return (
             <button
@@ -444,6 +472,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         </section>
       )}
 
+      {tab === 'notes' && (
+        <NotesTab
+          contactId={id}
+          notes={notesData?.notes ?? []}
+          loading={notesLoading}
+          onChange={refreshNotes}
+        />
+      )}
+
       <EditContactDialog
         open={editOpen}
         onOpenChange={setEditOpen}
@@ -456,6 +493,270 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         contact={contact}
       />
     </div>
+  );
+}
+
+function formatNoteDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return `Hoje, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  const diffMs = now.getTime() - d.getTime();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  if (diffMs >= 0 && diffMs < oneDayMs * 2) {
+    return `Ontem, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function NotesTab({
+  contactId,
+  notes,
+  loading,
+  onChange,
+}: {
+  contactId: string;
+  notes: ContactNoteItem[];
+  loading: boolean;
+  onChange: () => void;
+}) {
+  const confirm = useConfirm();
+  const [composer, setComposer] = useState('');
+  const [composerSubmitting, setComposerSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function addNote() {
+    const body = composer.trim();
+    if (!body || composerSubmitting) return;
+    setComposerSubmitting(true);
+    try {
+      await api(`/api/contacts/${contactId}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      });
+      setComposer('');
+      toast.success('Nota adicionada');
+      onChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar nota');
+    } finally {
+      setComposerSubmitting(false);
+    }
+  }
+
+  function startEdit(note: ContactNoteItem) {
+    setEditingId(note.id);
+    setEditDraft(note.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft('');
+  }
+
+  async function saveEdit(noteId: string) {
+    const body = editDraft.trim();
+    if (!body || editSubmitting) return;
+    setEditSubmitting(true);
+    try {
+      await api(`/api/contact-notes/${noteId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body }),
+      });
+      cancelEdit();
+      toast.success('Nota atualizada');
+      onChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao salvar nota');
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
+  async function removeNote(note: ContactNoteItem) {
+    const ok = await confirm({
+      title: 'Excluir nota?',
+      description: 'A nota é apagada definitivamente.',
+      confirmLabel: 'Excluir',
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeletingId(note.id);
+    try {
+      await api(`/api/contact-notes/${note.id}`, { method: 'DELETE' });
+      toast.success('Nota excluída');
+      onChange();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao excluir');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border bg-card p-4">
+        <Label htmlFor="contact-note-composer" className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <StickyNote className="h-3.5 w-3.5" />
+          Adicionar nota
+        </Label>
+        <textarea
+          id="contact-note-composer"
+          value={composer}
+          onChange={(e) => setComposer(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault();
+              addNote();
+            }
+          }}
+          rows={3}
+          maxLength={2000}
+          placeholder="Informações que persistem além de uma conversa: histórico, preferências, contexto de relacionamento…"
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            {composer.length}/2000 · Cmd/Ctrl+Enter pra salvar
+          </p>
+          <Button
+            size="sm"
+            onClick={addNote}
+            disabled={composerSubmitting || !composer.trim()}
+          >
+            {composerSubmitting ? 'Salvando…' : 'Adicionar nota'}
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Carregando notas…</p>
+      ) : notes.length === 0 ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+          Nenhuma nota ainda. Use o campo acima pra criar a primeira.
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {notes.map((note) => {
+            const isEditing = editingId === note.id;
+            const isDeleting = deletingId === note.id;
+            const wasEdited = note.updatedAt && note.updatedAt !== note.createdAt;
+            const authorName =
+              note.author?.name?.trim() || note.author?.email || 'Agente removido';
+            return (
+              <li
+                key={note.id}
+                className="group rounded-lg border bg-card p-4 transition hover:border-foreground/20"
+              >
+                <header className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {note.author?.image ? (
+                      <img
+                        src={note.author.image}
+                        alt={authorName}
+                        className="h-7 w-7 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                        {initialsFrom(authorName)}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{authorName}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatNoteDate(note.createdAt)}
+                        {wasEdited && (
+                          <span className="ml-1.5 italic">
+                            · editada {formatNoteDate(note.updatedAt)}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  {!isEditing && (
+                    <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title="Editar"
+                        onClick={() => startEdit(note)}
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        title="Excluir"
+                        disabled={isDeleting}
+                        onClick={() => removeNote(note)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                </header>
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editDraft}
+                      onChange={(e) => setEditDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          cancelEdit();
+                        }
+                        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                          e.preventDefault();
+                          saveEdit(note.id);
+                        }
+                      }}
+                      rows={Math.max(3, Math.min(editDraft.split('\n').length + 1, 12))}
+                      maxLength={2000}
+                      autoFocus
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={editSubmitting}>
+                        <X className="h-3.5 w-3.5" />
+                        Cancelar
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => saveEdit(note.id)}
+                        disabled={editSubmitting || !editDraft.trim() || editDraft.trim() === note.body}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        {editSubmitting ? 'Salvando…' : 'Salvar'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                    {note.body}
+                  </p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
