@@ -42,6 +42,7 @@ export const outboundWorker = new Worker<SendMessageJob>(
       kind,
       targetWaMessageId,
       reactionEmoji,
+      editedBy,
     } = job.data;
     const handle = sessionManager.get(inboxId);
     if (!handle) {
@@ -79,7 +80,30 @@ export const outboundWorker = new Worker<SendMessageJob>(
           fromMe: true,
         },
       });
+      // Snapshot do content atual ANTES do update — sem essa linha o histórico
+      // perde a versão anterior pra sempre. Falha aqui não bloqueia a edição.
       const editedAt = new Date();
+      try {
+        const before = await prisma.message.findUnique({
+          where: { id: messageId },
+          select: { content: true },
+        });
+        if (before?.content) {
+          await prisma.messageEdit.create({
+            data: {
+              messageId,
+              previousContent: before.content,
+              editedBy: editedBy ?? null,
+              editedAt,
+            },
+          });
+        }
+      } catch (snapshotErr) {
+        logger.warn(
+          { snapshotErr, messageId },
+          'Failed to snapshot previous content — edit continues',
+        );
+      }
       const updated = await prisma.message.update({
         where: { id: messageId },
         data: { content: text ?? '', editedAt },

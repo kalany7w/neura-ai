@@ -45,4 +45,6 @@ export interface SendMessageJob {
   kind?: 'message' | 'reaction' | 'edit' | 'revoke';
   targetWaMessageId?: string;
   reactionEmoji?: string;
+  /** User.id que disparou o edit/revoke — usado pra gravar autor no histórico de edições */
+  editedBy?: string;
 }

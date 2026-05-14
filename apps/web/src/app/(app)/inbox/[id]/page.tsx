@@ -18,6 +18,7 @@ import {
   CornerDownRight,
   FileText,
   Forward,
+  History,
   Mail,
   MapPin,
   Mic,
@@ -58,6 +59,13 @@ import {
 import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
 import { ScheduleMessageDialog } from '@/components/inbox/schedule-message-dialog';
 import { ForwardMessageDialog } from '@/components/inbox/forward-message-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface Member {
   userId: string;
@@ -218,6 +226,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
   const [batchForwardOpen, setBatchForwardOpen] = useState(false);
+  // Histórico de edições — id da msg cujo histórico mostrar
+  const [historyMessageId, setHistoryMessageId] = useState<string | null>(null);
   // Pinned bar
   const [pinnedExpanded, setPinnedExpanded] = useState(false);
 
@@ -1057,6 +1067,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                   )}
+                {item.editedAt && !item.deletedAt && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryMessageId(item.id)}
+                    title="Ver histórico de edições"
+                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <History className="h-3.5 w-3.5" />
+                  </button>
+                )}
                 {item.direction === 'OUTBOUND' &&
                   !item.deletedAt &&
                   item.status !== 'FAILED' && (
@@ -1550,6 +1570,116 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           exitSelectionMode();
         }}
       />
+
+      <MessageEditHistoryDialog
+        messageId={historyMessageId}
+        onClose={() => setHistoryMessageId(null)}
+      />
     </div>
+  );
+}
+
+interface MessageEditAuthor {
+  id: string;
+  name: string | null;
+  email: string;
+  image: string | null;
+}
+
+interface MessageEditEntry {
+  id: string;
+  previousContent: string;
+  editedAt: string;
+  editedBy: string | null;
+  author: MessageEditAuthor | null;
+}
+
+interface MessageEditHistoryResponse {
+  current: { content: string | null; editedAt: string | null; createdAt: string };
+  edits: MessageEditEntry[];
+}
+
+function MessageEditHistoryDialog({
+  messageId,
+  onClose,
+}: {
+  messageId: string | null;
+  onClose: () => void;
+}) {
+  const open = !!messageId;
+  const { data, isLoading } = useQuery<MessageEditHistoryResponse>({
+    queryKey: ['message-history', messageId],
+    queryFn: () => api(`/api/messages/${messageId}/history`),
+    enabled: open,
+  });
+
+  const totalVersions = (data?.edits.length ?? 0) + 1; // edits + atual
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-4 w-4 text-indigo-500" />
+            Histórico de edições
+          </DialogTitle>
+          <DialogDescription>
+            {isLoading
+              ? 'Carregando…'
+              : `${totalVersions} versão${totalVersions > 1 ? 'ões' : ''} (a atual e ${data?.edits.length ?? 0} anterior${(data?.edits.length ?? 0) === 1 ? '' : 'es'})`}
+          </DialogDescription>
+        </DialogHeader>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Carregando…</p>
+        ) : !data ? (
+          <p className="text-sm text-destructive">Erro ao carregar histórico</p>
+        ) : (
+          <ol className="space-y-3">
+            <li className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-700 dark:bg-emerald-950/40">
+              <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                <Check className="h-3 w-3" />
+                Versão atual
+                {data.current.editedAt && (
+                  <span className="ml-auto text-[10px] font-normal text-emerald-700/80 dark:text-emerald-300/80">
+                    {new Date(data.current.editedAt).toLocaleString('pt-BR')}
+                  </span>
+                )}
+              </div>
+              <p className="whitespace-pre-wrap break-words text-sm">
+                {data.current.content ?? <span className="italic opacity-70">(vazia)</span>}
+              </p>
+            </li>
+            {data.edits.map((ed, idx) => {
+              const authorName =
+                ed.author?.name?.trim() || ed.author?.email || 'Agente removido';
+              return (
+                <li key={ed.id} className="rounded-lg border bg-card p-3">
+                  <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Versão anterior #{data.edits.length - idx}
+                    <span className="ml-auto font-normal">
+                      {new Date(ed.editedAt).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                    {ed.previousContent}
+                  </p>
+                  {ed.editedBy && (
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      Editada por <span className="font-medium">{authorName}</span>
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+            {data.edits.length === 0 && (
+              <li className="rounded-md border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                Nenhuma versão anterior registrada — primeira edição foi antes desse histórico
+                existir.
+              </li>
+            )}
+          </ol>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
