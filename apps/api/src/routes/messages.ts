@@ -15,6 +15,103 @@ export const messagesRouter = new Hono<{
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 // "Apagar pra todos" funciona até ~7min após envio
 const REVOKE_WINDOW_MS = 7 * 60 * 1000;
+// Limite de mensagens pinadas por conversa
+const MAX_PINNED_PER_CONVERSATION = 10;
+
+// GET /api/conversations/:id/pinned — lista mensagens pinadas (ordem cronológica desc por pinnedAt)
+messagesRouter.get(
+  '/conversations/:id/pinned',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const conversationId = c.req.param('id');
+    const conv = await prisma.conversation.findFirst({
+      where: { id: conversationId, workspaceId },
+      select: { id: true },
+    });
+    if (!conv) return c.json({ error: 'not_found' }, 404);
+
+    const messages = await prisma.message.findMany({
+      where: { conversationId, pinnedAt: { not: null } },
+      orderBy: { pinnedAt: 'desc' },
+      take: 50,
+    });
+    return c.json({ messages });
+  },
+);
+
+// POST /api/messages/:id/pin — fixa msg no topo da conversa
+messagesRouter.post(
+  '/messages/:id/pin',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('conversation.send_message'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const id = c.req.param('id');
+
+    const msg = await prisma.message.findFirst({
+      where: { id, conversation: { workspaceId } },
+      select: { id: true, conversationId: true, pinnedAt: true, deletedAt: true },
+    });
+    if (!msg) return c.json({ error: 'not_found' }, 404);
+    if (msg.deletedAt) return c.json({ error: 'cannot_pin_deleted' }, 409);
+    if (msg.pinnedAt) return c.json({ ok: true, alreadyPinned: true });
+
+    const pinnedCount = await prisma.message.count({
+      where: { conversationId: msg.conversationId, pinnedAt: { not: null } },
+    });
+    if (pinnedCount >= MAX_PINNED_PER_CONVERSATION) {
+      return c.json(
+        {
+          error: 'too_many_pinned',
+          message: `Limite de ${MAX_PINNED_PER_CONVERSATION} mensagens pinadas por conversa. Desafixe alguma antes.`,
+        },
+        409,
+      );
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: msg.id },
+      data: { pinnedAt: new Date(), pinnedBy: userId },
+    });
+    await publishEvent(workspaceId, 'messages', 'message.pinned', {
+      conversationId: msg.conversationId,
+      messageId: updated.id,
+    });
+    return c.json({ ok: true });
+  },
+);
+
+// POST /api/messages/:id/unpin
+messagesRouter.post(
+  '/messages/:id/unpin',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('conversation.send_message'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const msg = await prisma.message.findFirst({
+      where: { id, conversation: { workspaceId } },
+      select: { id: true, conversationId: true, pinnedAt: true },
+    });
+    if (!msg) return c.json({ error: 'not_found' }, 404);
+    if (!msg.pinnedAt) return c.json({ ok: true, notPinned: true });
+
+    await prisma.message.update({
+      where: { id: msg.id },
+      data: { pinnedAt: null, pinnedBy: null },
+    });
+    await publishEvent(workspaceId, 'messages', 'message.unpinned', {
+      conversationId: msg.conversationId,
+      messageId: msg.id,
+    });
+    return c.json({ ok: true });
+  },
+);
 
 async function loadOwnableMessage(
   id: string,

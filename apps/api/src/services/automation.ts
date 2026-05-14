@@ -273,6 +273,14 @@ export function dispatchAutomationRules(
 
   setImmediate(async () => {
     try {
+      // Gate global: se o workspace pausou automações, skip tudo
+      const ws = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { settings: true },
+      });
+      const settings = (ws?.settings as Record<string, unknown> | null) ?? null;
+      if (settings?.automationsPaused === true) return;
+
       const rules = await prisma.automationRule.findMany({
         where: { workspaceId, trigger: event, enabled: true },
         orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
