@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -169,6 +170,7 @@ const ACTION_KIND_ICON: Record<ActionKind, React.ComponentType<{ className?: str
 
 export default function AutomationsPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
 
@@ -191,7 +193,14 @@ export default function AutomationsPage() {
   }
 
   async function remove(rule: Rule) {
-    if (!confirm(`Excluir regra "${rule.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: `Excluir regra "${rule.name}"?`,
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/automations/${rule.id}`, { method: 'DELETE' });
       toast.success('Regra excluída');

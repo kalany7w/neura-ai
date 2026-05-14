@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -122,6 +123,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const qc = useQueryClient();
   const router = useRouter();
+  const confirm = useConfirm();
   const [tab, setTab] = useState<Tab>('overview');
   const [editOpen, setEditOpen] = useState(false);
   const [startConvOpen, setStartConvOpen] = useState(false);
@@ -165,9 +167,12 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   async function remove() {
     if (!data?.contact) return;
     if (
-      !confirm(
-        `Excluir contato "${data.contact.name ?? data.contact.phoneNumber}"? Conversas e cards relacionados perdem o vínculo.`,
-      )
+      !(await confirm({
+        title: `Excluir contato "${data.contact.name ?? data.contact.phoneNumber}"?`,
+        description: 'Conversas e cards relacionados perdem o vínculo.',
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
     )
       return;
     try {

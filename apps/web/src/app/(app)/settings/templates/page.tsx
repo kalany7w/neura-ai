@@ -8,6 +8,7 @@ import { Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -33,6 +34,7 @@ type Input = z.infer<typeof schema>;
 
 export default function TemplatesPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const { data, isLoading } = useQuery<{ templates: TemplateItem[] }>({
     queryKey: ['templates'],
     queryFn: () => api('/api/templates'),
@@ -65,7 +67,14 @@ export default function TemplatesPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Remover template?')) return;
+    if (
+      !(await confirm({
+        title: 'Remover template?',
+        confirmLabel: 'Remover',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/templates/${id}`, { method: 'DELETE' });
       toast.success('Removido');

@@ -2,6 +2,7 @@ import { createMiddleware } from 'hono/factory';
 import { createHash } from 'node:crypto';
 import { auth } from '../auth';
 import { prisma } from '../db';
+import { apiKeyLimiter } from '../rate-limit';
 
 export interface AuthVars {
   userId: string;
@@ -36,6 +37,12 @@ export const requireAuth = createMiddleware<{ Variables: AuthVars }>(async (c, n
         },
       });
       if (apiKey && apiKey.enabled && (!apiKey.expiresAt || apiKey.expiresAt > new Date())) {
+        // Rate limit por chave (100 req/min) — anti-abuse de integrações
+        try {
+          await apiKeyLimiter.consume(apiKey.id);
+        } catch {
+          return c.json({ error: 'rate_limited' }, 429);
+        }
         // Atualiza lastUsedAt em background (sem await pra não bloquear hot path)
         prisma.apiKey
           .update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } })

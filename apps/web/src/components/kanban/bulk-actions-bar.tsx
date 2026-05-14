@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -73,6 +74,7 @@ export function BulkActionsBar({
   funnelId: string;
 }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
 
   async function run(payload: Record<string, unknown>) {
     try {
@@ -101,7 +103,14 @@ export function BulkActionsBar({
     run({ action: 'apply_label', labelId });
   }
   async function remove() {
-    if (!confirm(`Excluir ${selectedIds.length} card(s) selecionados? Esta ação é definitiva.`)) {
+    if (
+      !(await confirm({
+        title: `Excluir ${selectedIds.length} card(s) selecionados?`,
+        description: 'Esta ação é definitiva.',
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    ) {
       return;
     }
     run({ action: 'delete' });

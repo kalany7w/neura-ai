@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus, Tag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +45,7 @@ const TYPE_BADGE: Record<AttrType, string> = {
 
 export default function CustomAttrsPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery<{ defs: AttrDef[] }>({
@@ -53,9 +55,13 @@ export default function CustomAttrsPage() {
 
   async function remove(def: AttrDef) {
     if (
-      !confirm(
-        `Excluir atributo “${def.label}”? Os valores já preenchidos em contatos/conversas serão mantidos no banco mas não aparecerão mais na UI.`,
-      )
+      !(await confirm({
+        title: `Excluir atributo "${def.label}"?`,
+        description:
+          'Valores já preenchidos em contatos/conversas continuam no banco mas não aparecem mais na UI.',
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
     )
       return;
     try {

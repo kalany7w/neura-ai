@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { realtimeClient } from '@/lib/ws-client';
 import { useSession } from '@/lib/auth-client';
@@ -144,6 +145,7 @@ function applyTemplate(body: string, contact: ConversationDetail['contact']): st
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { data: session } = useSession();
@@ -446,7 +448,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   }
 
   async function removeNote(noteId: string) {
-    if (!confirm('Remover esta nota?')) return;
+    if (
+      !(await confirm({
+        title: 'Remover esta nota?',
+        confirmLabel: 'Remover',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/notes/${noteId}`, { method: 'DELETE' });
       await qc.invalidateQueries({ queryKey: ['conversation', id, 'notes'] });

@@ -8,6 +8,7 @@ import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -28,6 +29,7 @@ type Input = z.infer<typeof schema>;
 
 export default function LabelsPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const { data, isLoading } = useQuery<{ labels: LabelItem[] }>({
     queryKey: ['labels'],
     queryFn: () => api('/api/labels'),
@@ -63,7 +65,15 @@ export default function LabelsPage() {
   }
 
   async function remove(id: string) {
-    if (!confirm('Remover etiqueta? Será removida de todos contatos/conversas.')) return;
+    if (
+      !(await confirm({
+        title: 'Remover etiqueta?',
+        description: 'Será removida de todos os contatos e conversas que a tinham.',
+        confirmLabel: 'Remover',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/labels/${id}`, { method: 'DELETE' });
       toast.success('Removida');

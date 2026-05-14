@@ -7,6 +7,8 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
 import { outboundQueue } from '../queue';
 import { publishEvent } from '../redis-pub';
+import { outboundLimiter } from '../rate-limit';
+import { logger } from '../logger';
 
 export const conversationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -260,6 +262,20 @@ conversationsRouter.post(
     }
     if (conv.inbox.status !== 'CONNECTED') {
       return c.json({ error: 'inbox_not_connected' }, 409);
+    }
+
+    // Rate limit anti-ban WhatsApp: 30 msgs/min por inbox.
+    try {
+      await outboundLimiter.consume(`inbox:${conv.inboxId}`);
+    } catch {
+      logger.warn({ inboxId: conv.inboxId, workspaceId }, 'outbound rate-limited');
+      return c.json(
+        {
+          error: 'rate_limited',
+          message: 'Muitas mensagens nessa inbox em pouco tempo. Aguarde 1 minuto pra evitar ban do WhatsApp.',
+        },
+        429,
+      );
     }
 
     // Se reply, valida que a msg referenciada existe na mesma conversa

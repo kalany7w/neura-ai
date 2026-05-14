@@ -1,12 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Phone, QrCode, PlugZap, Power, RefreshCw, Settings2, Trash2 } from 'lucide-react';
+import { Clock, Phone, QrCode, PlugZap, Power, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { InboxSettingsDialog } from './inbox-settings-dialog';
+
+function formatRelativeAgo(iso: string | null): string | null {
+  if (!iso) return null;
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 0) return null;
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return 'agora há pouco';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `há ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `há ${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `há ${months} mês${months > 1 ? 'es' : ''}`;
+  const years = Math.floor(months / 12);
+  return `há ${years} ano${years > 1 ? 's' : ''}`;
+}
 
 export interface InboxItem {
   id: string;
@@ -47,8 +66,36 @@ const STATUS_COLOR: Record<InboxItem['status'], string> = {
 
 export function InboxCard({ inbox }: { inbox: InboxItem }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Tick a cada 30s pra refrescar o "conectado há X"
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (inbox.status !== 'CONNECTED') return;
+    const t = setInterval(() => setTick((v) => v + 1), 30_000);
+    return () => clearInterval(t);
+  }, [inbox.status]);
+
+  // Auto-regenerate QR quando expirar (Baileys gera novo em ~60s, mas só se sock pediu)
+  const lastAutoRegenRef = useRef<number>(0);
+  useEffect(() => {
+    if (inbox.status !== 'AWAITING_QR') return;
+    const expiresAt = inbox.waSession?.qrExpiresAt
+      ? new Date(inbox.waSession.qrExpiresAt).getTime()
+      : 0;
+    const now = Date.now();
+    if (!expiresAt || expiresAt > now + 1000) {
+      // Ainda válido — agenda check ao expirar
+      const delay = Math.max(1000, expiresAt - now);
+      const t = setTimeout(() => setTick((v) => v + 1), delay);
+      return () => clearTimeout(t);
+    }
+    // Expirado — reconnect força stop+start, gerando QR novo. No máx 1×/15s.
+    if (now - lastAutoRegenRef.current < 15_000) return;
+    lastAutoRegenRef.current = now;
+    api(`/api/inboxes/${inbox.id}/reconnect`, { method: 'POST' }).catch(() => {});
+  }, [inbox.id, inbox.status, inbox.waSession?.qrCode, inbox.waSession?.qrExpiresAt]);
 
   async function connect() {
     setBusy(true);
@@ -90,7 +137,15 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
   }
 
   async function remove() {
-    if (!confirm(`Remover inbox "${inbox.name}"?`)) return;
+    if (
+      !(await confirm({
+        title: `Remover inbox "${inbox.name}"?`,
+        description: 'A sessão WhatsApp é encerrada e as conversas vinculadas perdem a origem.',
+        confirmLabel: 'Remover',
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(true);
     try {
       await api(`/api/inboxes/${inbox.id}`, { method: 'DELETE' });
@@ -106,17 +161,37 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
   return (
     <div className="rounded-lg border bg-card p-5 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-semibold">{inbox.name}</h3>
+        <div className="min-w-0">
+          <h3 className="font-semibold truncate">{inbox.name}</h3>
           {inbox.waSession?.phoneNumber && (
             <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
               <Phone className="h-3.5 w-3.5" />
               {inbox.waSession.phoneNumber}
             </p>
           )}
+          {inbox.status === 'CONNECTED' && inbox.waSession?.lastConnectedAt && (
+            <p
+              className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground"
+              title={new Date(inbox.waSession.lastConnectedAt).toLocaleString('pt-BR')}
+            >
+              <Clock className="h-3 w-3" />
+              Conectado {formatRelativeAgo(inbox.waSession.lastConnectedAt)}
+            </p>
+          )}
+          {inbox.status !== 'CONNECTED' &&
+            inbox.status !== 'AWAITING_QR' &&
+            inbox.waSession?.lastConnectedAt && (
+              <p
+                className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                title={new Date(inbox.waSession.lastConnectedAt).toLocaleString('pt-BR')}
+              >
+                <Clock className="h-3 w-3" />
+                Última conexão {formatRelativeAgo(inbox.waSession.lastConnectedAt)}
+              </p>
+            )}
         </div>
         <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[inbox.status]}`}
+          className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[inbox.status]}`}
         >
           {STATUS_LABEL[inbox.status]}
         </span>
@@ -134,6 +209,22 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
             <QrCode className="h-3.5 w-3.5" />
             Escaneie no WhatsApp do seu celular (Aparelhos conectados)
           </p>
+          {inbox.waSession.qrExpiresAt &&
+            (() => {
+              const ms = new Date(inbox.waSession.qrExpiresAt).getTime() - Date.now();
+              if (ms <= 0) {
+                return (
+                  <p className="text-[11px] italic text-muted-foreground">
+                    QR expirado — gerando novo…
+                  </p>
+                );
+              }
+              return (
+                <p className="text-[11px] text-muted-foreground">
+                  Expira em {Math.max(1, Math.round(ms / 1000))}s · renova sozinho
+                </p>
+              );
+            })()}
         </div>
       )}
 

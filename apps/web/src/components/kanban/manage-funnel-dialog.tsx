@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -105,6 +106,7 @@ export function ManageFunnelDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['funnels'] });
 
@@ -150,9 +152,13 @@ export function ManageFunnelDialog({
 
   async function deleteFunnel() {
     if (
-      !confirm(
-        `Excluir funil "${funnel!.name}"? Todos os cards e listas dele serão removidos. Esta ação não pode ser desfeita.`,
-      )
+      !(await confirm({
+        title: `Excluir funil "${funnel!.name}"?`,
+        description:
+          'Todos os cards e listas dele serão removidos. Esta ação não pode ser desfeita.',
+        confirmLabel: 'Excluir funil',
+        destructive: true,
+      }))
     )
       return;
     try {
@@ -275,6 +281,7 @@ function StageRow({
   stages: Stage[];
   refresh: () => void;
 }) {
+  const confirm = useConfirm();
   const [name, setName] = useState(stage.name);
   const [color, setColor] = useState(stage.color);
   const [outcome, setOutcome] = useState<StageOutcome>(stage.outcome);
@@ -315,7 +322,15 @@ function StageRow({
       toast.error('Funil precisa ter pelo menos 1 lista');
       return;
     }
-    if (!confirm(`Excluir lista "${stage.name}"? Cards nela ficarão órfãos do stage.`)) return;
+    if (
+      !(await confirm({
+        title: `Excluir lista "${stage.name}"?`,
+        description: 'Cards nela ficarão órfãos do stage.',
+        confirmLabel: 'Excluir',
+        destructive: true,
+      }))
+    )
+      return;
     setBusy(true);
     try {
       await api(`/api/kanban/stages/${stage.id}`, { method: 'DELETE' });

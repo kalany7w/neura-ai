@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,6 +44,7 @@ interface CreateResp {
 
 export default function ApiKeysPage() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
   const [revealed, setRevealed] = useState<{ plain: string; name: string } | null>(null);
 
@@ -65,7 +67,15 @@ export default function ApiKeysPage() {
   }
 
   async function remove(key: ApiKey) {
-    if (!confirm(`Revogar a chave "${key.name}"? Esta ação é definitiva.`)) return;
+    if (
+      !(await confirm({
+        title: `Revogar a chave "${key.name}"?`,
+        description: 'Integrações que usam esta chave deixam de funcionar imediatamente.',
+        confirmLabel: 'Revogar',
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await api(`/api/api-keys/${key.id}`, { method: 'DELETE' });
       toast.success('Chave revogada');
