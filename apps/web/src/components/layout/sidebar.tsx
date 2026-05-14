@@ -18,6 +18,7 @@ import {
   Zap,
   Bot,
   BarChart3,
+  Key,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -64,6 +65,7 @@ const groups: NavGroup[] = [
       { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN'] },
       { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
+      { href: '/settings/api-keys', label: 'API Keys', icon: Key, roles: ['ADMIN'] },
     ],
   },
 ];

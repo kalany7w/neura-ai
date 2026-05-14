@@ -27,4 +27,11 @@ export interface SendMessageJob {
   quotedWaMessageId?: string;
   /** Reply: participant JID (grupos) — opcional */
   quotedParticipant?: string;
+  /**
+   * Quando 'reaction', os campos type/text/media são ignorados.
+   * targetWaMessageId é obrigatório; reactionEmoji vazio = remover reação.
+   */
+  kind?: 'message' | 'reaction';
+  targetWaMessageId?: string;
+  reactionEmoji?: string;
 }
