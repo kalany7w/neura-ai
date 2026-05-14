@@ -4,6 +4,8 @@ import { use, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
@@ -11,7 +13,9 @@ import {
   Clock,
   CornerDownRight,
   FileText,
+  Mail,
   Mic,
+  MoreHorizontal,
   Paperclip,
   MessageSquare,
   PauseCircle,
@@ -123,6 +127,7 @@ interface ConversationDetail {
   status: ConvStatus;
   assignedAgentId: string | null;
   unreadCount: number;
+  archivedAt: string | null;
   contact: { id: string; name: string | null; phoneNumber: string; avatarUrl: string | null };
   inbox: { id: string; name: string; status: string };
   messages: MessageItem[];
@@ -382,6 +387,39 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function markUnread() {
+    try {
+      await api(`/api/conversations/${id}/unread`, { method: 'POST' });
+      toast.success('Marcada como não lida');
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+      await qc.invalidateQueries({ queryKey: ['conversations'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function archive() {
+    try {
+      await api(`/api/conversations/${id}/archive`, { method: 'POST' });
+      toast.success('Conversa arquivada');
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+      await qc.invalidateQueries({ queryKey: ['conversations'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function unarchive() {
+    try {
+      await api(`/api/conversations/${id}/unarchive`, { method: 'POST' });
+      toast.success('Conversa desarquivada');
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+      await qc.invalidateQueries({ queryKey: ['conversations'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
   // Atalhos de template: digitou /nome → expande
   function maybeExpandShortcut(value: string): string {
     if (!templatesData?.templates || !data?.conversation) return value;
@@ -559,6 +597,37 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   </DropdownMenuItem>
                 );
               })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* More actions: marcar não lida, arquivar, etc */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs hover:bg-accent"
+                title="Mais ações"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Ações</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={markUnread} disabled={conv.unreadCount > 0}>
+                <Mail className="h-3.5 w-3.5" />
+                Marcar como não lida
+              </DropdownMenuItem>
+              {conv.archivedAt ? (
+                <DropdownMenuItem onSelect={unarchive}>
+                  <ArchiveRestore className="h-3.5 w-3.5" />
+                  Desarquivar
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onSelect={archive}>
+                  <Archive className="h-3.5 w-3.5" />
+                  Arquivar conversa
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 

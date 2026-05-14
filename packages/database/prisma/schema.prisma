@@ -282,6 +282,12 @@ model Conversation {
   lastMessageAt   DateTime?
   unreadCount     Int                @default(0)
   snoozeUntil     DateTime?
+  // Arquivada: removida das views padrão mas mantida (vs delete)
+  archivedAt      DateTime?
+  // Último agente que enviou OUTBOUND nesta conversa (cache pra lista)
+  lastAgentRepliedId String?
+  // Preview da última msg (qualquer direção) — cache pra lista
+  lastMessagePreview String?         @db.Text
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -293,6 +299,7 @@ model Conversation {
   notes     ConversationNote[]
 
   @@index([workspaceId, status, lastMessageAt])
+  @@index([workspaceId, archivedAt])
   @@index([assignedAgentId])
   @@index([contactId])
   @@index([inboxId])

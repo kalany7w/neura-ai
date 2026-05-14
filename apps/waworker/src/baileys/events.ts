@@ -339,17 +339,19 @@ async function persistInboundMessage(
       },
     });
 
+    // Sync cards linkados — atualiza preview/badge unread/lastMessageAt
+    // (slaStatus deixa pro SLA scheduler recalcular)
+    const preview = text ? text.slice(0, 60) : `[${type.toLowerCase()}]`;
     await tx.conversation.update({
       where: { id: conversation.id },
       data: {
         lastMessageAt: created.createdAt,
+        lastMessagePreview: preview,
         unreadCount: { increment: 1 },
+        // Auto-desarquivar quando msg nova chega
+        archivedAt: null,
       },
     });
-
-    // Sync cards linkados — atualiza preview/badge unread/lastMessageAt
-    // (slaStatus deixa pro SLA scheduler recalcular)
-    const preview = text ? text.slice(0, 60) : `[${type}]`;
     await tx.card.updateMany({
       where: { conversationId: conversation.id },
       data: {
