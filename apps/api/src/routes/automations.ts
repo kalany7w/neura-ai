@@ -42,6 +42,66 @@ const createSchema = z.object({
 
 const updateSchema = createSchema.partial();
 
+// GET /api/automations/settings — paused (e outras flags globais)
+automationsRouter.get(
+  '/settings',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.read'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const ws = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settings: true },
+    });
+    const settings = (ws?.settings as Record<string, unknown> | null) ?? {};
+    return c.json({
+      paused: settings.automationsPaused === true,
+      pausedAt: typeof settings.automationsPausedAt === 'string' ? settings.automationsPausedAt : null,
+    });
+  },
+);
+
+// PATCH /api/automations/settings — toggle pause global
+const settingsBody = z.object({ paused: z.boolean() });
+
+automationsRouter.patch(
+  '/settings',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const body = await c.req.json().catch(() => null);
+    const parsed = settingsBody.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+
+    const ws = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settings: true },
+    });
+    const current = (ws?.settings as Record<string, unknown> | null) ?? {};
+    const nowIso = new Date().toISOString();
+    const newSettings = {
+      ...current,
+      automationsPaused: parsed.data.paused,
+      automationsPausedAt: parsed.data.paused ? nowIso : null,
+    };
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { settings: newSettings },
+    });
+    await audit({
+      workspaceId,
+      actorId,
+      action: parsed.data.paused ? 'automations.paused' : 'automations.resumed',
+    });
+    return c.json({ paused: parsed.data.paused, pausedAt: parsed.data.paused ? nowIso : null });
+  },
+);
+
 automationsRouter.get(
   '/',
   requireAuth,

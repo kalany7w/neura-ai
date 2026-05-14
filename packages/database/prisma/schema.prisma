@@ -20,6 +20,8 @@ model Workspace {
   id        String   @id @default(cuid())
   name      String
   slug      String   @unique
+  // Settings flexíveis do workspace: automationsPaused, defaultGreeting, etc.
+  settings  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -648,6 +650,10 @@ model Message {
   locationLon    Float?
   locationName   String?
   locationAddress String?
+  // Pin de mensagem na conversa (apenas interno — não propaga pro WhatsApp).
+  // pinnedAt + pinnedBy permite N msgs pinadas, ordenadas por pinnedAt desc.
+  pinnedAt       DateTime?
+  pinnedBy       String?
   error          String?
   sentAt         DateTime?
   deliveredAt    DateTime?

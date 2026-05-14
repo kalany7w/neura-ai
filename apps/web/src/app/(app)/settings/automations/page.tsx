@@ -179,6 +179,37 @@ export default function AutomationsPage() {
     queryFn: () => api('/api/automations'),
   });
 
+  const { data: settings } = useQuery<{ paused: boolean; pausedAt: string | null }>({
+    queryKey: ['automations', 'settings'],
+    queryFn: () => api('/api/automations/settings'),
+  });
+
+  async function togglePauseGlobal() {
+    if (!settings) return;
+    const next = !settings.paused;
+    if (
+      next &&
+      !(await confirm({
+        title: 'Pausar todas as automações?',
+        description:
+          'Nenhuma regra dispara enquanto pausado. Mensagens, atribuições e ações automáticas ficam inertes até retomar.',
+        confirmLabel: 'Pausar',
+        destructive: true,
+      }))
+    )
+      return;
+    try {
+      await api('/api/automations/settings', {
+        method: 'PATCH',
+        body: JSON.stringify({ paused: next }),
+      });
+      toast.success(next ? 'Automações pausadas' : 'Automações retomadas');
+      await qc.invalidateQueries({ queryKey: ['automations', 'settings'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
   async function toggle(rule: Rule) {
     try {
       await api(`/api/automations/${rule.id}`, {
@@ -223,11 +254,50 @@ export default function AutomationsPage() {
             condições são avaliadas e, se passarem, as ações são executadas.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button onClick={() => setCreateOpen(true)} disabled={settings?.paused}>
           <Plus className="h-4 w-4" />
           Nova regra
         </Button>
       </div>
+
+      {settings && (
+        <div
+          className={`flex items-center gap-3 rounded-lg border p-3 ${
+            settings.paused
+              ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/40'
+              : 'bg-card'
+          }`}
+        >
+          <div className="flex-1">
+            <p className="text-sm font-medium">
+              {settings.paused ? 'Automações pausadas' : 'Automações ativas'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {settings.paused
+                ? `Nenhuma regra dispara desde ${
+                    settings.pausedAt
+                      ? new Date(settings.pausedAt).toLocaleString('pt-BR')
+                      : 'há pouco'
+                  }. Útil pra manutenção, migração ou debug.`
+                : 'Todas as regras com switch ligado disparam normalmente.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={togglePauseGlobal}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
+              settings.paused ? 'bg-amber-500' : 'bg-emerald-500'
+            }`}
+            aria-label={settings.paused ? 'Retomar automações' : 'Pausar automações'}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
+                settings.paused ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      )}
 
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando…</p>

@@ -12,6 +12,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
   Clock,
   CornerDownRight,
   FileText,
@@ -22,6 +23,8 @@ import {
   MoreHorizontal,
   Paperclip,
   Pencil,
+  Pin,
+  PinOff,
   MessageSquare,
   PauseCircle,
   PlayCircle,
@@ -97,6 +100,14 @@ interface ReactionItem {
   fromMe: boolean;
 }
 
+interface ReplyToRef {
+  id: string;
+  content: string | null;
+  type: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  deletedAt: string | null;
+}
+
 interface MessageItem {
   id: string;
   direction: 'INBOUND' | 'OUTBOUND';
@@ -115,6 +126,10 @@ interface MessageItem {
   locationLon: number | null;
   locationName: string | null;
   locationAddress: string | null;
+  pinnedAt: string | null;
+  pinnedBy: string | null;
+  replyToId: string | null;
+  replyTo: ReplyToRef | null;
   sentAt: string | null;
   createdAt: string;
   reactions: ReactionItem[];
@@ -197,6 +212,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [editingBusy, setEditingBusy] = useState(false);
   // Forward
   const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
+  // Pinned bar
+  const [pinnedExpanded, setPinnedExpanded] = useState(false);
 
   async function uploadAndSend(
     file: File | Blob,
@@ -346,6 +363,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       qc.invalidateQueries({ queryKey: ['conversation', id, 'notes'] });
     }
     if (event.event === 'message.edited' || event.event === 'message.deleted') {
+      qc.invalidateQueries({ queryKey: ['conversation', id] });
+    }
+    if (event.event === 'message.pinned' || event.event === 'message.unpinned') {
       qc.invalidateQueries({ queryKey: ['conversation', id] });
     }
     if (event.event === 'conversation.typing') {
@@ -533,6 +553,25 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       setEditingBusy(false);
     }
   }
+  async function pinMessage(msg: MessageItem) {
+    try {
+      await api(`/api/messages/${msg.id}/pin`, { method: 'POST' });
+      toast.success('Mensagem fixada');
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+  async function unpinMessage(msg: MessageItem) {
+    try {
+      await api(`/api/messages/${msg.id}/unpin`, { method: 'POST' });
+      toast.success('Mensagem desafixada');
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
   async function revokeMessage(msg: MessageItem) {
     if (
       !(await confirm({
@@ -751,6 +790,59 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
+      {(() => {
+        const pinned = (data?.conversation.messages ?? []).filter((m) => m.pinnedAt);
+        if (pinned.length === 0) return null;
+        return (
+          <div className="sticky top-0 z-10 border-b bg-amber-50/80 backdrop-blur dark:bg-amber-950/40">
+            <button
+              type="button"
+              onClick={() => setPinnedExpanded((v) => !v)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-amber-900 dark:text-amber-200"
+            >
+              <Pin className="h-3 w-3" />
+              <span className="font-medium">
+                {pinned.length} mensagem{pinned.length > 1 ? 's' : ''} fixada{pinned.length > 1 ? 's' : ''}
+              </span>
+              {pinnedExpanded ? (
+                <ChevronUp className="ml-auto h-3 w-3" />
+              ) : (
+                <ChevronDown className="ml-auto h-3 w-3" />
+              )}
+            </button>
+            {pinnedExpanded && (
+              <ul className="divide-y divide-amber-200 dark:divide-amber-800 max-h-40 overflow-y-auto">
+                {pinned.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex items-start gap-2 px-3 py-1.5 text-[11px]"
+                  >
+                    <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-semibold opacity-70">
+                        {m.direction === 'OUTBOUND'
+                          ? 'Você'
+                          : conv.contact.name ?? conv.contact.phoneNumber}
+                        :
+                      </span>{' '}
+                      {m.content ?? `[${m.type.toLowerCase()}]`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => unpinMessage(m)}
+                      title="Desafixar"
+                      className="shrink-0 rounded p-0.5 hover:bg-amber-200 dark:hover:bg-amber-900"
+                    >
+                      <PinOff className="h-3 w-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })()}
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
         {timeline.map((item) =>
           item.kind === 'note' ? (
@@ -824,6 +916,24 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                       <Forward className="h-3.5 w-3.5" />
                     </button>
                   )}
+                {!item.deletedAt && (
+                  <button
+                    type="button"
+                    onClick={() => (item.pinnedAt ? unpinMessage(item) : pinMessage(item))}
+                    title={item.pinnedAt ? 'Desafixar' : 'Fixar mensagem'}
+                    className={`rounded-full p-1 hover:bg-muted ${
+                      item.pinnedAt
+                        ? 'text-amber-600'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {item.pinnedAt ? (
+                      <PinOff className="h-3.5 w-3.5" />
+                    ) : (
+                      <Pin className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
                 {item.direction === 'OUTBOUND' &&
                   item.type === 'TEXT' &&
                   !item.deletedAt &&
@@ -964,6 +1074,31 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <Forward className="h-2.5 w-2.5" />
                     Encaminhada
                   </p>
+                )}
+                {item.replyTo && !item.deletedAt && (
+                  <div
+                    className={`mb-1.5 flex items-start gap-1.5 rounded-md border-l-2 px-2 py-1 text-[11px] ${
+                      item.direction === 'OUTBOUND'
+                        ? 'border-primary-foreground/40 bg-primary-foreground/10'
+                        : 'border-foreground/30 bg-background/60'
+                    }`}
+                  >
+                    <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0 opacity-60" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold opacity-70">
+                        {item.replyTo.direction === 'OUTBOUND'
+                          ? 'Você'
+                          : conv.contact.name ?? conv.contact.phoneNumber}
+                      </p>
+                      {item.replyTo.deletedAt ? (
+                        <p className="italic opacity-60">Mensagem apagada</p>
+                      ) : (
+                        <p className="line-clamp-2 opacity-80">
+                          {item.replyTo.content ?? `[${item.replyTo.type.toLowerCase()}]`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 )}
                 {item.deletedAt ? (
                   <p className="flex items-center gap-1.5 italic opacity-60">

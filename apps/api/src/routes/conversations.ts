@@ -16,11 +16,16 @@ export const conversationsRouter = new Hono<{
 
 // GET /api/conversations
 const listQuery = z.object({
-  status: z.enum(['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED']).optional(),
+  // Aceita "OPEN" ou "OPEN,PENDING" (comma-separated pra filtro multi)
+  status: z.string().optional(),
+  // Aceita um id ou comma-separated
   inboxId: z.string().optional(),
   assignedAgentId: z.string().optional(),
   unassigned: z.coerce.boolean().optional(),
   archived: z.coerce.boolean().optional(),
+  labelId: z.string().optional(),
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(25),
@@ -32,16 +37,52 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const userId = c.get('userId');
   const parsed = listQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!parsed.success) return c.json({ error: 'invalid_query', issues: parsed.error.issues }, 400);
-  const { status, inboxId, assignedAgentId, unassigned, archived, search, page, perPage } =
-    parsed.data;
+  const {
+    status,
+    inboxId,
+    assignedAgentId,
+    unassigned,
+    archived,
+    labelId,
+    since,
+    until,
+    search,
+    page,
+    perPage,
+  } = parsed.data;
 
   const where: Prisma.ConversationWhereInput = { workspaceId };
   // Por default exclui arquivadas. ?archived=true mostra só as arquivadas.
   where.archivedAt = archived ? { not: null } : null;
-  if (status) where.status = status;
-  if (inboxId) where.inboxId = inboxId;
+
+  // Multi-status: "OPEN,PENDING" → IN. Valida cada valor.
+  const ALLOWED_STATUS = ['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED'] as const;
+  type ConvStatus = (typeof ALLOWED_STATUS)[number];
+  if (status) {
+    const parts = status
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s): s is ConvStatus => (ALLOWED_STATUS as readonly string[]).includes(s));
+    if (parts.length === 1) where.status = parts[0];
+    else if (parts.length > 1) where.status = { in: parts };
+  }
+
+  if (inboxId) {
+    const parts = inboxId.split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 1) where.inboxId = parts[0];
+    else if (parts.length > 1) where.inboxId = { in: parts };
+  }
+
   if (unassigned) where.assignedAgentId = null;
   else if (assignedAgentId) where.assignedAgentId = assignedAgentId;
+
+  if (labelId) where.labels = { some: { labelId } };
+
+  if (since || until) {
+    where.createdAt = {};
+    if (since) (where.createdAt as Record<string, Date>).gte = new Date(since);
+    if (until) (where.createdAt as Record<string, Date>).lte = new Date(until);
+  }
 
   // Agent: só conversas próprias ou sem agente
   if (role === 'AGENT') {
@@ -123,7 +164,33 @@ conversationsRouter.get('/:id', requireAuth, requireWorkspace, async (c) => {
   if (role === 'AGENT' && conv.assignedAgentId && conv.assignedAgentId !== userId) {
     return c.json({ error: 'forbidden' }, 403);
   }
-  return c.json({ conversation: conv });
+
+  // Enriquece messages com replyTo (batch query — evita N+1)
+  const replyIds = Array.from(
+    new Set(conv.messages.map((m) => m.replyToId).filter((v): v is string => !!v)),
+  );
+  const replies =
+    replyIds.length > 0
+      ? await prisma.message.findMany({
+          where: { id: { in: replyIds } },
+          select: {
+            id: true,
+            content: true,
+            type: true,
+            direction: true,
+            deletedAt: true,
+          },
+        })
+      : [];
+  const replyById = new Map(replies.map((r) => [r.id, r]));
+  const enrichedMessages = conv.messages.map((m) => ({
+    ...m,
+    replyTo: m.replyToId ? (replyById.get(m.replyToId) ?? null) : null,
+  }));
+
+  return c.json({
+    conversation: { ...conv, messages: enrichedMessages },
+  });
 });
 
 // PATCH /api/conversations/:id (status / assign)
