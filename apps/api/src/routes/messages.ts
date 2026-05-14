@@ -199,9 +199,60 @@ messagesRouter.post(
       text: parsed.data.text,
       kind: 'edit',
       targetWaMessageId: msg.waMessageId,
+      editedBy: c.get('userId'),
     });
 
     return c.json({ ok: true });
+  },
+);
+
+// GET /api/messages/:id/history — versões anteriores (mais recente primeiro)
+messagesRouter.get(
+  '/messages/:id/history',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const msg = await prisma.message.findFirst({
+      where: { id, conversation: { workspaceId } },
+      select: { id: true, content: true, editedAt: true, createdAt: true },
+    });
+    if (!msg) return c.json({ error: 'not_found' }, 404);
+
+    const edits = await prisma.messageEdit.findMany({
+      where: { messageId: id },
+      orderBy: { editedAt: 'desc' },
+    });
+
+    // Enriquece com info do autor (1 query batch)
+    const authorIds = Array.from(
+      new Set(edits.map((e) => e.editedBy).filter((v): v is string => !!v)),
+    );
+    const authors = authorIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: authorIds } },
+          select: { id: true, name: true, email: true, image: true },
+        })
+      : [];
+    const authorMap = new Map(authors.map((a) => [a.id, a]));
+
+    const enriched = edits.map((e) => ({
+      id: e.id,
+      previousContent: e.previousContent,
+      editedAt: e.editedAt,
+      editedBy: e.editedBy,
+      author: e.editedBy ? authorMap.get(e.editedBy) ?? null : null,
+    }));
+
+    return c.json({
+      current: {
+        content: msg.content,
+        editedAt: msg.editedAt,
+        createdAt: msg.createdAt,
+      },
+      edits: enriched,
+    });
   },
 );
 
