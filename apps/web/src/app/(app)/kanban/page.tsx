@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -539,10 +539,51 @@ function StageColumn({
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
 }) {
+  const qc = useQueryClient();
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = cards.length;
   const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
   const accent = stage.outcome ? OUTCOME_COLOR[stage.outcome] : stage.color;
+
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerTitle, setComposerTitle] = useState('');
+  const [composerSubmitting, setComposerSubmitting] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (composerOpen) {
+      // Autofocus + cursor no fim quando abre
+      requestAnimationFrame(() => composerRef.current?.focus());
+    }
+  }, [composerOpen]);
+
+  function closeComposer() {
+    setComposerOpen(false);
+    setComposerTitle('');
+  }
+
+  async function submitQuickAdd(keepOpen: boolean) {
+    const title = composerTitle.trim();
+    if (!title || composerSubmitting) return;
+    setComposerSubmitting(true);
+    try {
+      await api('/api/kanban/cards', {
+        method: 'POST',
+        body: JSON.stringify({ funnelId, stageId: stage.id, title }),
+      });
+      setComposerTitle('');
+      await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
+      if (keepOpen) {
+        requestAnimationFrame(() => composerRef.current?.focus());
+      } else {
+        closeComposer();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar card');
+    } finally {
+      setComposerSubmitting(false);
+    }
+  }
 
   return (
     <div
@@ -558,7 +599,7 @@ function StageColumn({
         }}
       >
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
             <span
               className="h-2 w-2 shrink-0 rounded-full"
               style={{ backgroundColor: accent }}
@@ -568,13 +609,23 @@ function StageColumn({
               {total}
             </span>
           </div>
-          {stage.outcome && (
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${OUTCOME_BADGE_CLASS[stage.outcome]}`}
+          <div className="flex items-center gap-1">
+            {stage.outcome && (
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${OUTCOME_BADGE_CLASS[stage.outcome]}`}
+              >
+                {OUTCOME_LABEL[stage.outcome]}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setComposerOpen(true)}
+              title="Adicionar card nesta lista"
+              className="rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
             >
-              {OUTCOME_LABEL[stage.outcome]}
-            </span>
-          )}
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         {sumValue > 0 && (
           <p className="mt-1 text-[11px] font-medium text-muted-foreground">
@@ -587,6 +638,53 @@ function StageColumn({
         className="flex-1 space-y-2 overflow-y-auto p-2 min-h-[55vh]"
         style={{ borderTop: `1px solid ${accent}25` }}
       >
+        {composerOpen && (
+          <div className="rounded-xl border bg-card p-2 shadow-sm">
+            <textarea
+              ref={composerRef}
+              value={composerTitle}
+              onChange={(e) => setComposerTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  closeComposer();
+                }
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  submitQuickAdd(e.metaKey || e.ctrlKey);
+                }
+              }}
+              rows={2}
+              maxLength={200}
+              placeholder="Título do card (Enter pra criar, Shift+Enter pra quebrar linha)"
+              className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <p className="text-[10px] text-muted-foreground">
+                Cmd/Ctrl+Enter cria e mantém aberto
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={closeComposer}
+                  disabled={composerSubmitting}
+                  className="h-7 px-2 text-xs"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => submitQuickAdd(false)}
+                  disabled={composerSubmitting || !composerTitle.trim()}
+                  className="h-7 px-2 text-xs"
+                >
+                  {composerSubmitting ? 'Criando…' : 'Adicionar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
         {cards.map((c) => (
           <DraggableCard
             key={c.id}
@@ -599,12 +697,16 @@ function StageColumn({
             anySelected={selectedIds.size > 0}
           />
         ))}
-        {cards.length === 0 && (
-          <div className="flex h-32 flex-col items-center justify-center rounded-xl border border-dashed bg-background/40 px-3 text-center">
+        {cards.length === 0 && !composerOpen && (
+          <button
+            type="button"
+            onClick={() => setComposerOpen(true)}
+            className="flex h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-background/40 px-3 text-center transition hover:border-foreground/30 hover:bg-background/70"
+          >
             <p className="text-[11px] text-muted-foreground">
-              {isOver ? 'Solte aqui ↓' : 'Vazio — arraste um card pra cá'}
+              {isOver ? 'Solte aqui ↓' : '+ Adicionar card'}
             </p>
-          </div>
+          </button>
         )}
       </div>
     </div>
