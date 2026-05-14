@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Check,
   CheckCircle2,
+  CheckSquare,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -211,10 +212,38 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [editingBusy, setEditingBusy] = useState(false);
-  // Forward
+  // Forward (single)
   const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
+  // Multi-select pra forward batch
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [batchForwardOpen, setBatchForwardOpen] = useState(false);
   // Pinned bar
   const [pinnedExpanded, setPinnedExpanded] = useState(false);
+
+  function isForwardableType(type: string): boolean {
+    return type !== 'STICKER' && type !== 'LOCATION' && type !== 'CONTACT' && type !== 'SYSTEM';
+  }
+
+  function toggleSelectMessage(messageId: string) {
+    setSelectedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(messageId)) next.delete(messageId);
+      else if (next.size < 20) next.add(messageId);
+      else toast.error('Máximo 20 mensagens por encaminhamento');
+      return next;
+    });
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  }
+
+  function enterSelectionMode() {
+    setSelectionMode(true);
+    setSelectedMessageIds(new Set());
+  }
 
   async function uploadAndSend(
     file: File | Blob,
@@ -725,6 +754,10 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 <Mail className="h-3.5 w-3.5" />
                 Marcar como não lida
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={enterSelectionMode}>
+                <CheckSquare className="h-3.5 w-3.5" />
+                Selecionar mensagens
+              </DropdownMenuItem>
               {conv.archivedAt ? (
                 <DropdownMenuItem onSelect={unarchive}>
                   <ArchiveRestore className="h-3.5 w-3.5" />
@@ -790,6 +823,39 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           </DropdownMenu>
         </div>
       </div>
+
+      {selectionMode && (
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-indigo-500/95 px-3 py-2 text-indigo-50 shadow-sm">
+          <div className="flex items-center gap-2 text-sm">
+            <CheckSquare className="h-4 w-4" />
+            <span className="font-medium">
+              {selectedMessageIds.size === 0
+                ? 'Selecionar mensagens — clique nas mensagens'
+                : `${selectedMessageIds.size} selecionada${selectedMessageIds.size > 1 ? 's' : ''}`}
+            </span>
+            <span className="text-[11px] opacity-80">máx 20</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setBatchForwardOpen(true)}
+              disabled={selectedMessageIds.size === 0}
+              className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-900 transition hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Forward className="h-3.5 w-3.5" />
+              Encaminhar
+            </button>
+            <button
+              type="button"
+              onClick={exitSelectionMode}
+              className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200/40 px-2.5 py-1 text-xs font-medium hover:bg-indigo-400"
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {(() => {
         const pinned = (data?.conversation.messages ?? []).filter((m) => m.pinnedAt);
@@ -871,12 +937,55 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           ) : (
             <div
               key={item.id}
-              className={`group flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
+              className={`group flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'} ${
+                selectionMode ? 'cursor-pointer' : ''
+              } ${
+                selectionMode && selectedMessageIds.has(item.id)
+                  ? 'rounded-md bg-indigo-100/40 dark:bg-indigo-900/30 -mx-1 px-1'
+                  : ''
+              }`}
+              onClick={
+                selectionMode
+                  ? (e) => {
+                      // Não selecionar se clicar dentro de link/áudio/vídeo (deixa interação normal)
+                      const target = e.target as HTMLElement;
+                      if (target.closest('a, audio, video, button, input, textarea')) return;
+                      if (item.deletedAt) {
+                        toast.error('Mensagem apagada não pode ser encaminhada');
+                        return;
+                      }
+                      if (!isForwardableType(item.type)) {
+                        toast.error(`Tipo ${item.type} não pode ser encaminhado`);
+                        return;
+                      }
+                      toggleSelectMessage(item.id);
+                    }
+                  : undefined
+              }
             >
+              {selectionMode && (
+                <div
+                  className={`flex shrink-0 items-center px-1 ${
+                    item.direction === 'OUTBOUND' ? 'order-3' : 'order-0'
+                  }`}
+                >
+                  {selectedMessageIds.has(item.id) ? (
+                    <CheckSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  ) : (
+                    <Square
+                      className={`h-4 w-4 ${
+                        !item.deletedAt && isForwardableType(item.type)
+                          ? 'text-muted-foreground'
+                          : 'text-muted-foreground/30'
+                      }`}
+                    />
+                  )}
+                </div>
+              )}
               <div
                 className={`self-center mx-1 flex items-center gap-0.5 rounded-full border bg-card px-1 py-0.5 shadow-sm opacity-0 transition group-hover:opacity-100 ${
                   item.direction === 'OUTBOUND' ? 'order-1' : 'order-2'
-                }`}
+                } ${selectionMode ? 'hidden' : ''}`}
               >
                 {!item.deletedAt &&
                   QUICK_REACTIONS.map((emoji) => (
@@ -1429,6 +1538,17 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         }}
         messageId={forwardingMessageId}
         excludeConversationId={conv.id}
+      />
+
+      <ForwardMessageDialog
+        open={batchForwardOpen}
+        onOpenChange={(v) => setBatchForwardOpen(v)}
+        messageIds={Array.from(selectedMessageIds)}
+        excludeConversationId={conv.id}
+        onForwarded={() => {
+          setBatchForwardOpen(false);
+          exitSelectionMode();
+        }}
       />
     </div>
   );

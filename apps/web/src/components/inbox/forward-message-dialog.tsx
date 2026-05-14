@@ -25,18 +25,24 @@ interface ConversationListItem {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  messageId: string | null;
+  // Aceita 1 ID (compatível) OU array (batch). null/[] desabilita o submit.
+  messageId?: string | null;
+  messageIds?: string[];
   excludeConversationId?: string;
-  onForwarded?: (sent: string[]) => void;
+  onForwarded?: (sentConversationIds: string[]) => void;
 }
 
 export function ForwardMessageDialog({
   open,
   onOpenChange,
   messageId,
+  messageIds,
   excludeConversationId,
   onForwarded,
 }: Props) {
+  const ids: string[] = messageIds && messageIds.length > 0 ? messageIds : messageId ? [messageId] : [];
+  const isBatch = ids.length > 1;
+
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
@@ -69,25 +75,52 @@ export function ForwardMessageDialog({
   }
 
   async function submit() {
-    if (!messageId || selected.size === 0 || submitting) return;
+    if (ids.length === 0 || selected.size === 0 || submitting) return;
     setSubmitting(true);
     try {
-      const res = await api<{ sent: string[]; skipped: Array<{ reason: string }> }>(
-        `/api/messages/${messageId}/forward`,
-        {
+      if (isBatch) {
+        const res = await api<{
+          sent: Array<{ conversationId: string; messageCount: number }>;
+          skipped: Array<{ reason: string }>;
+          invalidMessages: string[];
+          totalMessages: number;
+        }>('/api/messages/forward-batch', {
           method: 'POST',
-          body: JSON.stringify({ conversationIds: Array.from(selected) }),
-        },
-      );
-      if (res.sent.length > 0) {
-        toast.success(`Encaminhada pra ${res.sent.length} conversa(s)`);
-      }
-      if (res.skipped.length > 0) {
-        toast.error(
-          `${res.skipped.length} pulada(s) — inbox desconectada ou outro erro.`,
+          body: JSON.stringify({
+            messageIds: ids,
+            conversationIds: Array.from(selected),
+          }),
+        });
+        if (res.sent.length > 0) {
+          toast.success(
+            `${res.totalMessages} mensagem(ns) encaminhada(s) pra ${res.sent.length} conversa(s)`,
+          );
+        }
+        if (res.skipped.length > 0) {
+          toast.error(`${res.skipped.length} pulada(s) — inbox desconectada ou outro erro.`);
+        }
+        if (res.invalidMessages.length > 0) {
+          toast.error(
+            `${res.invalidMessages.length} mensagem(ns) ignorada(s) (apagada ou tipo não suportado).`,
+          );
+        }
+        onForwarded?.(res.sent.map((s) => s.conversationId));
+      } else {
+        const res = await api<{ sent: string[]; skipped: Array<{ reason: string }> }>(
+          `/api/messages/${ids[0]}/forward`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ conversationIds: Array.from(selected) }),
+          },
         );
+        if (res.sent.length > 0) {
+          toast.success(`Encaminhada pra ${res.sent.length} conversa(s)`);
+        }
+        if (res.skipped.length > 0) {
+          toast.error(`${res.skipped.length} pulada(s) — inbox desconectada ou outro erro.`);
+        }
+        onForwarded?.(res.sent);
       }
-      onForwarded?.(res.sent);
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao encaminhar');
@@ -102,10 +135,13 @@ export function ForwardMessageDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Forward className="h-4 w-4" />
-            Encaminhar mensagem
+            {isBatch ? `Encaminhar ${ids.length} mensagens` : 'Encaminhar mensagem'}
           </DialogTitle>
           <DialogDescription>
-            Selecione até 10 conversas. Mídia é reenviada (não usa &quot;forwarded&quot; do WhatsApp).
+            Selecione até 10 conversas.{' '}
+            {isBatch
+              ? 'As mensagens são reenviadas em ordem cronológica original pra cada conversa selecionada.'
+              : 'Mídia é reenviada (não usa "forwarded" do WhatsApp).'}
           </DialogDescription>
         </DialogHeader>
 
