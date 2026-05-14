@@ -10,6 +10,7 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { DesktopNotificationsProvider } from '@/components/desktop-notifications-provider';
+import { OfflineBanner } from '@/components/offline-banner';
 
 interface WorkspaceListItem {
   id: string;
@@ -75,6 +76,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           activeWorkspaceId={activeWorkspace?.id}
         />
         <main className="flex-1 overflow-y-auto">
+          <OfflineBanner />
           <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
             <GlobalSearch />
             <NotificationsBell />

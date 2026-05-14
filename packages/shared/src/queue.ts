@@ -36,10 +36,13 @@ export interface SendMessageJob {
   /** Reply: participant JID (grupos) — opcional */
   quotedParticipant?: string;
   /**
-   * Quando 'reaction', os campos type/text/media são ignorados.
-   * targetWaMessageId é obrigatório; reactionEmoji vazio = remover reação.
+   * Variantes do job:
+   * - 'message' (default): envio padrão (text ou mídia)
+   * - 'reaction': adiciona/remove reação (targetWaMessageId obrigatório; emoji vazio = remover)
+   * - 'edit': edita conteúdo de msg enviada (targetWaMessageId + text obrigatórios; WhatsApp limita ~15min)
+   * - 'revoke': apaga msg pra todos (targetWaMessageId obrigatório; WhatsApp limita ~7min)
    */
-  kind?: 'message' | 'reaction';
+  kind?: 'message' | 'reaction' | 'edit' | 'revoke';
   targetWaMessageId?: string;
   reactionEmoji?: string;
 }

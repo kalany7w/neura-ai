@@ -7,7 +7,9 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  Ban,
   CalendarClock,
+  Check,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -17,6 +19,7 @@ import {
   Mic,
   MoreHorizontal,
   Paperclip,
+  Pencil,
   MessageSquare,
   PauseCircle,
   PlayCircle,
@@ -102,6 +105,9 @@ interface MessageItem {
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
   transcription: string | null;
   transcriptionStatus: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
+  editedAt: string | null;
+  deletedAt: string | null;
+  sentAt: string | null;
   createdAt: string;
   reactions: ReactionItem[];
 }
@@ -177,6 +183,10 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const pausedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Toggle de visualização de transcrição (msgId → exibir?)
   const [showTranscription, setShowTranscription] = useState<Record<string, boolean>>({});
+  // Edição inline: msgId em edição + texto
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState('');
+  const [editingBusy, setEditingBusy] = useState(false);
 
   async function uploadAndSend(
     file: File | Blob,
@@ -324,6 +334,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     }
     if (event.event === 'note.added' || event.event === 'note.removed') {
       qc.invalidateQueries({ queryKey: ['conversation', id, 'notes'] });
+    }
+    if (event.event === 'message.edited' || event.event === 'message.deleted') {
+      qc.invalidateQueries({ queryKey: ['conversation', id] });
     }
     if (event.event === 'conversation.typing') {
       const p = event.payload as { conversationId?: string; isTyping?: boolean } | null;
@@ -482,6 +495,51 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao reagir');
+    }
+  }
+
+  function startEdit(msg: MessageItem) {
+    setEditingMessageId(msg.id);
+    setEditingText(msg.content ?? '');
+  }
+  function cancelEdit() {
+    setEditingMessageId(null);
+    setEditingText('');
+    setEditingBusy(false);
+  }
+  async function submitEdit() {
+    if (!editingMessageId || !editingText.trim() || editingBusy) return;
+    setEditingBusy(true);
+    try {
+      await api(`/api/messages/${editingMessageId}/edit`, {
+        method: 'POST',
+        body: JSON.stringify({ text: editingText.trim() }),
+      });
+      toast.success('Mensagem editada');
+      cancelEdit();
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao editar');
+      setEditingBusy(false);
+    }
+  }
+  async function revokeMessage(msg: MessageItem) {
+    if (
+      !(await confirm({
+        title: 'Apagar mensagem pra todos?',
+        description:
+          'A mensagem some pra você e pro contato. Só funciona até ~7 minutos após o envio.',
+        confirmLabel: 'Apagar',
+        destructive: true,
+      }))
+    )
+      return;
+    try {
+      await api(`/api/messages/${msg.id}/delete`, { method: 'POST' });
+      toast.success('Mensagem apagada');
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao apagar');
     }
   }
 
@@ -717,29 +775,57 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   item.direction === 'OUTBOUND' ? 'order-1' : 'order-2'
                 }`}
               >
-                {QUICK_REACTIONS.map((emoji) => (
+                {!item.deletedAt &&
+                  QUICK_REACTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => react(item.id, emoji)}
+                      title={`Reagir ${emoji}`}
+                      className="rounded-full px-1 py-0.5 text-sm transition hover:scale-125 hover:bg-muted"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                {!item.deletedAt && (
                   <button
-                    key={emoji}
                     type="button"
-                    onClick={() => react(item.id, emoji)}
-                    title={`Reagir ${emoji}`}
-                    className="rounded-full px-1 py-0.5 text-sm transition hover:scale-125 hover:bg-muted"
+                    onClick={() => {
+                      setReplyTo(item);
+                      setMode('reply');
+                      inputRef.current?.focus();
+                    }}
+                    title="Responder"
+                    className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
-                    {emoji}
+                    <Reply className="h-3.5 w-3.5" />
                   </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReplyTo(item);
-                    setMode('reply');
-                    inputRef.current?.focus();
-                  }}
-                  title="Responder"
-                  className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <Reply className="h-3.5 w-3.5" />
-                </button>
+                )}
+                {item.direction === 'OUTBOUND' &&
+                  item.type === 'TEXT' &&
+                  !item.deletedAt &&
+                  item.status !== 'FAILED' && (
+                    <button
+                      type="button"
+                      onClick={() => startEdit(item)}
+                      title="Editar (até 15min)"
+                      className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                {item.direction === 'OUTBOUND' &&
+                  !item.deletedAt &&
+                  item.status !== 'FAILED' && (
+                    <button
+                      type="button"
+                      onClick={() => revokeMessage(item)}
+                      title="Apagar pra todos (até 7min)"
+                      className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
               </div>
               <div
                 className={`max-w-[70%] rounded-lg px-3 py-2 text-sm ${
@@ -813,13 +899,68 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     Documento ({item.mediaMimeType})
                   </a>
                 )}
-                {item.content && <p className="whitespace-pre-wrap break-words">{item.content}</p>}
+                {item.deletedAt ? (
+                  <p className="flex items-center gap-1.5 italic opacity-60">
+                    <Ban className="h-3 w-3" />
+                    Esta mensagem foi apagada
+                  </p>
+                ) : editingMessageId === item.id ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      submitEdit();
+                    }}
+                    className="flex flex-col gap-1.5"
+                  >
+                    <textarea
+                      autoFocus
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault();
+                          cancelEdit();
+                        } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault();
+                          submitEdit();
+                        }
+                      }}
+                      rows={Math.min(6, Math.max(2, editingText.split('\n').length))}
+                      className={`w-full resize-none rounded border bg-background px-2 py-1 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring`}
+                    />
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={cancelEdit}
+                        disabled={editingBusy}
+                        className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={editingBusy || !editingText.trim()}
+                        className="flex items-center gap-1 rounded bg-foreground px-2 py-0.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
+                      >
+                        <Check className="h-3 w-3" />
+                        {editingBusy ? 'Salvando…' : 'Salvar'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  item.content && (
+                    <p className="whitespace-pre-wrap break-words">{item.content}</p>
+                  )
+                )}
                 <p className="mt-1 text-[10px] opacity-70">
                   {new Date(item.createdAt).toLocaleTimeString('pt-BR', {
                     hour: '2-digit',
                     minute: '2-digit',
                   })}{' '}
-                  {item.direction === 'OUTBOUND' && STATUS_ICON[item.status]}
+                  {item.editedAt && !item.deletedAt && (
+                    <span className="italic">(editada)</span>
+                  )}{' '}
+                  {item.direction === 'OUTBOUND' && !item.deletedAt && STATUS_ICON[item.status]}
                 </p>
                 {item.reactions && item.reactions.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
