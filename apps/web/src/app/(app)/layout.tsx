@@ -69,6 +69,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             email: session.user.email,
           }}
           workspace={activeWorkspace ?? null}
+          workspaces={workspaces?.workspaces}
+          activeWorkspaceId={activeWorkspace?.id}
         />
         <main className="flex-1 overflow-y-auto">
           <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">

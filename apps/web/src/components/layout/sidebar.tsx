@@ -19,10 +19,22 @@ import {
   Bot,
   BarChart3,
   Key,
+  ScrollText,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Check, ChevronDown, Plus } from 'lucide-react';
 
 type Role = 'ADMIN' | 'SUPERVISOR' | 'AGENT';
 
@@ -66,6 +78,7 @@ const groups: NavGroup[] = [
       { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
       { href: '/settings/api-keys', label: 'API Keys', icon: Key, roles: ['ADMIN'] },
+      { href: '/settings/audit', label: 'Audit log', icon: ScrollText, roles: ['ADMIN'] },
     ],
   },
 ];
@@ -76,16 +89,61 @@ interface User {
   email: string;
 }
 
+interface WorkspaceOption {
+  id: string;
+  name: string;
+  slug: string;
+  role: Role;
+}
+
 interface SidebarProps {
   user: User;
   workspace?: { name: string; role: Role } | null;
+  workspaces?: WorkspaceOption[];
+  activeWorkspaceId?: string;
 }
 
-export function Sidebar({ user, workspace }: SidebarProps) {
+function RealtimeDot({ state }: { state: string }) {
+  return (
+    <div
+      title={
+        state === 'open'
+          ? 'Tempo real conectado'
+          : state === 'connecting'
+            ? 'Conectando…'
+            : 'Desconectado'
+      }
+    >
+      {state === 'open' ? (
+        <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+      ) : (
+        <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+      )}
+    </div>
+  );
+}
+
+export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const wsState = useRealtimeStore((s) => s.state);
   const role = workspace?.role;
+  const hasMultiple = (workspaces?.length ?? 0) > 1;
+
+  async function switchWorkspace(wsId: string) {
+    if (wsId === activeWorkspaceId) return;
+    try {
+      await api('/api/workspaces/switch', {
+        method: 'POST',
+        body: JSON.stringify({ workspaceId: wsId }),
+      });
+      toast.success('Workspace trocado');
+      router.refresh();
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao trocar workspace');
+    }
+  }
 
   const initials = (user.name ?? user.email)
     .split(/[\s.@]/)
@@ -113,28 +171,59 @@ export function Sidebar({ user, workspace }: SidebarProps) {
           </div>
         </Link>
         {workspace && (
-          <div className="mt-2 flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium">{workspace.name}</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                {workspace.role.toLowerCase()}
-              </p>
-            </div>
-            <div
-              title={
-                wsState === 'open'
-                  ? 'Tempo real conectado'
-                  : wsState === 'connecting'
-                    ? 'Conectando…'
-                    : 'Desconectado'
-              }
-            >
-              {wsState === 'open' ? (
-                <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-              ) : (
-                <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-            </div>
+          <div className="mt-2">
+            {hasMultiple ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 hover:bg-muted"
+                  >
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="truncate text-xs font-medium">{workspace.name}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {workspace.role.toLowerCase()}
+                      </p>
+                    </div>
+                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                    <RealtimeDot state={wsState} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>Seus workspaces</DropdownMenuLabel>
+                  {workspaces!.map((w) => (
+                    <DropdownMenuItem
+                      key={w.id}
+                      onSelect={() => switchWorkspace(w.id)}
+                      className={w.id === activeWorkspaceId ? 'bg-accent/60' : ''}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm">{w.name}</p>
+                        <p className="text-[10px] uppercase text-muted-foreground">
+                          {w.role.toLowerCase()}
+                        </p>
+                      </div>
+                      {w.id === activeWorkspaceId && <Check className="h-3.5 w-3.5" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => router.push('/onboarding')}>
+                    <Plus className="h-3.5 w-3.5" />
+                    Novo workspace
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{workspace.name}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {workspace.role.toLowerCase()}
+                  </p>
+                </div>
+                <RealtimeDot state={wsState} />
+              </div>
+            )}
           </div>
         )}
       </div>
