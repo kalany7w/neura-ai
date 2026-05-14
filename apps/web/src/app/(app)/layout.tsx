@@ -9,6 +9,7 @@ import { RealtimeProvider } from '@/components/realtime-provider';
 import { Sidebar } from '@/components/layout/sidebar';
 import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { GlobalSearch } from '@/components/layout/global-search';
+import { DesktopNotificationsProvider } from '@/components/desktop-notifications-provider';
 
 interface WorkspaceListItem {
   id: string;
@@ -61,6 +62,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <RealtimeProvider>
+      <DesktopNotificationsProvider />
       <div className="flex h-screen overflow-hidden">
         <Sidebar
           user={{
