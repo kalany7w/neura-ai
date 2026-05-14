@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Search, Plus, Phone, Upload } from 'lucide-react';
 import { ImportContactsDialog } from '@/components/contacts/import-contacts-dialog';
+import { ContactsBulkActionsBar } from '@/components/contacts/bulk-actions-bar';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
@@ -50,7 +51,21 @@ export default function ContactsPage() {
   const [labelId, setLabelId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const perPage = 25;
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
 
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
   if (search) params.set('search', search);
@@ -200,36 +215,89 @@ export default function ContactsPage() {
         ) : !data?.items.length ? (
           <p className="p-6 text-sm text-muted-foreground">Nenhum contato.</p>
         ) : (
-          data.items.map((contact) => (
-            <Link
-              key={contact.id}
-              href={`/contacts/${contact.id}`}
-              className="flex items-center justify-between gap-4 p-4 hover:bg-accent/50 transition-colors"
-            >
-              <div>
-                <p className="font-medium">{contact.name ?? contact.phoneNumber}</p>
-                <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                  <Phone className="h-3 w-3" />
-                  {contact.phoneNumber}
-                </p>
+          <>
+            {data.items.length > 0 && (
+              <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={data.items.every((c) => selectedIds.has(c.id))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        for (const c of data.items) next.add(c.id);
+                        return next;
+                      });
+                    } else {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        for (const c of data.items) next.delete(c.id);
+                        return next;
+                      });
+                    }
+                  }}
+                  className="h-3.5 w-3.5 rounded border-input"
+                />
+                <span>
+                  {selectedIds.size > 0
+                    ? `${selectedIds.size} selecionado(s)`
+                    : 'Selecionar página'}
+                </span>
               </div>
-              {contact.labels.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {contact.labels.map((cl) => (
-                    <span
-                      key={cl.label.id}
-                      style={{ backgroundColor: cl.label.color }}
-                      className="rounded-full px-2 py-0.5 text-xs text-white"
-                    >
-                      {cl.label.name}
-                    </span>
-                  ))}
+            )}
+            {data.items.map((contact) => {
+              const isSelected = selectedIds.has(contact.id);
+              return (
+                <div
+                  key={contact.id}
+                  className={`group flex items-center gap-3 p-4 transition-colors ${
+                    isSelected ? 'bg-accent/40' : 'hover:bg-accent/50'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => toggleSelect(contact.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3.5 w-3.5 shrink-0 rounded border-input"
+                  />
+                  <Link
+                    href={`/contacts/${contact.id}`}
+                    className="flex flex-1 items-center justify-between gap-4"
+                  >
+                    <div>
+                      <p className="font-medium">{contact.name ?? contact.phoneNumber}</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Phone className="h-3 w-3" />
+                        {contact.phoneNumber}
+                      </p>
+                    </div>
+                    {contact.labels.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {contact.labels.map((cl) => (
+                          <span
+                            key={cl.label.id}
+                            style={{ backgroundColor: cl.label.color }}
+                            className="rounded-full px-2 py-0.5 text-xs text-white"
+                          >
+                            {cl.label.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </Link>
                 </div>
-              )}
-            </Link>
-          ))
+              );
+            })}
+          </>
         )}
       </div>
+
+      <ContactsBulkActionsBar
+        selectedIds={Array.from(selectedIds)}
+        labels={labelsData?.labels ?? []}
+        onClear={clearSelection}
+      />
 
       {data && data.total > perPage && (
         <div className="flex items-center justify-between text-sm">

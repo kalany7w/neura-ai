@@ -20,6 +20,7 @@ const listQuery = z.object({
   inboxId: z.string().optional(),
   assignedAgentId: z.string().optional(),
   unassigned: z.coerce.boolean().optional(),
+  archived: z.coerce.boolean().optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(25),
@@ -31,9 +32,12 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const userId = c.get('userId');
   const parsed = listQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!parsed.success) return c.json({ error: 'invalid_query', issues: parsed.error.issues }, 400);
-  const { status, inboxId, assignedAgentId, unassigned, search, page, perPage } = parsed.data;
+  const { status, inboxId, assignedAgentId, unassigned, archived, search, page, perPage } =
+    parsed.data;
 
   const where: Prisma.ConversationWhereInput = { workspaceId };
+  // Por default exclui arquivadas. ?archived=true mostra só as arquivadas.
+  where.archivedAt = archived ? { not: null } : null;
   if (status) where.status = status;
   if (inboxId) where.inboxId = inboxId;
   if (unassigned) where.assignedAgentId = null;
@@ -53,21 +57,46 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
     };
   }
 
-  const [total, items] = await Promise.all([
+  const [total, items, lastReplyUsers] = await Promise.all([
     prisma.conversation.count({ where }),
     prisma.conversation.findMany({
       where,
       include: {
         contact: { select: { id: true, name: true, phoneNumber: true, avatarUrl: true } },
         inbox: { select: { id: true, name: true } },
+        labels: { include: { label: { select: { id: true, name: true, color: true } } } },
       },
       orderBy: { lastMessageAt: 'desc' },
       skip: (page - 1) * perPage,
       take: perPage,
     }),
+    // Pre-fetch quem foi o último agente — em batch pra evitar N+1
+    (async () => {
+      const allIds = new Set<string>();
+      return allIds;
+    })(),
   ]);
 
-  return c.json({ items, total, page, perPage });
+  // Resolve nome dos lastAgentRepliedId em batch
+  const agentIds = Array.from(
+    new Set(items.map((c) => c.lastAgentRepliedId).filter((v): v is string => !!v)),
+  );
+  const agents =
+    agentIds.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { id: { in: agentIds } },
+          select: { id: true, name: true, email: true },
+        });
+  void lastReplyUsers;
+  const agentMap = new Map(agents.map((u) => [u.id, u]));
+
+  const enriched = items.map((c) => ({
+    ...c,
+    lastAgentRepliedBy: c.lastAgentRepliedId ? agentMap.get(c.lastAgentRepliedId) ?? null : null,
+  }));
+
+  return c.json({ items: enriched, total, page, perPage });
 });
 
 // GET /api/conversations/:id (com mensagens)
@@ -220,6 +249,58 @@ conversationsRouter.post('/:id/read', requireAuth, requireWorkspace, async (c) =
   return c.json({ ok: true });
 });
 
+// POST /api/conversations/:id/unread — marca como não lida (unreadCount = max(1, atual))
+conversationsRouter.post('/:id/unread', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({ where: { id, workspaceId } });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (conv.unreadCount > 0) return c.json({ ok: true });
+  const updated = await prisma.conversation.update({
+    where: { id },
+    data: { unreadCount: 1 },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.updated', {
+    conversationId: updated.id,
+    unreadCount: 1,
+  });
+  return c.json({ ok: true });
+});
+
+// POST /api/conversations/:id/archive — arquiva (esconde das listas padrão)
+conversationsRouter.post('/:id/archive', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({ where: { id, workspaceId } });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (conv.archivedAt) return c.json({ ok: true });
+  await prisma.conversation.update({
+    where: { id },
+    data: { archivedAt: new Date() },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.archived', {
+    conversationId: id,
+  });
+  return c.json({ ok: true });
+});
+
+// POST /api/conversations/:id/unarchive — desarquiva
+conversationsRouter.post('/:id/unarchive', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({ where: { id, workspaceId } });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (!conv.archivedAt) return c.json({ ok: true });
+  await prisma.conversation.update({
+    where: { id },
+    data: { archivedAt: null },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.unarchived', {
+    conversationId: id,
+  });
+  return c.json({ ok: true });
+});
+
 // POST /api/conversations/:id/messages (envia)
 const sendBody = z
   .object({
@@ -302,16 +383,29 @@ conversationsRouter.post(
         status: 'PENDING',
       },
     });
+    // Cache do preview pra lista de conversas
+    const preview = parsed.data.text
+      ? parsed.data.text.slice(0, 80)
+      : `[${parsed.data.type.toLowerCase()}]`;
     // Auto-atribui o agente que enviou (se conversa não atribuída)
     if (!conv.assignedAgentId) {
       await prisma.conversation.update({
         where: { id: conv.id },
-        data: { assignedAgentId: userId, lastMessageAt: msg.createdAt },
+        data: {
+          assignedAgentId: userId,
+          lastMessageAt: msg.createdAt,
+          lastAgentRepliedId: userId,
+          lastMessagePreview: preview,
+        },
       });
     } else {
       await prisma.conversation.update({
         where: { id: conv.id },
-        data: { lastMessageAt: msg.createdAt },
+        data: {
+          lastMessageAt: msg.createdAt,
+          lastAgentRepliedId: userId,
+          lastMessagePreview: preview,
+        },
       });
     }
 

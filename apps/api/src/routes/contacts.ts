@@ -246,6 +246,86 @@ contactsRouter.post(
   },
 );
 
+// POST /api/contacts/bulk — ações em lote (delete, apply/unapply label)
+const bulkSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('delete'),
+    contactIds: z.array(z.string().min(1)).min(1).max(500),
+  }),
+  z.object({
+    action: z.literal('apply_label'),
+    contactIds: z.array(z.string().min(1)).min(1).max(500),
+    labelId: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('unapply_label'),
+    contactIds: z.array(z.string().min(1)).min(1).max(500),
+    labelId: z.string().min(1),
+  }),
+]);
+
+contactsRouter.post(
+  '/bulk',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = bulkSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const role = c.get('role')!;
+    const actorId = c.get('userId');
+    const data = parsed.data;
+
+    // Permissão: delete requer contact.delete; labels requer label.apply
+    if (data.action === 'delete' && role !== 'ADMIN') {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+
+    // Garante que todos os contatos pertencem ao workspace
+    const owned = await prisma.contact.findMany({
+      where: { id: { in: data.contactIds }, workspaceId },
+      select: { id: true },
+    });
+    const ids = owned.map((o) => o.id);
+    if (ids.length === 0) return c.json({ affected: 0 });
+
+    let affected = 0;
+    if (data.action === 'delete') {
+      const res = await prisma.contact.deleteMany({ where: { id: { in: ids } } });
+      affected = res.count;
+    } else if (data.action === 'apply_label') {
+      const label = await prisma.label.findFirst({
+        where: { id: data.labelId, workspaceId },
+        select: { id: true },
+      });
+      if (!label) return c.json({ error: 'label_not_found' }, 404);
+      const res = await prisma.contactLabel.createMany({
+        data: ids.map((id) => ({ contactId: id, labelId: label.id })),
+        skipDuplicates: true,
+      });
+      affected = res.count;
+    } else {
+      const res = await prisma.contactLabel.deleteMany({
+        where: { contactId: { in: ids }, labelId: data.labelId },
+      });
+      affected = res.count;
+    }
+
+    await audit({
+      workspaceId,
+      actorId,
+      action: `contact.bulk_${data.action}`,
+      metadata: {
+        count: ids.length,
+        affected,
+        labelId: 'labelId' in data ? data.labelId : undefined,
+      },
+    });
+    return c.json({ affected });
+  },
+);
+
 const mergeSchema = z.object({
   primaryId: z.string().min(1),
   secondaryId: z.string().min(1),

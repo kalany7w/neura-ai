@@ -11,12 +11,17 @@ export default function LoginPage() {
       </CardHeader>
       <CardContent>
         <LoginForm />
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Ainda não tem conta?{' '}
-          <Link href="/signup" className="font-medium text-primary hover:underline">
-            Cadastrar
+        <div className="mt-6 flex flex-col items-center gap-2 text-center text-sm text-muted-foreground">
+          <Link href="/forgot-password" className="hover:text-foreground hover:underline">
+            Esqueci a senha
           </Link>
-        </p>
+          <span>
+            Ainda não tem conta?{' '}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Cadastrar
+            </Link>
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
