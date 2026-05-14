@@ -106,11 +106,14 @@ MINIO_USE_SSL=false
 NEXT_PUBLIC_API_URL=https://api.neura-ai.net
 NEXT_PUBLIC_WS_URL=wss://api.neura-ai.net/ws
 
-# === Whisper transcription (opcional — deixa vazio se não quiser usar agora) ===
-# Habilita transcrição automática de áudios via OpenAI Whisper (~$0.006/min).
+# === OpenAI (opcional — deixa vazio se não quiser usar agora) ===
+# Mesma chave habilita 2 features:
+#   1) Transcrição automática de áudios (Whisper, ~$0.006/min)
+#   2) Sugestões de resposta com IA no composer (gpt-4o-mini, ~$0.0005/sugestão)
 OPENAI_API_KEY=
 WHISPER_MODEL=whisper-1
 WHISPER_API_BASE=https://api.openai.com/v1
+OPENAI_CHAT_MODEL=gpt-4o-mini
 
 # === Coolify-generated (Coolify preenche automaticamente — NÃO mexer) ===
 SERVICE_FQDN_API=api.neura-ai.net
