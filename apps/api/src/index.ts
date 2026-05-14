@@ -24,6 +24,7 @@ import { reportsRouter } from './routes/reports';
 import { notificationsRouter } from './routes/notifications';
 import { searchRouter } from './routes/search';
 import { reactionsRouter } from './routes/reactions';
+import { messagesRouter } from './routes/messages';
 import { apiKeysRouter } from './routes/api-keys';
 import { auditRouter } from './routes/audit';
 import { customAttributesRouter } from './routes/custom-attributes';
@@ -74,6 +75,7 @@ app.route('/api/reports', reportsRouter);
 app.route('/api/notifications', notificationsRouter);
 app.route('/api/search', searchRouter);
 app.route('/api', reactionsRouter); // /api/messages/:id/react
+app.route('/api', messagesRouter); // /api/messages/:id/edit, /delete
 app.route('/api/api-keys', apiKeysRouter);
 app.route('/api/audit-log', auditRouter);
 app.route('/api/custom-attributes', customAttributesRouter);

@@ -636,6 +636,10 @@ model Message {
   // Transcrição (preenchido pra AUDIO via Whisper, fire-and-forget)
   transcription       String?              @db.Text
   transcriptionStatus TranscriptionStatus?
+  // Edição: editedAt preenchido quando agente reedita conteúdo (Baileys edit API).
+  // deletedAt preenchido quando msg foi revogada ("apagar pra todos") — content fica null/placeholder.
+  editedAt       DateTime?
+  deletedAt      DateTime?
   error          String?
   sentAt         DateTime?
   deliveredAt    DateTime?

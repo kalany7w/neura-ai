@@ -68,6 +68,53 @@ export const outboundWorker = new Worker<SendMessageJob>(
       return;
     }
 
+    // Edit path: re-envia mesma key com texto novo (Baileys edit API)
+    // WhatsApp limita edição a ~15min; falha silenciosa se rejeitado.
+    if (kind === 'edit' && targetWaMessageId) {
+      await handle.sock.sendMessage(jid, {
+        text: text ?? '',
+        edit: {
+          id: targetWaMessageId,
+          remoteJid: jid,
+          fromMe: true,
+        },
+      });
+      const editedAt = new Date();
+      const updated = await prisma.message.update({
+        where: { id: messageId },
+        data: { content: text ?? '', editedAt },
+      });
+      await publishEvent(workspaceId, 'messages', 'message.edited', {
+        messageId: updated.id,
+        conversationId,
+        content: text ?? '',
+        editedAt,
+      });
+      return;
+    }
+
+    // Revoke ("apagar pra todos") — WhatsApp limita a ~7min após envio
+    if (kind === 'revoke' && targetWaMessageId) {
+      await handle.sock.sendMessage(jid, {
+        delete: {
+          id: targetWaMessageId,
+          remoteJid: jid,
+          fromMe: true,
+        },
+      });
+      const deletedAt = new Date();
+      const updated = await prisma.message.update({
+        where: { id: messageId },
+        data: { deletedAt },
+      });
+      await publishEvent(workspaceId, 'messages', 'message.deleted', {
+        messageId: updated.id,
+        conversationId,
+        deletedAt,
+      });
+      return;
+    }
+
     // Monta `quoted` se foi um reply — Baileys exige WAMessage stub mínimo
     const quoted = quotedWaMessageId
       ? ({
