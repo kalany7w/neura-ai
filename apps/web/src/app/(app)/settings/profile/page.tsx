@@ -8,6 +8,7 @@ import { authClient, useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ActiveSessions } from '@/components/settings/active-sessions';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -189,6 +190,8 @@ export default function ProfilePage() {
           </Button>
         </form>
       </div>
+
+      <ActiveSessions />
     </div>
   );
 }

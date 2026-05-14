@@ -15,7 +15,9 @@ import {
   Clock,
   CornerDownRight,
   FileText,
+  Forward,
   Mail,
+  MapPin,
   Mic,
   MoreHorizontal,
   Paperclip,
@@ -50,6 +52,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
 import { ScheduleMessageDialog } from '@/components/inbox/schedule-message-dialog';
+import { ForwardMessageDialog } from '@/components/inbox/forward-message-dialog';
 
 interface Member {
   userId: string;
@@ -107,6 +110,11 @@ interface MessageItem {
   transcriptionStatus: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
   editedAt: string | null;
   deletedAt: string | null;
+  forwardedFromId: string | null;
+  locationLat: number | null;
+  locationLon: number | null;
+  locationName: string | null;
+  locationAddress: string | null;
   sentAt: string | null;
   createdAt: string;
   reactions: ReactionItem[];
@@ -187,6 +195,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [editingBusy, setEditingBusy] = useState(false);
+  // Forward
+  const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
 
   async function uploadAndSend(
     file: File | Blob,
@@ -801,6 +811,19 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <Reply className="h-3.5 w-3.5" />
                   </button>
                 )}
+                {!item.deletedAt &&
+                  item.type !== 'STICKER' &&
+                  item.type !== 'LOCATION' &&
+                  item.type !== 'CONTACT' && (
+                    <button
+                      type="button"
+                      onClick={() => setForwardingMessageId(item.id)}
+                      title="Encaminhar"
+                      className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <Forward className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 {item.direction === 'OUTBOUND' &&
                   item.type === 'TEXT' &&
                   !item.deletedAt &&
@@ -898,6 +921,49 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   >
                     Documento ({item.mediaMimeType})
                   </a>
+                )}
+                {item.type === 'STICKER' && item.mediaUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.mediaUrl}
+                    alt="sticker"
+                    className="mb-1 max-h-32 max-w-[150px]"
+                    loading="lazy"
+                  />
+                )}
+                {item.type === 'LOCATION' &&
+                  item.locationLat !== null &&
+                  item.locationLon !== null && (
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${item.locationLat},${item.locationLon}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`mb-1 flex items-start gap-2 rounded-md p-2 transition hover:bg-foreground/5 ${
+                        item.direction === 'OUTBOUND'
+                          ? 'bg-primary-foreground/10'
+                          : 'bg-background/60'
+                      }`}
+                    >
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div className="min-w-0">
+                        {item.locationName && (
+                          <p className="truncate font-medium">{item.locationName}</p>
+                        )}
+                        {item.locationAddress && (
+                          <p className="truncate text-xs opacity-80">{item.locationAddress}</p>
+                        )}
+                        <p className="mt-0.5 text-[10px] opacity-70">
+                          Abrir no Google Maps · {item.locationLat.toFixed(5)},{' '}
+                          {item.locationLon.toFixed(5)}
+                        </p>
+                      </div>
+                    </a>
+                  )}
+                {item.forwardedFromId && !item.deletedAt && (
+                  <p className="mb-1 flex items-center gap-1 text-[10px] italic opacity-60">
+                    <Forward className="h-2.5 w-2.5" />
+                    Encaminhada
+                  </p>
                 )}
                 {item.deletedAt ? (
                   <p className="flex items-center gap-1.5 italic opacity-60">
@@ -1218,6 +1284,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           setText('');
           setScheduleOpen(false);
         }}
+      />
+
+      <ForwardMessageDialog
+        open={!!forwardingMessageId}
+        onOpenChange={(v) => {
+          if (!v) setForwardingMessageId(null);
+        }}
+        messageId={forwardingMessageId}
+        excludeConversationId={conv.id}
       />
     </div>
   );
