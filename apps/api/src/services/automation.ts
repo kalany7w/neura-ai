@@ -1,4 +1,5 @@
 import type { Prisma } from '@neura/database';
+import { renderTemplate } from '@neura/shared/template-render';
 import { prisma } from '../db';
 import { logger } from '../logger';
 import { outboundQueue } from '../queue';
@@ -212,13 +213,17 @@ async function enqueueOutbound(
 ): Promise<void> {
   const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    include: { contact: { select: { phoneNumber: true } }, inbox: { select: { status: true } } },
+    include: {
+      contact: { select: { name: true, phoneNumber: true } },
+      inbox: { select: { name: true, status: true } },
+    },
   });
   if (!conv) return;
-  // Render placeholders simples
-  const rendered = text
-    .replaceAll('{{contact.name}}', '')
-    .replaceAll('{{contact.phoneNumber}}', conv.contact.phoneNumber);
+  // Render placeholders com fallback opcional ({{contact.name | default 'cliente'}})
+  const rendered = renderTemplate(text, {
+    contact: { name: conv.contact.name, phoneNumber: conv.contact.phoneNumber },
+    inbox: { name: conv.inbox.name },
+  });
   if (conv.inbox.status !== 'CONNECTED') {
     logger.warn(
       { conversationId, inboxStatus: conv.inbox.status },

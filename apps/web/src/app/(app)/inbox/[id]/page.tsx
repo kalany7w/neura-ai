@@ -38,6 +38,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { renderTemplate } from '@neura/shared/template-render';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
@@ -171,9 +172,9 @@ const STATUS_ICON: Record<MessageItem['status'], string> = {
 };
 
 function applyTemplate(body: string, contact: ConversationDetail['contact']): string {
-  return body
-    .replaceAll('{{contact.name}}', contact.name ?? contact.phoneNumber)
-    .replaceAll('{{contact.phoneNumber}}', contact.phoneNumber);
+  return renderTemplate(body, {
+    contact: { name: contact.name, phoneNumber: contact.phoneNumber },
+  });
 }
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {

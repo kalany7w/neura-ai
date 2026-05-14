@@ -1,17 +1,24 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2, FileText } from 'lucide-react';
+import { Trash2, FileText, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import { renderTemplate, TEMPLATE_VARIABLES } from '@neura/shared/template-render';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+
+const PREVIEW_VARS = {
+  contact: { name: 'Maria Silva', phoneNumber: '+5511999998888' },
+  inbox: { name: 'Suporte' },
+  agent: { name: 'Ana' },
+};
 
 interface TemplateItem {
   id: string;
@@ -45,8 +52,36 @@ export default function TemplatesPage() {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<Input>({ resolver: zodResolver(schema) });
+  const bodyValue = watch('body') ?? '';
+  const previewRendered = bodyValue ? renderTemplate(bodyValue, PREVIEW_VARS) : '';
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  function insertPlaceholder(name: string) {
+    const ref = bodyRef.current;
+    const snippet = `{{${name}}}`;
+    if (ref) {
+      const start = ref.selectionStart ?? bodyValue.length;
+      const end = ref.selectionEnd ?? bodyValue.length;
+      const next = bodyValue.slice(0, start) + snippet + bodyValue.slice(end);
+      setValue('body', next, { shouldValidate: true, shouldDirty: true });
+      // Reposiciona caret após inserção
+      requestAnimationFrame(() => {
+        ref.focus();
+        const pos = start + snippet.length;
+        ref.setSelectionRange(pos, pos);
+      });
+    } else {
+      setValue('body', (getValues('body') ?? '') + snippet, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+    }
+  }
 
   async function onCreate(values: Input) {
     setSubmitting(true);
@@ -89,8 +124,9 @@ export default function TemplatesPage() {
       <div>
         <h1 className="text-3xl font-bold">Templates de resposta</h1>
         <p className="text-muted-foreground">
-          Respostas rápidas com atalhos (ex: <code>/saudacao</code>) e placeholders{' '}
-          <code>{`{{contact.name}}`}</code>.
+          Respostas rápidas com atalhos (ex: <code>/saudacao</code>) e placeholders
+          condicionais — use <code>{`{{contact.firstName | default 'amigo'}}`}</code> pra dar
+          fallback quando o contato não tem nome cadastrado.
         </p>
       </div>
 
@@ -113,12 +149,63 @@ export default function TemplatesPage() {
               <textarea
                 id="body"
                 rows={5}
-                {...register('body')}
-                placeholder="Olá {{contact.name}}, tudo bem?"
-                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                {...register('body', {
+                  // Mantém a ref do RHF + a nossa pra poder injetar placeholder na posição do caret
+                })}
+                ref={(el) => {
+                  bodyRef.current = el;
+                  register('body').ref(el);
+                }}
+                placeholder={"Olá {{contact.firstName | default 'amigo'}}, tudo bem?"}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
               />
               {errors.body && <p className="text-xs text-destructive">{errors.body.message}</p>}
             </div>
+
+            {/* Placeholders disponíveis — clicar injeta no caret */}
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Placeholders
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {TEMPLATE_VARIABLES.map((v) => (
+                  <button
+                    key={v.name}
+                    type="button"
+                    onClick={() => insertPlaceholder(v.name)}
+                    title={v.description}
+                    className="inline-flex items-center rounded-md border bg-muted/40 px-2 py-0.5 font-mono text-[11px] hover:border-foreground/40 hover:bg-accent"
+                  >
+                    {`{{${v.name}}}`}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Adicione fallback com <code className="text-[11px]">{`| default 'valor'`}</code> —
+                exibido quando o campo estiver vazio.
+              </p>
+            </div>
+
+            {/* Preview ao vivo */}
+            {bodyValue && (
+              <div className="space-y-1.5 rounded-md border border-dashed bg-muted/20 p-3">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Eye className="h-3 w-3" />
+                  Preview com dados de exemplo
+                </p>
+                <p className="whitespace-pre-wrap break-words text-sm">
+                  {previewRendered || (
+                    <span className="italic text-muted-foreground">
+                      (placeholders resolvem pra vazio)
+                    </span>
+                  )}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  contact = Maria Silva · +5511999998888 · inbox = Suporte · agent = Ana
+                </p>
+              </div>
+            )}
+
             <Button type="submit" className="w-full" disabled={submitting}>
               {submitting ? 'Salvando...' : 'Salvar template'}
             </Button>
