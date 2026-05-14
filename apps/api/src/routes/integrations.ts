@@ -134,6 +134,168 @@ integrationsRouter.delete(
   },
 );
 
+// ============================================
+// INBOUND WEBHOOKS (POST externo dispara ação no Neura)
+// ============================================
+
+const INBOUND_ACTIONS = [
+  'send_message',
+  'create_conversation',
+  'apply_label',
+  'create_note',
+] as const;
+
+const slugRegex = /^[a-z0-9-]{4,40}$/;
+
+function generateSlug(name: string): string {
+  const base = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30);
+  const suffix = randomBytes(3).toString('hex');
+  const safe = base || 'hook';
+  return `${safe}-${suffix}`;
+}
+
+const inboundCreateSchema = z.object({
+  name: z.string().min(1).max(80),
+  allowedActions: z.array(z.enum(INBOUND_ACTIONS)).default([]),
+  enabled: z.boolean().default(true),
+});
+
+const inboundUpdateSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  allowedActions: z.array(z.enum(INBOUND_ACTIONS)).optional(),
+  enabled: z.boolean().optional(),
+  regenerateSecret: z.boolean().optional(),
+});
+
+// GET /api/integrations/inbound
+integrationsRouter.get(
+  '/inbound',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.read'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const role = c.get('role')!;
+    const hooks = await prisma.inboundWebhook.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return c.json({
+      hooks: hooks.map((h) => ({
+        ...h,
+        // Só ADMIN vê o secret completo (resto vê mascarado)
+        secret: role === 'ADMIN' ? h.secret : '***',
+      })),
+      availableActions: INBOUND_ACTIONS,
+    });
+  },
+);
+
+// POST /api/integrations/inbound — cria com slug + secret auto-gerados
+integrationsRouter.post(
+  '/inbound',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = inboundCreateSchema.safeParse(body);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+
+    // Garante slug único (até 5 tentativas, conflito é raro com sufixo random)
+    let slug = generateSlug(parsed.data.name);
+    for (let i = 0; i < 5; i++) {
+      const exists = await prisma.inboundWebhook.findUnique({ where: { slug } });
+      if (!exists) break;
+      slug = generateSlug(parsed.data.name);
+    }
+
+    const secret = randomBytes(32).toString('hex');
+    const hook = await prisma.inboundWebhook.create({
+      data: {
+        workspaceId,
+        name: parsed.data.name,
+        slug,
+        secret,
+        allowedActions: parsed.data.allowedActions,
+        enabled: parsed.data.enabled,
+      },
+    });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'inbound_webhook.created',
+      resource: `InboundWebhook:${hook.id}`,
+      metadata: { name: hook.name, slug: hook.slug },
+    });
+    return c.json({ hook, fullSecret: secret }, 201);
+  },
+);
+
+// PATCH /api/integrations/inbound/:id
+integrationsRouter.patch(
+  '/inbound/:id',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = inboundUpdateSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const existing = await prisma.inboundWebhook.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+
+    const data: Record<string, unknown> = {};
+    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.allowedActions !== undefined)
+      data.allowedActions = parsed.data.allowedActions;
+    if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
+    let newSecret: string | null = null;
+    if (parsed.data.regenerateSecret) {
+      newSecret = randomBytes(32).toString('hex');
+      data.secret = newSecret;
+    }
+    const hook = await prisma.inboundWebhook.update({ where: { id }, data });
+    return c.json({ hook, fullSecret: newSecret });
+  },
+);
+
+// DELETE /api/integrations/inbound/:id
+integrationsRouter.delete(
+  '/inbound/:id',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const existing = await prisma.inboundWebhook.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+    await prisma.inboundWebhook.delete({ where: { id } });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'inbound_webhook.deleted',
+      resource: `InboundWebhook:${id}`,
+    });
+    return c.json({ ok: true });
+  },
+);
+
 // POST /api/integrations/webhooks/:id/test — dispara payload de teste
 integrationsRouter.post(
   '/webhooks/:id/test',

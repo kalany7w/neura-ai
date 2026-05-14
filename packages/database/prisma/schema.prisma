@@ -37,6 +37,7 @@ model Workspace {
   cards               Card[]
   messageTemplates    MessageTemplate[]
   webhooks            Webhook[]
+  inboundWebhooks     InboundWebhook[]
   automationRules     AutomationRule[]
   notifications       Notification[]
   apiKeys             ApiKey[]
@@ -764,6 +765,35 @@ model Webhook {
 
   @@index([workspaceId])
   @@map("webhooks")
+}
+
+// ============================================
+// INBOUND WEBHOOKS (POST externo dispara ação no Neura — CRM, n8n, IA externa)
+// ============================================
+
+model InboundWebhook {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  // slug é a parte da URL: /api/inbound/<slug>. Único por workspace.
+  slug        String    @unique
+  // HMAC-SHA256 secret pra validar X-Neura-Signature.
+  secret      String
+  enabled     Boolean   @default(true)
+  // Quais actions essa rota pode disparar (subset de allowed actions).
+  // Vazio = todas. Exemplos: ['send_message','create_note'].
+  allowedActions String[] @default([])
+  lastFiredAt DateTime?
+  lastStatus  Int?
+  lastError   String?   @db.Text
+  callCount   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("inbound_webhooks")
 }
 
 // ============================================
