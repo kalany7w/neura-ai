@@ -6,6 +6,7 @@ import { auth } from './auth';
 import { prisma } from './db';
 import { env } from './env';
 import { logger } from './logger';
+import { redis } from './redis';
 
 /**
  * Cada cliente WS está inscrito em 3 canais do workspace ativo:
@@ -86,11 +87,22 @@ export function setupWebSocket(app: Hono) {
           );
         },
         onMessage: (evt, ws) => {
-          // Cliente envia ping ou comandos básicos (espaço pra futuro)
           try {
             const data = JSON.parse(evt.data.toString());
             if (data?.event === 'ping') {
               ws.send(JSON.stringify({ event: 'pong', ts: Date.now() }));
+              return;
+            }
+            if (data?.event === 'typing' && workspaceId) {
+              const conversationId: unknown = data.payload?.conversationId;
+              const state: unknown = data.payload?.state;
+              if (
+                typeof conversationId === 'string' &&
+                (state === 'composing' || state === 'paused' || state === 'available')
+              ) {
+                void forwardTypingToWorker(workspaceId, conversationId, state);
+              }
+              return;
             }
           } catch {
             // ignore
@@ -107,4 +119,44 @@ export function setupWebSocket(app: Hono) {
   );
 
   return { injectWebSocket };
+}
+
+/**
+ * Encaminha typing do agente pro waworker via canal de comandos.
+ * Valida que a conversa pertence ao workspace antes de publicar.
+ */
+async function forwardTypingToWorker(
+  workspaceId: string,
+  conversationId: string,
+  state: 'composing' | 'paused' | 'available',
+): Promise<void> {
+  try {
+    const conv = await prisma.conversation.findFirst({
+      where: { id: conversationId, workspaceId },
+      select: {
+        inboxId: true,
+        inbox: { select: { status: true } },
+        contact: { select: { phoneNumber: true } },
+      },
+    });
+    if (!conv) return;
+    if (conv.inbox.status !== 'CONNECTED') return;
+    await redis.publish(
+      'worker:commands',
+      JSON.stringify({
+        cmd: 'presence.send',
+        inboxId: conv.inboxId,
+        jid: phoneToJid(conv.contact.phoneNumber),
+        state,
+      }),
+    );
+  } catch (err) {
+    logger.warn({ err }, 'forwardTypingToWorker failed');
+  }
+}
+
+function phoneToJid(phone: string): string {
+  if (phone.includes('@')) return phone;
+  const digits = phone.replace(/^\+/, '').replace(/\D/g, '');
+  return `${digits}@s.whatsapp.net`;
 }

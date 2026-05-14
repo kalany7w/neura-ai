@@ -5,15 +5,15 @@ import { sessionManager } from './baileys/manager';
 
 const subscriber = new Redis(env.REDIS_URL);
 
-const commandSchema = (() => {
-  // Lazy import to avoid circular issues
-  return null;
-})();
-
-interface Command {
-  cmd: 'session.start' | 'session.stop';
-  inboxId: string;
-}
+type Command =
+  | { cmd: 'session.start'; inboxId: string }
+  | { cmd: 'session.stop'; inboxId: string }
+  | {
+      cmd: 'presence.send';
+      inboxId: string;
+      jid: string;
+      state: 'composing' | 'paused' | 'available';
+    };
 
 export function startCommandsListener(): void {
   subscriber.subscribe('worker:commands', (err) => {
@@ -27,8 +27,11 @@ export function startCommandsListener(): void {
   subscriber.on('message', async (channel, raw) => {
     if (channel !== 'worker:commands') return;
     try {
-      const cmd: Command = JSON.parse(raw);
-      logger.info({ cmd }, 'Received command');
+      const cmd = JSON.parse(raw) as Command;
+      if (cmd.cmd !== 'presence.send') {
+        // typing é alto-volume — só loga session.* pra não poluir
+        logger.info({ cmd }, 'Received command');
+      }
       switch (cmd.cmd) {
         case 'session.start':
           await sessionManager.start(cmd.inboxId);
@@ -36,6 +39,17 @@ export function startCommandsListener(): void {
         case 'session.stop':
           await sessionManager.stop(cmd.inboxId);
           break;
+        case 'presence.send': {
+          const handle = sessionManager.get(cmd.inboxId);
+          if (!handle) return;
+          // 'available' antes do estado típico — alguns clientes só aceitam typing se quem manda tá online
+          try {
+            await handle.sock.sendPresenceUpdate(cmd.state, cmd.jid);
+          } catch (err) {
+            logger.debug({ err, inboxId: cmd.inboxId }, 'sendPresenceUpdate failed (ignored)');
+          }
+          break;
+        }
         default:
           logger.warn({ cmd }, 'Unknown command');
       }

@@ -21,6 +21,10 @@ const apiEnvSchema = baseEnvSchema.extend({
     .string()
     .default('false')
     .transform((v) => v === 'true'),
+  // Whisper transcription (opcional — se vazio, transcrição é desligada)
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  WHISPER_MODEL: z.string().default('whisper-1'),
+  WHISPER_API_BASE: z.string().url().default('https://api.openai.com/v1'),
 });
 
 export const env = loadEnv(apiEnvSchema);

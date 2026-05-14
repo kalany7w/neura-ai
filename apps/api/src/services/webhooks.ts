@@ -5,6 +5,7 @@ import { logger } from '../logger';
 export const WEBHOOK_EVENTS = [
   'message.new',
   'message.status',
+  'message.transcribed',
   'conversation.created',
   'conversation.assigned',
   'conversation.status_changed',

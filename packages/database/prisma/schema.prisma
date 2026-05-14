@@ -603,6 +603,12 @@ enum MessageStatus {
   FAILED
 }
 
+enum TranscriptionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
 model Message {
   id             String           @id @default(cuid())
   conversationId String
@@ -620,6 +626,9 @@ model Message {
   // Resposta a outra mensagem (replied_to no Baileys)
   replyToId      String?
   status         MessageStatus    @default(PENDING)
+  // Transcrição (preenchido pra AUDIO via Whisper, fire-and-forget)
+  transcription       String?              @db.Text
+  transcriptionStatus TranscriptionStatus?
   error          String?
   sentAt         DateTime?
   deliveredAt    DateTime?

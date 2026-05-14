@@ -74,3 +74,25 @@ export async function presignDownload(key: string, expiresInSec = 3600): Promise
   const cmd = new GetObjectCommand({ Bucket: env.MINIO_BUCKET, Key: key });
   return getSignedUrl(s3, cmd, { expiresIn: expiresInSec });
 }
+
+/**
+ * Extrai a key MinIO de uma URL pública (ex: http://host:9000/bucket/key).
+ */
+export function keyFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const bucket = env.MINIO_BUCKET;
+    const idx = parsed.pathname.indexOf(`/${bucket}/`);
+    if (idx === -1) return null;
+    return decodeURIComponent(parsed.pathname.slice(idx + bucket.length + 2));
+  } catch {
+    return null;
+  }
+}
+
+export async function getMediaBuffer(key: string): Promise<Buffer> {
+  const obj = await s3.send(new GetObjectCommand({ Bucket: env.MINIO_BUCKET, Key: key }));
+  if (!obj.Body) throw new Error(`Empty body for ${key}`);
+  const bytes = await obj.Body.transformToByteArray();
+  return Buffer.from(bytes);
+}
