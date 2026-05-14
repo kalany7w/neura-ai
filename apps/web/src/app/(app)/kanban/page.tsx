@@ -17,6 +17,7 @@ import {
   BookmarkCheck,
   ChevronDown,
   Clock,
+  Download,
   Filter,
   MessageSquare,
   MoreHorizontal,
@@ -825,6 +826,15 @@ export default function KanbanPage() {
             <Settings2 className="h-3.5 w-3.5" />
             Gerenciar
           </Button>
+          <a
+            href={`/api/reports/export.csv?type=cards`}
+            download
+            className="inline-flex items-center gap-1 rounded-md border bg-card px-2.5 py-1.5 text-sm hover:bg-accent"
+            title="Baixar CSV dos cards"
+          >
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </a>
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
           <div className="hidden md:flex items-center gap-4 pl-3 ml-1 border-l text-[11px] text-muted-foreground">
             <span>

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
+import { DashboardTimeseriesChart } from '@/components/dashboard/timeseries-chart';
 
 interface DashboardStats {
   inbox: {
@@ -146,6 +147,9 @@ export default function DashboardPage() {
           href={session?.user?.id ? `/inbox?assignedAgentId=${session.user.id}` : '/inbox'}
         />
       </div>
+
+      {/* Timeseries gráfico */}
+      <DashboardTimeseriesChart />
 
       {/* Pipeline + workspace stats */}
       <div className="grid gap-5 lg:grid-cols-3">

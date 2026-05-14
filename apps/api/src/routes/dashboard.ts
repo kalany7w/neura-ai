@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import { prisma } from '../db';
 import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
@@ -120,4 +121,64 @@ dashboardRouter.get('/stats', requireAuth, requireWorkspace, async (c) => {
     },
     recentConversations,
   });
+});
+
+// GET /api/dashboard/timeseries?days=14 — séries diárias pra gráficos
+const timeseriesQuery = z.object({
+  days: z.coerce.number().int().min(2).max(90).default(14),
+});
+
+dashboardRouter.get('/timeseries', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const parsed = timeseriesQuery.safeParse(
+    Object.fromEntries(new URL(c.req.url).searchParams),
+  );
+  const days = parsed.success ? parsed.data.days : 14;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  since.setUTCHours(0, 0, 0, 0);
+
+  const [convRows, msgRows] = await Promise.all([
+    prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`
+      SELECT date_trunc('day', "createdAt")::date AS day, COUNT(*)::bigint AS count
+      FROM conversations
+      WHERE "workspaceId" = ${workspaceId} AND "createdAt" >= ${since}
+      GROUP BY 1
+      ORDER BY 1 ASC
+    `,
+    prisma.$queryRaw<
+      Array<{ day: Date; direction: 'INBOUND' | 'OUTBOUND'; count: bigint }>
+    >`
+      SELECT date_trunc('day', m."createdAt")::date AS day, m.direction, COUNT(*)::bigint AS count
+      FROM messages m
+      JOIN conversations c ON c.id = m."conversationId"
+      WHERE c."workspaceId" = ${workspaceId} AND m."createdAt" >= ${since}
+      GROUP BY 1, 2
+      ORDER BY 1 ASC
+    `,
+  ]);
+
+  // Monta esqueleto com TODOS os dias (zeros pra dias sem dado)
+  const series: Record<string, { conversations: number; inbound: number; outbound: number }> =
+    {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(since);
+    d.setUTCDate(d.getUTCDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    series[key] = { conversations: 0, inbound: 0, outbound: 0 };
+  }
+  for (const r of convRows) {
+    const key = r.day.toISOString().slice(0, 10);
+    const slot = series[key];
+    if (slot) slot.conversations = Number(r.count);
+  }
+  for (const r of msgRows) {
+    const key = r.day.toISOString().slice(0, 10);
+    const slot = series[key];
+    if (!slot) continue;
+    if (r.direction === 'INBOUND') slot.inbound = Number(r.count);
+    else slot.outbound = Number(r.count);
+  }
+
+  const days_ = Object.entries(series).map(([date, v]) => ({ date, ...v }));
+  return c.json({ days: days_ });
 });

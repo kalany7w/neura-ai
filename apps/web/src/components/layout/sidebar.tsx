@@ -26,6 +26,7 @@ import { useRealtimeStore } from '@/lib/realtime-store';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { ThemeToggle } from '@/components/theme-toggle';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,7 +75,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/settings/templates', label: 'Templates', icon: FileText },
       { href: '/settings/labels', label: 'Etiquetas', icon: Tag, roles: ['ADMIN'] },
-      { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN'] },
+      { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
       { href: '/settings/custom-attributes', label: 'Atributos', icon: Tag, roles: ['ADMIN'] },
@@ -287,6 +288,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
               <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
             </div>
           </Link>
+          <ThemeToggle />
           <Link
             href="/settings/profile"
             title="Configurações do perfil"
