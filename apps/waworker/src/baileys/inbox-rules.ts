@@ -1,3 +1,4 @@
+import { renderTemplate } from '@neura/shared/template-render';
 import { prisma } from '../db';
 import { logger } from '../logger';
 import { publishEvent } from '../redis';
@@ -136,10 +137,10 @@ export async function applyInboxRules(params: {
         : settings.outOfHoursMessage?.trim() || null;
 
       if (messageToSend) {
-        // Renderiza placeholders simples
-        const rendered = messageToSend
-          .replaceAll('{{contact.name}}', params.contactName ?? '')
-          .replaceAll('{{contact.phoneNumber}}', params.contactPhone);
+        // Renderiza placeholders ({{contact.name}}, {{contact.firstName | default 'amigo'}}, ...)
+        const rendered = renderTemplate(messageToSend, {
+          contact: { name: params.contactName, phoneNumber: params.contactPhone },
+        });
 
         // Cria Message OUTBOUND e enfileira envio
         const msg = await prisma.message.create({
