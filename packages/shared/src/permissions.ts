@@ -35,6 +35,7 @@ export const PERMISSIONS = {
   'contact.update': ['ADMIN', 'SUPERVISOR'],
   'contact.delete': ['ADMIN'],
   'contact.merge': ['ADMIN', 'SUPERVISOR'],
+  'contact.add_note': ['ADMIN', 'SUPERVISOR', 'AGENT'],
 
   // Labels & custom attrs (Fase 5)
   'label.manage': ['ADMIN', 'SUPERVISOR'],
