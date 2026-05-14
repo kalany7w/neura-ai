@@ -26,6 +26,7 @@ import { searchRouter } from './routes/search';
 import { reactionsRouter } from './routes/reactions';
 import { apiKeysRouter } from './routes/api-keys';
 import { auditRouter } from './routes/audit';
+import { customAttributesRouter } from './routes/custom-attributes';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
@@ -72,6 +73,7 @@ app.route('/api/search', searchRouter);
 app.route('/api', reactionsRouter); // /api/messages/:id/react
 app.route('/api/api-keys', apiKeysRouter);
 app.route('/api/audit-log', auditRouter);
+app.route('/api/custom-attributes', customAttributesRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
