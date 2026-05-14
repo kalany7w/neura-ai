@@ -108,6 +108,103 @@ messagesRouter.post(
   },
 );
 
+// POST /api/messages/:id/forward — encaminha pra outras conversas (máx 10)
+const forwardBody = z.object({
+  conversationIds: z.array(z.string().min(1)).min(1).max(10),
+});
+
+messagesRouter.post(
+  '/messages/:id/forward',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('conversation.send_message'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const id = c.req.param('id');
+
+    const body = await c.req.json().catch(() => null);
+    const parsed = forwardBody.safeParse(body);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const source = await prisma.message.findFirst({
+      where: { id, conversation: { workspaceId } },
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        mediaUrl: true,
+        mediaMimeType: true,
+        deletedAt: true,
+      },
+    });
+    if (!source) return c.json({ error: 'not_found' }, 404);
+    if (source.deletedAt) return c.json({ error: 'cannot_forward_deleted' }, 409);
+    if (source.type === 'STICKER' || source.type === 'LOCATION' || source.type === 'CONTACT') {
+      return c.json({ error: 'unsupported_type', message: 'Tipo não suportado pra encaminhar' }, 409);
+    }
+
+    const targets = await prisma.conversation.findMany({
+      where: { id: { in: parsed.data.conversationIds }, workspaceId },
+      include: {
+        contact: { select: { phoneNumber: true } },
+        inbox: { select: { id: true, status: true } },
+      },
+    });
+
+    const skipped: Array<{ conversationId: string; reason: string }> = [];
+    const sent: string[] = [];
+
+    for (const target of targets) {
+      if (target.inbox.status !== 'CONNECTED') {
+        skipped.push({ conversationId: target.id, reason: 'inbox_not_connected' });
+        continue;
+      }
+      const msg = await prisma.message.create({
+        data: {
+          conversationId: target.id,
+          direction: 'OUTBOUND',
+          type: source.type,
+          content: source.content,
+          mediaUrl: source.mediaUrl,
+          mediaMimeType: source.mediaMimeType,
+          forwardedFromId: source.id,
+          status: 'PENDING',
+        },
+      });
+      await prisma.conversation.update({
+        where: { id: target.id },
+        data: {
+          lastMessageAt: msg.createdAt,
+          lastAgentRepliedId: userId,
+          lastMessagePreview: source.content
+            ? source.content.slice(0, 80)
+            : `[${source.type.toLowerCase()}]`,
+        },
+      });
+      await outboundQueue.add('send', {
+        inboxId: target.inboxId,
+        workspaceId,
+        conversationId: target.id,
+        messageId: msg.id,
+        to: target.contact.phoneNumber,
+        type: source.type as 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT',
+        text: source.content ?? undefined,
+        mediaUrl: source.mediaUrl ?? undefined,
+        mimeType: source.mediaMimeType ?? undefined,
+      });
+      await publishEvent(workspaceId, 'messages', 'message.new', {
+        conversationId: target.id,
+        message: msg,
+      });
+      sent.push(target.id);
+    }
+
+    return c.json({ sent, skipped });
+  },
+);
+
 // POST /api/messages/:id/delete — revoga ("apagar pra todos"), ~7min
 messagesRouter.post(
   '/messages/:id/delete',

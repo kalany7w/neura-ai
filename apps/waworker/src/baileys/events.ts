@@ -280,6 +280,15 @@ async function persistInboundMessage(
   const type = inferMessageType(messageContent);
   const pushName = msg.pushName ?? null;
 
+  // Extrai metadata de location (LOCATION type)
+  const loc = messageContent.locationMessage;
+  const locationLat =
+    type === 'LOCATION' && typeof loc?.degreesLatitude === 'number' ? loc.degreesLatitude : null;
+  const locationLon =
+    type === 'LOCATION' && typeof loc?.degreesLongitude === 'number' ? loc.degreesLongitude : null;
+  const locationName = type === 'LOCATION' ? loc?.name ?? null : null;
+  const locationAddress = type === 'LOCATION' ? loc?.address ?? null : null;
+
   const txResult = await prisma.$transaction(async (tx) => {
     // Upsert contact
     const contact = await tx.contact.upsert({
@@ -366,6 +375,10 @@ async function persistInboundMessage(
         direction: 'INBOUND' satisfies MessageDirection,
         type,
         content: text,
+        locationLat,
+        locationLon,
+        locationName,
+        locationAddress,
         status: 'DELIVERED',
         sentAt: msg.messageTimestamp
           ? new Date(Number(msg.messageTimestamp) * 1000)

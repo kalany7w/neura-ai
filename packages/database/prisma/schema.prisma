@@ -640,6 +640,14 @@ model Message {
   // deletedAt preenchido quando msg foi revogada ("apagar pra todos") — content fica null/placeholder.
   editedAt       DateTime?
   deletedAt      DateTime?
+  // Mensagem encaminhada — referência opcional à msg original (mesmo workspace).
+  // Cliente WhatsApp NÃO marca como forwarded ao receber (só envia conteúdo).
+  forwardedFromId String?
+  // Location messages (Baileys locationMessage) — campos opcionais.
+  locationLat    Float?
+  locationLon    Float?
+  locationName   String?
+  locationAddress String?
   error          String?
   sentAt         DateTime?
   deliveredAt    DateTime?
