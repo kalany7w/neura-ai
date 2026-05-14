@@ -39,12 +39,34 @@ export const outboundWorker = new Worker<SendMessageJob>(
       fileName,
       quotedWaMessageId,
       quotedParticipant,
+      kind,
+      targetWaMessageId,
+      reactionEmoji,
     } = job.data;
     const handle = sessionManager.get(inboxId);
     if (!handle) {
       throw new Error(`No active session for inbox ${inboxId}`);
     }
     const jid = toJid(to);
+
+    // Reaction path: payload diferente, sem persistência de Message own
+    if (kind === 'reaction' && targetWaMessageId) {
+      await handle.sock.sendMessage(jid, {
+        react: {
+          text: reactionEmoji ?? '', // vazio = remove
+          key: {
+            id: targetWaMessageId,
+            remoteJid: jid,
+            fromMe: false,
+          },
+        },
+      });
+      await publishEvent(workspaceId, 'messages', 'reaction.sent', {
+        messageId,
+        emoji: reactionEmoji ?? null,
+      });
+      return;
+    }
 
     // Monta `quoted` se foi um reply — Baileys exige WAMessage stub mínimo
     const quoted = quotedWaMessageId

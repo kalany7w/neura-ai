@@ -80,7 +80,11 @@ conversationsRouter.get('/:id', requireAuth, requireWorkspace, async (c) => {
     include: {
       contact: true,
       inbox: { select: { id: true, name: true, status: true } },
-      messages: { orderBy: { createdAt: 'asc' }, take: 100 },
+      messages: {
+        orderBy: { createdAt: 'asc' },
+        take: 100,
+        include: { reactions: true },
+      },
     },
   });
   if (!conv) return c.json({ error: 'not_found' }, 404);

@@ -37,6 +37,7 @@ model Workspace {
   webhooks            Webhook[]
   automationRules     AutomationRule[]
   notifications       Notification[]
+  apiKeys             ApiKey[]
 
   @@map("workspaces")
 }
@@ -624,11 +625,51 @@ model Message {
   readAt         DateTime?
   createdAt      DateTime         @default(now())
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  reactions    MessageReaction[]
 
   @@index([conversationId, createdAt])
   @@index([waMessageId])
   @@map("messages")
+}
+
+model MessageReaction {
+  id          String   @id @default(cuid())
+  messageId   String
+  emoji       String
+  fromMe      Boolean  @default(true) // true = enviado por agente nosso
+  createdBy   String?  // userId que reagiu (null = vindo do cliente)
+  createdAt   DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, emoji, fromMe])
+  @@index([messageId])
+  @@map("message_reactions")
+}
+
+// ============================================
+// API KEYS (Bearer pra integrações externas)
+// ============================================
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  prefix      String    // ex 'nk_live_abc12345' — visível pro user identificar
+  hashed      String    @unique // SHA-256 do segredo completo
+  scopes      String[]  @default([])
+  enabled     Boolean   @default(true)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("api_keys")
 }
 
 // ============================================

@@ -77,6 +77,12 @@ function initialsFromName(s: string | null | undefined): string {
     .join('');
 }
 
+interface ReactionItem {
+  id: string;
+  emoji: string;
+  fromMe: boolean;
+}
+
 interface MessageItem {
   id: string;
   direction: 'INBOUND' | 'OUTBOUND';
@@ -87,7 +93,10 @@ interface MessageItem {
   thumbnailUrl: string | null;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
   createdAt: string;
+  reactions: ReactionItem[];
 }
+
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 interface NoteItem {
   id: string;
@@ -282,6 +291,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       event.event === 'message.new' ||
       event.event === 'message.status' ||
       event.event === 'message.media_ready' ||
+      event.event === 'reaction.local' ||
+      event.event === 'reaction.sent' ||
       event.event === 'conversation.status_changed' ||
       event.event === 'conversation.assigned'
     ) {
@@ -359,6 +370,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     setShowTemplates(false);
     setMode('reply');
     inputRef.current?.focus();
+  }
+
+  async function react(messageId: string, emoji: string) {
+    try {
+      await api(`/api/messages/${messageId}/react`, {
+        method: 'POST',
+        body: JSON.stringify({ emoji }),
+      });
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao reagir');
+    }
   }
 
   async function removeNote(noteId: string) {
@@ -550,20 +573,35 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               key={item.id}
               className={`group flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'}`}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setReplyTo(item);
-                  setMode('reply');
-                  inputRef.current?.focus();
-                }}
-                title="Responder"
-                className={`order-2 self-center mx-1 rounded-full p-1 text-muted-foreground opacity-0 transition group-hover:opacity-100 hover:bg-muted hover:text-foreground ${
+              <div
+                className={`self-center mx-1 flex items-center gap-0.5 rounded-full border bg-card px-1 py-0.5 shadow-sm opacity-0 transition group-hover:opacity-100 ${
                   item.direction === 'OUTBOUND' ? 'order-1' : 'order-2'
                 }`}
               >
-                <Reply className="h-3.5 w-3.5" />
-              </button>
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => react(item.id, emoji)}
+                    title={`Reagir ${emoji}`}
+                    className="rounded-full px-1 py-0.5 text-sm transition hover:scale-125 hover:bg-muted"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReplyTo(item);
+                    setMode('reply');
+                    inputRef.current?.focus();
+                  }}
+                  title="Responder"
+                  className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Reply className="h-3.5 w-3.5" />
+                </button>
+              </div>
               <div
                 className={`max-w-[70%] rounded-lg px-3 py-2 text-sm ${
                   item.direction === 'OUTBOUND'
@@ -606,6 +644,23 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   })}{' '}
                   {item.direction === 'OUTBOUND' && STATUS_ICON[item.status]}
                 </p>
+                {item.reactions && item.reactions.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {item.reactions.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => r.fromMe && react(item.id, '')}
+                        title={r.fromMe ? 'Clique pra remover' : 'Reagiu'}
+                        className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-xs ${
+                          r.fromMe ? 'border-foreground/20 bg-background/40' : 'bg-background/40'
+                        } ${item.direction === 'OUTBOUND' ? 'border-primary-foreground/20' : ''}`}
+                      >
+                        <span>{r.emoji}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ),

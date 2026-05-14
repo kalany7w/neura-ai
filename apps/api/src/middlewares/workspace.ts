@@ -19,10 +19,15 @@ export interface WorkspaceVars extends AuthVars {
 export const requireWorkspace = createMiddleware<{ Variables: WorkspaceVars }>(async (c, next) => {
   const userId = c.get('userId');
   const sessionId = c.get('sessionId');
+  const apiKeyWorkspaceId = c.get('apiKeyWorkspaceId');
 
-  let workspaceId = c.req.header('X-Workspace-Id') ?? null;
+  // 1) Bearer ApiKey: workspaceId já vem pré-resolvido pelo requireAuth
+  let workspaceId = apiKeyWorkspaceId ?? null;
+  // 2) Header explícito
+  if (!workspaceId) workspaceId = c.req.header('X-Workspace-Id') ?? null;
 
-  if (!workspaceId) {
+  // 3) Session.activeWorkspaceId (só se for sessão normal, não apikey)
+  if (!workspaceId && !sessionId.startsWith('apikey:')) {
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       select: { activeWorkspaceId: true },
@@ -51,11 +56,13 @@ export const requireWorkspace = createMiddleware<{ Variables: WorkspaceVars }>(a
     }
     workspaceId = firstMembership.workspaceId;
     role = firstMembership.role;
-    // Persiste pra próximas requests não precisarem do fallback
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { activeWorkspaceId: workspaceId },
-    }).catch(() => {});
+    // Persiste pra próximas requests não precisarem do fallback (só pra sessões normais)
+    if (!sessionId.startsWith('apikey:')) {
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { activeWorkspaceId: workspaceId },
+      }).catch(() => {});
+    }
   }
 
   c.set('workspaceId', workspaceId);
