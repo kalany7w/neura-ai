@@ -32,6 +32,7 @@ import {
   PlayCircle,
   Reply,
   Send,
+  Sparkles,
   Square,
   StickyNote,
   Trash2,
@@ -41,7 +42,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { renderTemplate } from '@neura/shared/template-render';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { realtimeClient } from '@/lib/ws-client';
@@ -228,6 +229,47 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [batchForwardOpen, setBatchForwardOpen] = useState(false);
   // Histórico de edições — id da msg cujo histórico mostrar
   const [historyMessageId, setHistoryMessageId] = useState<string | null>(null);
+  // Sugestões de resposta com IA
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+
+  async function fetchSuggestions() {
+    if (suggesting) return;
+    setSuggesting(true);
+    setSuggestions([]);
+    try {
+      const res = await api<{ suggestions: string[]; model?: string; elapsedMs?: number }>(
+        `/api/conversations/${id}/suggest-replies`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ count: 3 }),
+        },
+      );
+      if (res.suggestions.length === 0) {
+        toast.error('Nenhuma sugestão retornada');
+      } else {
+        setSuggestions(res.suggestions);
+      }
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'ai_disabled') {
+        toast.error('IA desativada — configure OPENAI_API_KEY no Coolify');
+      } else if (err instanceof ApiError && err.code === 'no_inbound') {
+        toast.error('Sem mensagem do cliente pra responder');
+      } else if (err instanceof ApiError && err.code === 'empty_conversation') {
+        toast.error('Conversa vazia');
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Erro ao gerar sugestões');
+      }
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function applySuggestion(suggestion: string) {
+    setText(suggestion);
+    setSuggestions([]);
+    inputRef.current?.focus();
+  }
   // Pinned bar
   const [pinnedExpanded, setPinnedExpanded] = useState(false);
 
@@ -1498,6 +1540,41 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           )}
         </div>
 
+        {suggestions.length > 0 && mode === 'reply' && (
+          <div className="mb-2 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-indigo-500" />
+                Sugestões com IA — clique pra usar
+              </span>
+              <button
+                type="button"
+                onClick={() => setSuggestions([])}
+                className="rounded p-0.5 hover:bg-muted"
+                title="Fechar"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            <ul className="space-y-1.5">
+              {suggestions.map((s, idx) => (
+                <li key={idx}>
+                  <button
+                    type="button"
+                    onClick={() => applySuggestion(s)}
+                    className="group w-full rounded-md border border-indigo-200 bg-indigo-50/50 px-3 py-2 text-left text-sm transition hover:border-indigo-400 hover:bg-indigo-100/60 dark:border-indigo-800 dark:bg-indigo-950/30 dark:hover:bg-indigo-900/40"
+                  >
+                    <span className="mr-2 inline-flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white">
+                      {idx + 1}
+                    </span>
+                    <span className="whitespace-pre-wrap break-words">{s}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -1517,6 +1594,19 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             disabled={sending || (mode === 'reply' && conv.inbox.status !== 'CONNECTED')}
             className={mode === 'note' ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30' : ''}
           />
+          {mode === 'reply' && (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              onClick={fetchSuggestions}
+              disabled={suggesting || conv.inbox.status !== 'CONNECTED'}
+              title="Sugerir respostas com IA"
+              className={suggesting ? 'animate-pulse' : ''}
+            >
+              <Sparkles className={`h-4 w-4 ${suggesting ? 'text-indigo-500' : ''}`} />
+            </Button>
+          )}
           <Button
             type="submit"
             disabled={

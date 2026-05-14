@@ -25,6 +25,9 @@ const apiEnvSchema = baseEnvSchema.extend({
   OPENAI_API_KEY: z.string().min(1).optional(),
   WHISPER_MODEL: z.string().default('whisper-1'),
   WHISPER_API_BASE: z.string().url().default('https://api.openai.com/v1'),
+  // Sugestões de resposta com IA (mesma chave do Whisper). Default: gpt-4o-mini
+  // (~$0.15/1M tokens input — sugestão típica custa <$0.0005 por chamada).
+  OPENAI_CHAT_MODEL: z.string().default('gpt-4o-mini'),
 });
 
 export const env = loadEnv(apiEnvSchema);

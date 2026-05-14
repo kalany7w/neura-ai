@@ -9,6 +9,8 @@ import { outboundQueue } from '../queue';
 import { publishEvent } from '../redis-pub';
 import { outboundLimiter } from '../rate-limit';
 import { logger } from '../logger';
+import { suggestReplies, type SuggestReplyInput } from '../services/ai-suggest';
+import { env } from '../env';
 
 export const conversationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -296,6 +298,118 @@ conversationsRouter.post(
       inboxId: inbox.id,
     });
     return c.json({ conversation: conv, reused: false }, 201);
+  },
+);
+
+// POST /api/conversations/:id/suggest-replies — 3 sugestões via OpenAI
+// Body opcional: { hint?: string, count?: 1-5 }
+const suggestBody = z.object({
+  hint: z.string().max(500).optional(),
+  count: z.number().int().min(1).max(5).default(3),
+});
+
+conversationsRouter.post(
+  '/:id/suggest-replies',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('conversation.send_message'),
+  async (c) => {
+    if (!env.OPENAI_API_KEY) {
+      return c.json(
+        {
+          error: 'ai_disabled',
+          message:
+            'Sugestões com IA precisam de OPENAI_API_KEY configurada. Veja .planning/COOLIFY-PASTE.md.',
+        },
+        503,
+      );
+    }
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const id = c.req.param('id');
+
+    const body = await c.req.json().catch(() => ({}));
+    const parsed = suggestBody.safeParse(body ?? {});
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const conv = await prisma.conversation.findFirst({
+      where: { id, workspaceId },
+      include: {
+        contact: { select: { name: true, phoneNumber: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 12, // 12 últimas, vamos reverter pra cronológico asc
+          where: { deletedAt: null },
+          select: {
+            direction: true,
+            type: true,
+            content: true,
+            createdAt: true,
+            transcription: true,
+          },
+        },
+      },
+    });
+    if (!conv) return c.json({ error: 'not_found' }, 404);
+
+    // Mais antiga primeiro
+    const chronological = [...conv.messages].reverse();
+
+    const history: SuggestReplyInput[] = chronological.map((m) => {
+      const authorLabel = m.direction === 'INBOUND' ? 'cliente' : 'agente';
+      // Pra mídia, usa transcrição (áudio) ou tag genérica do tipo
+      let content = m.content?.trim() ?? '';
+      if (!content) {
+        if (m.type === 'AUDIO' && m.transcription) content = `[áudio transcrito] ${m.transcription}`;
+        else content = `[${m.type.toLowerCase()}]`;
+      }
+      return {
+        direction: m.direction === 'INBOUND' ? 'inbound' : 'outbound',
+        authorLabel,
+        content,
+        at: m.createdAt,
+      };
+    });
+
+    if (history.length === 0) {
+      return c.json({ error: 'empty_conversation' }, 409);
+    }
+    const lastInbound = [...history].reverse().find((m) => m.direction === 'inbound');
+    if (!lastInbound) {
+      return c.json(
+        {
+          error: 'no_inbound',
+          message: 'Sem mensagem do cliente pra responder — última atividade foi do agente.',
+        },
+        409,
+      );
+    }
+
+    // Resolve nome do agente atual
+    const agent = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    });
+    const agentName = agent?.name?.trim() || agent?.email || null;
+
+    try {
+      const started = Date.now();
+      const suggestions = await suggestReplies(
+        {
+          contactName: conv.contact.name,
+          agentName,
+          history,
+          hint: parsed.data.hint,
+        },
+        parsed.data.count,
+      );
+      const elapsed = Date.now() - started;
+      return c.json({ suggestions, elapsedMs: elapsed, model: env.OPENAI_CHAT_MODEL });
+    } catch (err) {
+      logger.error({ err, conversationId: id }, 'AI suggest-replies failed');
+      const message = err instanceof Error ? err.message : 'AI request failed';
+      return c.json({ error: 'ai_error', message }, 502);
+    }
   },
 );
 
