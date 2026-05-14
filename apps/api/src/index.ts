@@ -33,6 +33,7 @@ import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
 import { startAutoResolveScheduler } from './auto-resolve';
+import { transcribeWorker } from './transcribe';
 
 const app = new Hono();
 
@@ -108,5 +109,18 @@ startAutoResolveScheduler().catch((err) =>
 startScheduledMsgsScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start ScheduledMessages scheduler'),
 );
+
+if (env.OPENAI_API_KEY) {
+  logger.info(
+    { model: env.WHISPER_MODEL, concurrency: 2 },
+    'Whisper transcribe worker started',
+  );
+} else {
+  logger.warn(
+    'OPENAI_API_KEY not set — Whisper worker idle (jobs will fail). Configure OPENAI_API_KEY pra ativar transcrição.',
+  );
+}
+// Mantém referência viva pra ESM tree-shake não derrubar o worker
+void transcribeWorker;
 
 export { app };

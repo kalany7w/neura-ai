@@ -3,6 +3,14 @@
  */
 
 export const QUEUE_OUTBOUND = 'outbound';
+export const QUEUE_TRANSCRIBE = 'transcribe';
+
+export interface TranscribeJob {
+  /** Workspace pra publishEvent + audit */
+  workspaceId: string;
+  /** Message.id (AUDIO) a transcrever */
+  messageId: string;
+}
 
 export interface SendMessageJob {
   /** Inbox que vai enviar (define a sessão Baileys a usar) */

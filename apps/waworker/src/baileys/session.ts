@@ -7,7 +7,12 @@ import { prisma } from '../db';
 import { logger } from '../logger';
 import { publishEvent } from '../redis';
 import { makeEncryptedAuthState } from './auth-state';
-import { handleConnectionUpdate, handleMessagesUpsert, handleMessagesUpdate } from './events';
+import {
+  handleConnectionUpdate,
+  handleMessagesUpsert,
+  handleMessagesUpdate,
+  handlePresenceUpdate,
+} from './events';
 
 const baileysLogger = pino({ level: 'silent' });
 
@@ -66,12 +71,18 @@ export async function startSession(
     }
   });
   sock.ev.on('messages.upsert', (payload) =>
-    handleMessagesUpsert({ inboxId: inbox.id, workspaceId: inbox.workspaceId }, payload),
+    handleMessagesUpsert({ inboxId: inbox.id, workspaceId: inbox.workspaceId, sock }, payload),
   );
   sock.ev.on('messages.update', (payload) =>
     handleMessagesUpdate(
       { inboxId: inbox.id, workspaceId: inbox.workspaceId },
       payload as Parameters<typeof handleMessagesUpdate>[1],
+    ),
+  );
+  sock.ev.on('presence.update', (payload) =>
+    handlePresenceUpdate(
+      { inboxId: inbox.id, workspaceId: inbox.workspaceId },
+      payload as Parameters<typeof handlePresenceUpdate>[1],
     ),
   );
 

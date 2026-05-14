@@ -28,6 +28,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
+import { realtimeClient } from '@/lib/ws-client';
 import { useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,6 +95,8 @@ interface MessageItem {
   mediaMimeType: string | null;
   thumbnailUrl: string | null;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+  transcription: string | null;
+  transcriptionStatus: 'PENDING' | 'COMPLETED' | 'FAILED' | null;
   createdAt: string;
   reactions: ReactionItem[];
 }
@@ -157,6 +160,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const recordChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  // Typing indicator — contato digitando
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const partnerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Typing indicator — agente digitando (envia presença pro cliente)
+  const lastTypingSentState = useRef<'composing' | 'paused' | null>(null);
+  const lastTypingSentAt = useRef(0);
+  const pausedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Toggle de visualização de transcrição (msgId → exibir?)
+  const [showTranscription, setShowTranscription] = useState<Record<string, boolean>>({});
 
   async function uploadAndSend(
     file: File | Blob,
@@ -294,6 +307,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       event.event === 'message.new' ||
       event.event === 'message.status' ||
       event.event === 'message.media_ready' ||
+      event.event === 'message.transcribed' ||
       event.event === 'reaction.local' ||
       event.event === 'reaction.sent' ||
       event.event === 'conversation.status_changed' ||
@@ -304,7 +318,48 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     if (event.event === 'note.added' || event.event === 'note.removed') {
       qc.invalidateQueries({ queryKey: ['conversation', id, 'notes'] });
     }
+    if (event.event === 'conversation.typing') {
+      const p = event.payload as { conversationId?: string; isTyping?: boolean } | null;
+      if (!p || p.conversationId !== id) return;
+      if (p.isTyping) {
+        setPartnerTyping(true);
+        if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+        // Auto-clear depois 6s sem update (paused às vezes não vem)
+        partnerTypingTimer.current = setTimeout(() => setPartnerTyping(false), 6_000);
+      } else {
+        setPartnerTyping(false);
+        if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+      }
+    }
   });
+
+  // Cleanup typing timer no unmount
+  useEffect(() => {
+    return () => {
+      if (partnerTypingTimer.current) clearTimeout(partnerTypingTimer.current);
+      if (pausedTimer.current) clearTimeout(pausedTimer.current);
+    };
+  }, []);
+
+  function sendTyping(state: 'composing' | 'paused') {
+    if (!data?.conversation || data.conversation.inbox.status !== 'CONNECTED') return;
+    const now = Date.now();
+    // Throttle composing pra max 1x/4s; paused sempre passa
+    if (state === 'composing' && lastTypingSentState.current === 'composing' && now - lastTypingSentAt.current < 4_000) {
+      return;
+    }
+    realtimeClient.send('typing', { conversationId: id, state });
+    lastTypingSentState.current = state;
+    lastTypingSentAt.current = now;
+  }
+
+  function onComposerChange(value: string) {
+    setText(value);
+    if (mode !== 'reply') return;
+    sendTyping('composing');
+    if (pausedTimer.current) clearTimeout(pausedTimer.current);
+    pausedTimer.current = setTimeout(() => sendTyping('paused'), 2_500);
+  }
 
   async function updateConversation(payload: { status?: ConvStatus; assignedAgentId?: string | null }) {
     try {
@@ -358,6 +413,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         });
         setText('');
         setReplyTo(null);
+        // Sinaliza que paramos de digitar
+        if (pausedTimer.current) clearTimeout(pausedTimer.current);
+        sendTyping('paused');
         await qc.invalidateQueries({ queryKey: ['conversation', id] });
       }
     } catch (err) {
@@ -624,7 +682,45 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   </a>
                 )}
                 {item.type === 'AUDIO' && item.mediaUrl && (
-                  <audio controls src={item.mediaUrl} className="mb-1 w-full" />
+                  <div className="mb-1 space-y-1">
+                    <audio controls src={item.mediaUrl} className="w-full" />
+                    {item.transcriptionStatus === 'PENDING' && (
+                      <p className="flex items-center gap-1 text-[10px] italic opacity-70">
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+                        Transcrevendo…
+                      </p>
+                    )}
+                    {item.transcriptionStatus === 'FAILED' && (
+                      <p className="text-[10px] italic opacity-60">Transcrição falhou</p>
+                    )}
+                    {item.transcriptionStatus === 'COMPLETED' && item.transcription && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowTranscription((s) => ({ ...s, [item.id]: !s[item.id] }))
+                        }
+                        className={`flex items-center gap-1 rounded text-[10px] opacity-80 hover:opacity-100 ${
+                          item.direction === 'OUTBOUND' ? 'text-primary-foreground' : 'text-foreground'
+                        }`}
+                      >
+                        <FileText className="h-3 w-3" />
+                        {showTranscription[item.id] ? 'Ocultar transcrição' : 'Ver transcrição'}
+                      </button>
+                    )}
+                    {item.transcriptionStatus === 'COMPLETED' &&
+                      item.transcription &&
+                      showTranscription[item.id] && (
+                        <p
+                          className={`whitespace-pre-wrap break-words rounded-md px-2 py-1.5 text-xs italic ${
+                            item.direction === 'OUTBOUND'
+                              ? 'bg-primary-foreground/10'
+                              : 'bg-background/60'
+                          }`}
+                        >
+                          {item.transcription}
+                        </p>
+                      )}
+                  </div>
                 )}
                 {item.type === 'VIDEO' && item.mediaUrl && (
                   <video controls src={item.mediaUrl} className="mb-1 max-h-64 rounded-md" />
@@ -671,6 +767,27 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="border-t pt-3 space-y-2">
+        {partnerTyping && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="flex items-end gap-0.5">
+              <span
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-current"
+                style={{ animationDelay: '0ms' }}
+              />
+              <span
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-current"
+                style={{ animationDelay: '150ms' }}
+              />
+              <span
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-current"
+                style={{ animationDelay: '300ms' }}
+              />
+            </span>
+            <span className="italic">
+              {conv.contact.name ?? conv.contact.phoneNumber} está digitando…
+            </span>
+          </div>
+        )}
         {conv.inbox.status !== 'CONNECTED' && mode === 'reply' && (
           <p className="text-xs text-amber-600">
             Inbox não conectada — conecte em /inboxes antes de responder.
@@ -841,7 +958,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           <Input
             ref={inputRef}
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => onComposerChange(e.target.value)}
             placeholder={
               mode === 'note'
                 ? 'Nota interna (só agentes veem)…'

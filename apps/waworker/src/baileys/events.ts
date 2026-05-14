@@ -12,6 +12,7 @@ import { publishEvent } from '../redis';
 import type { MessageDirection, MessageType } from '@neura/database';
 import { downloadAndStoreMedia } from './media';
 import { applyInboxRules } from './inbox-rules';
+import { enqueueTranscribe } from '../queue/transcribe';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 
@@ -115,6 +116,7 @@ export async function handleConnectionUpdate(
 interface MessagesContext {
   inboxId: string;
   workspaceId: string;
+  sock?: WASocket;
 }
 
 interface UpsertPayload {
@@ -137,6 +139,74 @@ export async function handleMessagesUpsert(
   }
 }
 
+/**
+ * Mapa de jid → conversationId pra resolver presence.update do Baileys sem hit DB
+ * em cada update. Populado quando inbound chega (já temos contact+conversa em memória).
+ */
+const jidToConversation = new Map<string, { conversationId: string; workspaceId: string }>();
+
+interface PresenceContext {
+  inboxId: string;
+  workspaceId: string;
+}
+
+interface PresenceUpdate {
+  id: string;
+  presences: Record<
+    string,
+    {
+      lastKnownPresence?: 'unavailable' | 'available' | 'composing' | 'recording' | 'paused';
+      lastSeen?: number | null;
+    }
+  >;
+}
+
+export async function handlePresenceUpdate(
+  ctx: PresenceContext,
+  update: PresenceUpdate,
+): Promise<void> {
+  if (!update?.id) return;
+  // Em 1-1 o presences tem 1 entry com a key == jid do contato
+  const presences = update.presences ?? {};
+  const jids = Object.keys(presences);
+  if (jids.length === 0) return;
+
+  const cached = jidToConversation.get(update.id);
+  let conversationId = cached?.conversationId;
+  if (!conversationId) {
+    // Fallback: resolve por phoneNumber em DB
+    const phoneNumber = `+${update.id.split('@')[0] ?? ''}`;
+    const contact = await prisma.contact.findUnique({
+      where: { workspaceId_phoneNumber: { workspaceId: ctx.workspaceId, phoneNumber } },
+      select: { id: true },
+    });
+    if (!contact) return;
+    const conv = await prisma.conversation.findFirst({
+      where: {
+        workspaceId: ctx.workspaceId,
+        inboxId: ctx.inboxId,
+        contactId: contact.id,
+        status: { in: ['OPEN', 'PENDING', 'SNOOZED'] },
+      },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true },
+    });
+    if (!conv) return;
+    conversationId = conv.id;
+    jidToConversation.set(update.id, { conversationId, workspaceId: ctx.workspaceId });
+  }
+
+  const first = jids[0];
+  if (!first) return;
+  const state = presences[first]?.lastKnownPresence ?? 'unavailable';
+  const isTyping = state === 'composing' || state === 'recording';
+  await publishEvent(ctx.workspaceId, 'conversations', 'conversation.typing', {
+    conversationId,
+    state,
+    isTyping,
+  });
+}
+
 async function persistInboundMessage(
   ctx: MessagesContext,
   msg: WAMessage,
@@ -149,6 +219,14 @@ async function persistInboundMessage(
   }
 
   const remoteJid = msg.key.remoteJid;
+  // Subscribe presença pra começar a receber composing/paused (Baileys exige opt-in)
+  if (ctx.sock) {
+    try {
+      await ctx.sock.presenceSubscribe(remoteJid);
+    } catch (err) {
+      logger.debug({ err, remoteJid }, 'presenceSubscribe failed (ignored)');
+    }
+  }
   // Extrai número (formato 5511999999999@s.whatsapp.net)
   const phoneRaw = remoteJid.split('@')[0];
   if (!phoneRaw) return;
@@ -310,8 +388,13 @@ async function persistInboundMessage(
     };
   });
 
-  // Aplica regras da inbox depois da transação (round-robin, saudação, out-of-hours)
   if (txResult) {
+    // Cache jid → conversation pra resolver presence.update sem hit DB
+    jidToConversation.set(remoteJid, {
+      conversationId: txResult.conversationId,
+      workspaceId: ctx.workspaceId,
+    });
+    // Aplica regras da inbox depois da transação (round-robin, saudação, out-of-hours)
     void applyInboxRules({
       workspaceId: ctx.workspaceId,
       inboxId: ctx.inboxId,
@@ -347,6 +430,14 @@ async function downloadStoreAndUpdate(
       mimeType: updated.mediaMimeType,
       size: updated.mediaSize,
     });
+
+    // Áudio: enfileira transcrição (api processa via Whisper)
+    if (updated.type === 'AUDIO' && updated.mediaUrl) {
+      void enqueueTranscribe({
+        workspaceId: ctx.workspaceId,
+        messageId: updated.id,
+      });
+    }
   } catch (err) {
     logger.error({ err, messageId }, 'Failed to download/store media (background)');
   }

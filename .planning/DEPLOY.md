@@ -65,6 +65,11 @@ MINIO_USE_SSL=false
 NEXT_PUBLIC_API_URL=https://api.neura-ai.net
 NEXT_PUBLIC_WS_URL=wss://api.neura-ai.net/ws
 
+# Whisper transcription (opcional — vazio desliga transcrição automática de áudio)
+OPENAI_API_KEY=
+WHISPER_MODEL=whisper-1
+WHISPER_API_BASE=https://api.openai.com/v1
+
 # Coolify-generated (Coolify preenche automaticamente — NÃO mexer)
 SERVICE_FQDN_API=api.neura-ai.net
 SERVICE_FQDN_WEB=app.neura-ai.net
