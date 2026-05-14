@@ -28,7 +28,7 @@ async function loadAuthBlob(inboxId: string): Promise<AuthBlob> {
   return { creds: initAuthCreds(), keys: {} };
 }
 
-async function saveAuthBlob(inboxId: string, blob: AuthBlob): Promise<void> {
+async function persistAuthBlob(inboxId: string, blob: AuthBlob): Promise<void> {
   const json = JSON.stringify(blob, BufferJSON.replacer);
   const encryptedAuthState = encrypt(json);
   await prisma.waSession.upsert({
@@ -36,6 +36,55 @@ async function saveAuthBlob(inboxId: string, blob: AuthBlob): Promise<void> {
     create: { inboxId, encryptedAuthState },
     update: { encryptedAuthState, updatedAt: new Date() },
   });
+}
+
+/**
+ * Durante handshake o Baileys chama keys.set ~50× em sequência. Persistir a cada
+ * chamada é desperdício: encrypt+upsert pesados. Debounce 500ms + flush no creds
+ * update mantém durabilidade sem o overhead.
+ */
+const SAVE_DEBOUNCE_MS = 500;
+
+interface PendingSave {
+  blob: AuthBlob;
+  timer: NodeJS.Timeout;
+  inFlight: Promise<void> | null;
+}
+
+const pendingSaves = new Map<string, PendingSave>();
+
+function scheduleSave(inboxId: string, blob: AuthBlob): void {
+  const existing = pendingSaves.get(inboxId);
+  if (existing) clearTimeout(existing.timer);
+  const timer = setTimeout(() => {
+    const entry = pendingSaves.get(inboxId);
+    if (!entry) return;
+    pendingSaves.delete(inboxId);
+    entry.inFlight = persistAuthBlob(inboxId, entry.blob).catch((err) => {
+      logger.error({ err, inboxId }, 'persistAuthBlob failed');
+    });
+  }, SAVE_DEBOUNCE_MS);
+  pendingSaves.set(inboxId, { blob, timer, inFlight: existing?.inFlight ?? null });
+}
+
+/**
+ * Força salvamento imediato (usar em creds.update e ao parar sessão).
+ */
+async function flushSave(inboxId: string, blob: AuthBlob): Promise<void> {
+  const existing = pendingSaves.get(inboxId);
+  if (existing) {
+    clearTimeout(existing.timer);
+    pendingSaves.delete(inboxId);
+  }
+  await persistAuthBlob(inboxId, blob);
+}
+
+export async function flushPendingAuthState(inboxId: string): Promise<void> {
+  const entry = pendingSaves.get(inboxId);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  pendingSaves.delete(inboxId);
+  await persistAuthBlob(inboxId, entry.blob).catch(() => {});
 }
 
 /**
@@ -84,11 +133,13 @@ export async function makeEncryptedAuthState(inboxId: string): Promise<{
               }
             }
           }
-          await saveAuthBlob(inboxId, blob);
+          // Debounce save: handshake chama isso ~50× em sequência
+          scheduleSave(inboxId, blob);
         },
       },
     },
-    saveCreds: () => saveAuthBlob(inboxId, blob),
+    // creds.update precisa persistir imediatamente (sessão crítica)
+    saveCreds: () => flushSave(inboxId, blob),
   };
 }
 

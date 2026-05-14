@@ -2,6 +2,28 @@ import { prisma } from '../db';
 import { createNotification } from './notifications';
 
 /**
+ * Dedup window: se a mesma chave criou notif nos últimos N ms, pula.
+ * Evita encher o sino quando contato manda 5 msgs em 10s.
+ */
+const DEDUP_WINDOW_MS = 30_000;
+const dedupCache = new Map<string, number>();
+
+function shouldDedup(key: string): boolean {
+  const now = Date.now();
+  const last = dedupCache.get(key);
+  // Limpa entries antigas (best-effort, máx ~1000 entries)
+  if (dedupCache.size > 1000) {
+    const cutoff = now - DEDUP_WINDOW_MS;
+    for (const [k, t] of dedupCache.entries()) {
+      if (t < cutoff) dedupCache.delete(k);
+    }
+  }
+  if (last && now - last < DEDUP_WINDOW_MS) return true;
+  dedupCache.set(key, now);
+  return false;
+}
+
+/**
  * Hook que cria notifications pros agentes envolvidos em eventos relevantes.
  * Chamado pelo publishEvent (fire-and-forget).
  */
@@ -77,6 +99,9 @@ async function handleMessageNew(
     },
   });
   if (!conv || !conv.assignedAgentId) return;
+
+  // Dedup: 1 notif por (agente, conversa) a cada 30s
+  if (shouldDedup(`msg:${conv.assignedAgentId}:${conversationId}`)) return;
 
   const who = conv.contact.name ?? conv.contact.phoneNumber;
   const preview = message.content

@@ -140,10 +140,35 @@ export async function handleMessagesUpsert(
 }
 
 /**
- * Mapa de jid → conversationId pra resolver presence.update do Baileys sem hit DB
- * em cada update. Populado quando inbound chega (já temos contact+conversa em memória).
+ * Cache LRU jid → conversationId pra resolver presence.update do Baileys sem hit DB.
+ * Populado quando inbound chega. Max 5000 entries (FIFO). Sem TTL — chave fica
+ * válida enquanto a conversa estiver aberta.
  */
+const JID_CACHE_MAX = 5000;
 const jidToConversation = new Map<string, { conversationId: string; workspaceId: string }>();
+
+function jidCachePut(jid: string, value: { conversationId: string; workspaceId: string }) {
+  // Re-insert pra atualizar ordem (Map mantém ordem de inserção)
+  if (jidToConversation.has(jid)) jidToConversation.delete(jid);
+  jidToConversation.set(jid, value);
+  if (jidToConversation.size > JID_CACHE_MAX) {
+    const oldest = jidToConversation.keys().next().value;
+    if (oldest) jidToConversation.delete(oldest);
+  }
+}
+
+/**
+ * jids cujo presence subscribe já foi feito por inbox — evita re-subscribe em
+ * cada inbound (Baileys pode rate-limitar e isso é desnecessário).
+ */
+const subscribedJids = new Map<string, Set<string>>();
+
+/**
+ * Limpa estado da sessão ao parar inbox (evita leak de memória entre conexões).
+ */
+export function clearSessionState(inboxId: string): void {
+  subscribedJids.delete(inboxId);
+}
 
 interface PresenceContext {
   inboxId: string;
@@ -193,7 +218,7 @@ export async function handlePresenceUpdate(
     });
     if (!conv) return;
     conversationId = conv.id;
-    jidToConversation.set(update.id, { conversationId, workspaceId: ctx.workspaceId });
+    jidCachePut(update.id, { conversationId, workspaceId: ctx.workspaceId });
   }
 
   const first = jids[0];
@@ -220,11 +245,20 @@ async function persistInboundMessage(
 
   const remoteJid = msg.key.remoteJid;
   // Subscribe presença pra começar a receber composing/paused (Baileys exige opt-in)
+  // — só 1× por jid por sessão (evita rate-limit no Baileys)
   if (ctx.sock) {
-    try {
-      await ctx.sock.presenceSubscribe(remoteJid);
-    } catch (err) {
-      logger.debug({ err, remoteJid }, 'presenceSubscribe failed (ignored)');
+    let set = subscribedJids.get(ctx.inboxId);
+    if (!set) {
+      set = new Set();
+      subscribedJids.set(ctx.inboxId, set);
+    }
+    if (!set.has(remoteJid)) {
+      try {
+        await ctx.sock.presenceSubscribe(remoteJid);
+        set.add(remoteJid);
+      } catch (err) {
+        logger.debug({ err, remoteJid }, 'presenceSubscribe failed (ignored)');
+      }
     }
   }
   // Extrai número (formato 5511999999999@s.whatsapp.net)
@@ -391,8 +425,8 @@ async function persistInboundMessage(
   });
 
   if (txResult) {
-    // Cache jid → conversation pra resolver presence.update sem hit DB
-    jidToConversation.set(remoteJid, {
+    // Cache jid → conversation pra resolver presence.update sem hit DB (LRU)
+    jidCachePut(remoteJid, {
       conversationId: txResult.conversationId,
       workspaceId: ctx.workspaceId,
     });

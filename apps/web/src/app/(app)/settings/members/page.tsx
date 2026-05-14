@@ -89,9 +89,15 @@ export default function MembersPage() {
     queryFn: () => api('/api/workspaces/me'),
   });
 
+  const currentRole = currentUserId
+    ? (data?.workspace.members.find((m) => m.userId === currentUserId)?.role ?? null)
+    : null;
+  const canManage = currentRole === 'ADMIN';
+
   const { data: invitesData } = useQuery<{ invites: InviteItem[] }>({
     queryKey: ['invites', 'pending'],
     queryFn: () => api('/api/workspaces/me/invites'),
+    enabled: canManage,
   });
 
   const adminCount = data?.workspace.members.filter((m) => m.role === 'ADMIN').length ?? 0;
@@ -180,17 +186,26 @@ export default function MembersPage() {
         <p className="text-muted-foreground">Convide agentes e gerencie permissões.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Convidar agente</CardTitle>
-            <CardDescription>O convite expira em 7 dias.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <InviteForm />
-          </CardContent>
-        </Card>
+      {!canManage && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-200">
+          Apenas administradores podem convidar, remover ou alterar funções. Você está em modo leitura.
+        </div>
+      )}
 
+      <div className={`grid gap-6 ${canManage ? 'lg:grid-cols-3' : ''}`}>
+        {canManage && (
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>Convidar agente</CardTitle>
+              <CardDescription>O convite expira em 7 dias.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <InviteForm />
+            </CardContent>
+          </Card>
+        )}
+
+        {canManage && (
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Convites pendentes</CardTitle>
@@ -248,6 +263,7 @@ export default function MembersPage() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
 
       <Card>
@@ -283,54 +299,64 @@ export default function MembersPage() {
                       <p className="truncate text-xs text-muted-foreground">{m.user.email}</p>
                     </div>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          disabled={isLastAdmin}
-                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 ${ROLE_BADGE[m.role]}`}
-                          title={isLastAdmin ? 'Último admin do workspace' : 'Mudar função'}
-                        >
-                          {ROLE_LABEL[m.role]}
-                          {!isLastAdmin && <ChevronDown className="h-3 w-3" />}
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-64">
-                        <DropdownMenuLabel>Função no workspace</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {(['ADMIN', 'SUPERVISOR', 'AGENT'] as Role[]).map((r) => (
-                          <DropdownMenuItem
-                            key={r}
-                            onSelect={() => changeRole(m, r)}
-                            className={r === m.role ? 'bg-accent/60' : ''}
+                    {canManage ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            disabled={isLastAdmin}
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 ${ROLE_BADGE[m.role]}`}
+                            title={isLastAdmin ? 'Último admin do workspace' : 'Mudar função'}
                           >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-medium">{ROLE_LABEL[r]}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                {ROLE_DESCRIPTION[r]}
-                              </span>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                            {ROLE_LABEL[m.role]}
+                            {!isLastAdmin && <ChevronDown className="h-3 w-3" />}
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-64">
+                          <DropdownMenuLabel>Função no workspace</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {(['ADMIN', 'SUPERVISOR', 'AGENT'] as Role[]).map((r) => (
+                            <DropdownMenuItem
+                              key={r}
+                              onSelect={() => changeRole(m, r)}
+                              className={r === m.role ? 'bg-accent/60' : ''}
+                            >
+                              <div className="flex flex-col gap-0.5">
+                                <span className="font-medium">{ROLE_LABEL[r]}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {ROLE_DESCRIPTION[r]}
+                                </span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_BADGE[m.role]}`}
+                      >
+                        {ROLE_LABEL[m.role]}
+                      </span>
+                    )}
 
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => removeMember(m)}
-                      disabled={isLastAdmin}
-                      title={
-                        isLastAdmin
-                          ? 'Não é possível remover o último admin'
-                          : isSelf
-                            ? 'Sair do workspace'
-                            : 'Remover membro'
-                      }
-                      className="text-muted-foreground hover:text-destructive disabled:opacity-40"
-                    >
-                      {isSelf ? <UserMinus className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-                    </Button>
+                    {canManage && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeMember(m)}
+                        disabled={isLastAdmin}
+                        title={
+                          isLastAdmin
+                            ? 'Não é possível remover o último admin'
+                            : isSelf
+                              ? 'Sair do workspace'
+                              : 'Remover membro'
+                        }
+                        className="text-muted-foreground hover:text-destructive disabled:opacity-40"
+                      >
+                        {isSelf ? <UserMinus className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </Button>
+                    )}
                   </li>
                 );
               })}

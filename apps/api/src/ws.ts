@@ -43,6 +43,25 @@ export function setupWebSocket(app: Hono) {
   app.get(
     '/ws',
     upgradeWebSocket(async (c) => {
+      // Origin check (CSRF defense pra WS) — WS upgrade não passa pelo middleware CORS
+      const origin = c.req.header('Origin');
+      const originOk =
+        !origin ||
+        env.TRUSTED_ORIGINS.some(
+          (allowed) => origin === allowed || origin.startsWith(allowed),
+        );
+      if (!originOk) {
+        logger.warn({ origin }, 'WS upgrade rejected: untrusted origin');
+        return {
+          onOpen: (_evt, ws) => {
+            ws.send(JSON.stringify({ event: 'error', payload: { code: 'untrusted_origin' } }));
+            ws.close(1008, 'untrusted_origin');
+          },
+          onMessage: () => {},
+          onClose: () => {},
+        };
+      }
+
       const session = await auth.api.getSession({ headers: c.req.raw.headers });
       const userId = session?.user?.id ?? null;
       const sessionId = session?.session?.id ?? null;

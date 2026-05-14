@@ -306,7 +306,7 @@ reportsRouter.get('/inboxes', requireAuth, requireWorkspace, async (c) => {
 });
 
 const exportSchema = z.object({
-  type: z.enum(['conversations', 'messages']).default('conversations'),
+  type: z.enum(['conversations', 'messages', 'cards']).default('conversations'),
   since: z.string().datetime().optional(),
   until: z.string().datetime().optional(),
 });
@@ -329,7 +329,40 @@ reportsRouter.get('/export.csv', requireAuth, requireWorkspace, async (c) => {
   const { since, until } = parseRange(c);
 
   let csv = '';
-  if (parsed.data.type === 'conversations') {
+  if (parsed.data.type === 'cards') {
+    const rows = await prisma.card.findMany({
+      where: { workspaceId, createdAt: { gte: since, lte: until } },
+      include: {
+        funnel: { select: { name: true } },
+        stage: { select: { name: true, outcome: true } },
+        labels: { include: { label: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    });
+    csv =
+      'id,title,funnel,stage,outcome,value,currency,assigned_agent_id,sla_status,labels,due_date,created_at,updated_at\n';
+    for (const r of rows) {
+      csv +=
+        [
+          r.id,
+          r.title,
+          r.funnel.name,
+          r.stage.name,
+          r.stage.outcome ?? '',
+          r.value !== null ? r.value.toString() : '',
+          r.currency,
+          r.assignedAgentId ?? '',
+          r.slaStatus,
+          r.labels.map((cl) => cl.label.name).join('|'),
+          r.dueDate?.toISOString() ?? '',
+          r.createdAt.toISOString(),
+          r.updatedAt.toISOString(),
+        ]
+          .map(csvEscape)
+          .join(',') + '\n';
+    }
+  } else if (parsed.data.type === 'conversations') {
     const rows = await prisma.conversation.findMany({
       where: { workspaceId, createdAt: { gte: since, lte: until } },
       include: {
