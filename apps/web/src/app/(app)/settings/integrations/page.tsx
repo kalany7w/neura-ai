@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
+import { InboundWebhooksSection } from '@/components/integrations/inbound-webhooks-section';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -297,6 +298,10 @@ export default function IntegrationsPage() {
         availableEvents={data?.availableEvents ?? []}
         editing={editing}
       />
+
+      <div className="border-t pt-6">
+        <InboundWebhooksSection />
+      </div>
     </div>
   );
 }
