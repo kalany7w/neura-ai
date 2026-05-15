@@ -314,6 +314,15 @@ model Conversation {
   lastInboundAt      DateTime?
   // Timestamp da última msg OUTBOUND (agente/auto). Se < lastInboundAt → aguardando resposta.
   lastOutboundAt     DateTime?
+  // IA Copilot: classificação automática (intent + urgency + sentiment + confidence)
+  // Schema: { intent: 'sale'|'support'|'complaint'|'info'|'other', urgency: 'low'|'medium'|'high'|'critical', sentiment: 'positive'|'neutral'|'negative', confidence: 0-1, classifiedAt: ISO }
+  aiClassification   Json?
+  // IA Copilot: resumo da conversa (1-2 frases). Regenerado on-demand ou após N msgs novas.
+  aiSummary          String?            @db.Text
+  aiSummaryAt        DateTime?
+  // IA Copilot: próximas ações sugeridas pelo modelo. Schema: [{ kind: 'assign'|'move_card'|'apply_label'|'set_status'|'send_template', ...args, reason, confidence }]
+  aiSuggestedActions Json?
+  aiSuggestedAt      DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -523,6 +532,11 @@ model Card {
   lastMessagePreview String?   @db.Text
   lastMessageAt      DateTime?
   unreadCount        Int       @default(0)
+  // IA Forecast: probabilidade de fechamento (0.00-1.00) baseada em mensagens + valor + idade
+  aiWinProbability   Decimal?  @db.Decimal(3, 2)
+  // Raciocínio que IA usou pra estimar (1-2 frases pra agente entender)
+  aiWinReasoning     String?   @db.Text
+  aiForecastAt       DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

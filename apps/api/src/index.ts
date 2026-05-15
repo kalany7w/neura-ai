@@ -36,6 +36,7 @@ import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
 import { startAutoResolveScheduler } from './auto-resolve';
 import { transcribeWorker } from './transcribe';
+import { aiWorker } from './ai-worker';
 
 const app = new Hono();
 
@@ -124,7 +125,8 @@ if (env.OPENAI_API_KEY) {
     'OPENAI_API_KEY not set — Whisper worker idle (jobs will fail). Configure OPENAI_API_KEY pra ativar transcrição.',
   );
 }
-// Mantém referência viva pra ESM tree-shake não derrubar o worker
+// Mantém referência viva pra ESM tree-shake não derrubar os workers
 void transcribeWorker;
+void aiWorker;
 
 export { app };

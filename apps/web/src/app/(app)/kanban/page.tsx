@@ -26,6 +26,7 @@ import {
   Search,
   Settings2,
   SlidersHorizontal,
+  Sparkles,
   Trash2,
   TrendingUp,
   UserCheck,
@@ -34,7 +35,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { Input } from '@/components/ui/input';
@@ -110,6 +111,7 @@ interface Card {
   stageId: string;
   title: string;
   value: string | null;
+  currency?: string;
   assignedAgentId: string | null;
   slaStatus: string;
   lastMessageAt: string | null;
@@ -117,6 +119,9 @@ interface Card {
   unreadCount: number;
   labels: Array<{ label: { id: string; name: string; color: string } }>;
   snoozes: ActiveSnooze[];
+  aiWinProbability?: string | null;
+  aiWinReasoning?: string | null;
+  aiForecastAt?: string | null;
 }
 
 interface Member {
@@ -427,6 +432,38 @@ function DraggableCard({
             </p>
           </div>
         )}
+
+        {/* Forecast IA: probabilidade fechamento */}
+        {card.aiWinProbability != null && (() => {
+          const prob = Number(card.aiWinProbability);
+          const pct = Math.round(prob * 100);
+          const cls =
+            prob >= 0.7
+              ? 'bg-emerald-500'
+              : prob >= 0.4
+                ? 'bg-amber-500'
+                : 'bg-red-500';
+          return (
+            <div
+              className="mt-2 pl-2"
+              title={card.aiWinReasoning ?? 'Forecast IA'}
+            >
+              <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                <span className="flex items-center gap-1 text-muted-foreground">
+                  <Sparkles className="h-2.5 w-2.5 text-indigo-500" />
+                  Forecast IA
+                </span>
+                <span className="font-semibold tabular-nums">{pct}%</span>
+              </div>
+              <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full ${cls}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Etiquetas */}
         {card.labels.length > 0 && (
@@ -806,7 +843,8 @@ export default function KanbanPage() {
       event.event === 'card.updated' ||
       event.event === 'card.deleted' ||
       event.event === 'card.snoozed' ||
-      event.event === 'card.snooze_expired'
+      event.event === 'card.snooze_expired' ||
+      event.event === 'card.forecasted'
     ) {
       qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     }
@@ -828,7 +866,16 @@ export default function KanbanPage() {
     const total = cards.length;
     const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
     const unread = cards.reduce((acc, c) => acc + c.unreadCount, 0);
-    return { total, sumValue, unread };
+    // Receita prevista IA: sum(value × probability) — só cards com forecast
+    let forecastValue = 0;
+    let forecastedCount = 0;
+    for (const c of cards) {
+      if (c.aiWinProbability != null && c.value) {
+        forecastValue += Number(c.value) * Number(c.aiWinProbability);
+        forecastedCount += 1;
+      }
+    }
+    return { total, sumValue, unread, forecastValue, forecastedCount };
   }, [cardsData]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -928,6 +975,37 @@ export default function KanbanPage() {
             <Settings2 className="h-3.5 w-3.5" />
             Gerenciar
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'Recalcular forecast IA?',
+                description: `IA vai estimar probabilidade de fechamento pra todos cards ativos do funil. Pode levar até 1min e custa ~$0.001 por card.`,
+                confirmLabel: 'Recalcular',
+              });
+              if (!ok) return;
+              try {
+                const res = await api<{ enqueued: number }>(
+                  `/api/kanban/funnels/${funnelId}/ai/forecast-all`,
+                  { method: 'POST' },
+                );
+                toast.success(`${res.enqueued} card(s) enfileirados — atualizando em segundos`);
+              } catch (err) {
+                const msg =
+                  err instanceof ApiError && err.code === 'ai_disabled'
+                    ? 'Configure OPENAI_API_KEY pra ativar IA'
+                    : err instanceof Error
+                      ? err.message
+                      : 'Erro';
+                toast.error(msg);
+              }
+            }}
+            title="Recalcular probabilidade de fechamento IA pra todos cards do funil"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+            Forecast IA
+          </Button>
           <a
             href={`/api/reports/export.csv?type=cards`}
             download
@@ -951,6 +1029,18 @@ export default function KanbanPage() {
             {totals.unread > 0 && (
               <span>
                 <span className="font-semibold text-primary">{totals.unread}</span> não lidas
+              </span>
+            )}
+            {totals.forecastedCount > 0 && totals.forecastValue > 0 && (
+              <span
+                title={`Receita prevista IA = soma(valor × probabilidade) de ${totals.forecastedCount} card(s) com forecast`}
+                className="inline-flex items-center gap-1"
+              >
+                <Sparkles className="h-3 w-3 text-indigo-500" />
+                <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                  {formatBRL(totals.forecastValue)}
+                </span>{' '}
+                previstos
               </span>
             )}
           </div>

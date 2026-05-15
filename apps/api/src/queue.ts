@@ -3,8 +3,10 @@ import { Redis } from 'ioredis';
 import {
   QUEUE_OUTBOUND,
   QUEUE_TRANSCRIBE,
+  QUEUE_AI,
   type SendMessageJob,
   type TranscribeJob,
+  type AiJob,
 } from '@neura/shared/queue';
 import { env } from './env';
 
@@ -27,5 +29,15 @@ export const transcribeQueue = new Queue<TranscribeJob>(QUEUE_TRANSCRIBE, {
     backoff: { type: 'exponential', delay: 5_000 },
     removeOnComplete: { age: 60 * 60, count: 500 },
     removeOnFail: { age: 7 * 24 * 60 * 60 },
+  },
+});
+
+export const aiQueue = new Queue<AiJob>(QUEUE_AI, {
+  connection: bullConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 5_000 },
+    removeOnComplete: { age: 60 * 60, count: 500 },
+    removeOnFail: { age: 24 * 60 * 60 },
   },
 });

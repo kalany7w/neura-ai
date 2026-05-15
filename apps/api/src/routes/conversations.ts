@@ -10,7 +10,12 @@ import { publishEvent } from '../redis-pub';
 import { outboundLimiter } from '../rate-limit';
 import { logger } from '../logger';
 import { suggestReplies, type SuggestReplyInput } from '../services/ai-suggest';
+import { summarizeConversation } from '../services/ai-summarize';
+import { suggestNextActions } from '../services/ai-next-action';
+import { classifyConversation } from '../services/ai-classify';
+import { buildMentionTargets } from '../services/mentions';
 import { audit } from '../services/audit';
+import { aiQueue } from '../queue';
 import { env } from '../env';
 
 export const conversationsRouter = new Hono<{
@@ -622,6 +627,184 @@ conversationsRouter.post(
     }
   },
 );
+
+// POST /api/conversations/:id/ai/summarize — gera resumo IA (cache em Conversation.aiSummary)
+conversationsRouter.post('/:id/ai/summarize', requireAuth, requireWorkspace, async (c) => {
+  if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
+    select: {
+      id: true,
+      contact: { select: { name: true } },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: { direction: true, content: true, transcription: true, type: true },
+      },
+    },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  const history = conv.messages
+    .reverse()
+    .map((m) => ({
+      direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
+      content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
+    }))
+    .filter((m) => m.content.trim().length > 0);
+  if (history.length === 0) {
+    return c.json({ error: 'empty_conversation' }, 409);
+  }
+  const summary = await summarizeConversation({
+    history,
+    contactName: conv.contact.name,
+  });
+  if (!summary) return c.json({ error: 'ai_error' }, 502);
+  await prisma.conversation.update({
+    where: { id },
+    data: { aiSummary: summary, aiSummaryAt: new Date() },
+  });
+  return c.json({ summary, generatedAt: new Date().toISOString() });
+});
+
+// POST /api/conversations/:id/ai/next-actions — sugere próximas ações
+conversationsRouter.post('/:id/ai/next-actions', requireAuth, requireWorkspace, async (c) => {
+  if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
+    select: {
+      id: true,
+      status: true,
+      assignedAgentId: true,
+      contact: { select: { name: true } },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 16,
+        select: { direction: true, content: true, transcription: true, type: true },
+      },
+    },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+
+  // Carrega contexto disponível pra IA escolher de listas reais
+  const [members, labels, templates, stages] = await Promise.all([
+    prisma.membership.findMany({
+      where: { workspaceId },
+      select: { userId: true, user: { select: { name: true, email: true } } },
+    }),
+    prisma.label.findMany({
+      where: { workspaceId, scope: { in: ['CONVERSATION', 'BOTH'] } },
+      select: { name: true, color: true },
+      take: 30,
+    }),
+    prisma.messageTemplate.findMany({
+      where: { workspaceId },
+      select: { name: true, shortcut: true },
+      take: 30,
+    }),
+    prisma.stage.findMany({
+      where: { funnel: { workspaceId } },
+      select: { name: true, outcome: true },
+      take: 30,
+    }),
+  ]);
+
+  const agentTargets = buildMentionTargets(
+    members.map((m) => ({ userId: m.userId, user: m.user })),
+  );
+  const availableAgents = agentTargets.map((t) => ({ slug: t.slug, name: t.name }));
+  const currentAgent = conv.assignedAgentId
+    ? agentTargets.find((t) => t.userId === conv.assignedAgentId)
+    : null;
+
+  const history = conv.messages
+    .reverse()
+    .map((m) => ({
+      direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
+      content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
+    }))
+    .filter((m) => m.content.trim().length > 0);
+  if (history.length === 0) {
+    return c.json({ error: 'empty_conversation' }, 409);
+  }
+
+  // Pega stage atual via card linkado (se houver)
+  const card = await prisma.card.findFirst({
+    where: { conversationId: id, workspaceId },
+    select: { stage: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const actions = await suggestNextActions({
+    history,
+    contactName: conv.contact.name,
+    currentAgentSlug: currentAgent?.slug ?? null,
+    availableAgents,
+    availableLabels: labels.map((l) => ({ name: l.name, color: l.color })),
+    availableTemplates: templates.map((t) => ({ name: t.name, shortcut: t.shortcut })),
+    availableStages: stages.map((s) => ({
+      name: s.name,
+      outcome: s.outcome as 'POSITIVE' | 'NEGATIVE' | 'RISK' | null,
+    })),
+    currentStatus: conv.status,
+    currentStageName: card?.stage.name ?? null,
+  });
+
+  const generatedAt = new Date();
+  await prisma.conversation.update({
+    where: { id },
+    data: { aiSuggestedActions: actions, aiSuggestedAt: generatedAt },
+  });
+  return c.json({ actions, generatedAt: generatedAt.toISOString() });
+});
+
+// POST /api/conversations/:id/ai/classify — força re-classify imediato (debug/manual)
+conversationsRouter.post('/:id/ai/classify', requireAuth, requireWorkspace, async (c) => {
+  if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
+    select: {
+      id: true,
+      contact: { select: { name: true } },
+      messages: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+        select: { direction: true, content: true, transcription: true, type: true },
+      },
+    },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  const history = conv.messages
+    .reverse()
+    .map((m) => ({
+      direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
+      content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
+    }))
+    .filter((m) => m.content.trim().length > 0);
+  if (history.length === 0) {
+    return c.json({ error: 'empty_conversation' }, 409);
+  }
+  const result = await classifyConversation({ history, contactName: conv.contact.name });
+  if (!result) return c.json({ error: 'ai_error' }, 502);
+  const classification = { ...result, classifiedAt: new Date().toISOString() };
+  await prisma.conversation.update({
+    where: { id },
+    data: { aiClassification: classification },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.classified', {
+    conversationId: id,
+    classification,
+  });
+  return c.json({ classification });
+});
 
 // POST /api/conversations/:id/read — zera unreadCount
 conversationsRouter.post('/:id/read', requireAuth, requireWorkspace, async (c) => {

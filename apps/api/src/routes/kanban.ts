@@ -7,6 +7,9 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
 import { audit } from '../services/audit';
 import { publishEvent } from '../redis-pub';
+import { forecastCard } from '../services/ai-forecast';
+import { aiQueue } from '../queue';
+import { env } from '../env';
 
 export const kanbanRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -758,5 +761,131 @@ kanbanRouter.delete(
       resource: `Card:${id}`,
     });
     return c.json({ ok: true });
+  },
+);
+
+// POST /api/kanban/cards/:id/ai/forecast — calcula probabilidade fechamento via IA
+kanbanRouter.post(
+  '/cards/:id/ai/forecast',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const card = await prisma.card.findFirst({
+      where: { id, workspaceId },
+      include: { stage: { select: { name: true, outcome: true } } },
+    });
+    if (!card) return c.json({ error: 'not_found' }, 404);
+
+    let contactName: string | null = null;
+    let messages: Array<{
+      direction: 'INBOUND' | 'OUTBOUND';
+      content: string | null;
+      transcription: string | null;
+      type: string;
+    }> = [];
+    if (card.conversationId) {
+      const conv = await prisma.conversation.findFirst({
+        where: { id: card.conversationId, workspaceId },
+        select: {
+          contact: { select: { name: true } },
+          messages: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            take: 16,
+            select: { direction: true, content: true, transcription: true, type: true },
+          },
+        },
+      });
+      contactName = conv?.contact.name ?? null;
+      messages = conv?.messages ?? [];
+    }
+
+    const now = Date.now();
+    const ageDays = Math.max(
+      0,
+      Math.floor((now - new Date(card.createdAt).getTime()) / (24 * 60 * 60 * 1000)),
+    );
+    const daysSinceLastMessage = card.lastMessageAt
+      ? Math.floor((now - new Date(card.lastMessageAt).getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+    const history = messages
+      .reverse()
+      .map((m) => ({
+        direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as
+          | 'inbound'
+          | 'outbound',
+        content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
+      }))
+      .filter((m) => m.content.trim().length > 0);
+
+    const result = await forecastCard({
+      cardTitle: card.title,
+      cardValue: card.value ? Number(card.value) : null,
+      cardCurrency: card.currency,
+      stageName: card.stage.name,
+      stageOutcome: (card.stage.outcome as 'POSITIVE' | 'NEGATIVE' | 'RISK' | null) ?? null,
+      ageDays,
+      daysSinceLastMessage,
+      history,
+      contactName,
+    });
+    if (!result) return c.json({ error: 'ai_error' }, 502);
+    await prisma.card.update({
+      where: { id },
+      data: {
+        aiWinProbability: result.probability,
+        aiWinReasoning: result.reasoning,
+        aiForecastAt: new Date(),
+      },
+    });
+    await publishEvent(workspaceId, 'cards', 'card.forecasted', {
+      cardId: id,
+      probability: result.probability,
+      reasoning: result.reasoning,
+    });
+    return c.json({
+      probability: result.probability,
+      reasoning: result.reasoning,
+      forecastedAt: new Date().toISOString(),
+    });
+  },
+);
+
+// POST /api/kanban/funnels/:id/ai/forecast-all — enfileira forecast pra todos cards do funil
+kanbanRouter.post(
+  '/funnels/:id/ai/forecast-all',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('funnel.manage'),
+  async (c) => {
+    if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const funnel = await prisma.funnel.findFirst({
+      where: { id, workspaceId },
+      select: { id: true },
+    });
+    if (!funnel) return c.json({ error: 'not_found' }, 404);
+    const cards = await prisma.card.findMany({
+      where: {
+        funnelId: id,
+        workspaceId,
+        // só cards ativos — stages POSITIVE/NEGATIVE finais não precisam forecast
+        stage: { outcome: null },
+      },
+      select: { id: true },
+      take: 200,
+    });
+    for (const card of cards) {
+      await aiQueue.add(
+        'forecast',
+        { workspaceId, kind: 'forecast', targetId: card.id },
+        { jobId: `forecast:${card.id}` },
+      );
+    }
+    return c.json({ enqueued: cards.length });
   },
 );
