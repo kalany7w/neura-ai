@@ -1,4 +1,4 @@
-# docker-compose.yml — produção (Coolify)
+# docker-compose.yaml — produção (Coolify)
 # IMPORTANTE: SEM `ports:` — Coolify faz roteamento via Caddy.
 # Cada serviço expõe sua porta INTERNA (7301/7302/7303) e Coolify direciona o domínio.
 
