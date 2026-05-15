@@ -56,7 +56,9 @@ type ActionKind =
   | 'apply_label'
   | 'send_template'
   | 'send_message'
-  | 'move_card';
+  | 'move_card'
+  | 'wait'
+  | 'set_card_value';
 
 type Action =
   | { kind: 'assign_agent'; userId: string | null }
@@ -64,13 +66,19 @@ type Action =
   | { kind: 'apply_label'; labelId: string; target?: 'conversation' | 'contact' }
   | { kind: 'send_template'; templateId: string }
   | { kind: 'send_message'; text: string }
-  | { kind: 'move_card'; stageId: string };
+  | { kind: 'move_card'; stageId: string }
+  | { kind: 'wait'; seconds: number }
+  | { kind: 'set_card_value'; value: number; currency?: string };
+
+type RuleKind = 'auto' | 'macro';
 
 interface Rule {
   id: string;
   name: string;
   description: string | null;
+  kind: RuleKind;
   trigger: string;
+  triggerConfig: { hoursThreshold?: number } | null;
   conditions: Condition[];
   actions: Action[];
   enabled: boolean;
@@ -110,6 +118,9 @@ const TRIGGER_LABEL: Record<string, string> = {
   'card.created': 'Card criado',
   'conversation.assigned': 'Conversa atribuída',
   'conversation.status_changed': 'Status da conversa mudou',
+  'time.no_response': 'Sem resposta há X horas',
+  'time.after_created': 'Conversa criada há X horas',
+  manual: 'Manual (botão no chat)',
 };
 
 const TRIGGER_HINT: Record<string, string> = {
@@ -119,7 +130,25 @@ const TRIGGER_HINT: Record<string, string> = {
   'card.created': 'Quando um card é criado (manual ou auto)',
   'conversation.assigned': 'Quando agente é atribuído (ou removido)',
   'conversation.status_changed': 'Quando status muda (Aberta/Pendente/Resolvida/Adiada)',
+  'time.no_response':
+    'Cliente mandou msg e ninguém respondeu há ≥ X horas. Dispara 1× por conversa.',
+  'time.after_created':
+    'Conversa criada há ≥ X horas, ainda OPEN/PENDING. Dispara 1× por conversa.',
+  manual: 'Macro só dispara quando agente clica no botão da conversa',
 };
+
+const AUTO_TRIGGERS = [
+  'conversation.created',
+  'message.new',
+  'card.moved',
+  'card.created',
+  'conversation.assigned',
+  'conversation.status_changed',
+  'time.no_response',
+  'time.after_created',
+] as const;
+
+const TIME_TRIGGERS = new Set(['time.no_response', 'time.after_created']);
 
 const FIELDS_BY_TRIGGER: Record<string, Array<{ value: string; label: string }>> = {
   'message.new': [
@@ -163,6 +192,8 @@ const ACTION_KIND_LABEL: Record<ActionKind, string> = {
   send_template: 'Enviar template',
   send_message: 'Enviar mensagem',
   move_card: 'Mover card no kanban',
+  wait: 'Esperar (segundos)',
+  set_card_value: 'Definir valor do card',
 };
 
 const ACTION_KIND_ICON: Record<ActionKind, React.ComponentType<{ className?: string }>> = {
@@ -172,6 +203,8 @@ const ACTION_KIND_ICON: Record<ActionKind, React.ComponentType<{ className?: str
   send_template: ArrowRight,
   send_message: ArrowRight,
   move_card: ArrowRight,
+  wait: Clock,
+  set_card_value: Activity,
 };
 
 export default function AutomationsPage() {
@@ -375,10 +408,22 @@ function RuleRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{rule.name}</h3>
-            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
-              <Zap className="h-2.5 w-2.5" />
-              {TRIGGER_LABEL[rule.trigger] ?? rule.trigger}
-            </span>
+            {rule.kind === 'macro' ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
+                <Wand2 className="h-2.5 w-2.5" />
+                Macro manual
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                <Zap className="h-2.5 w-2.5" />
+                {TRIGGER_LABEL[rule.trigger] ?? rule.trigger}
+                {rule.triggerConfig?.hoursThreshold && (
+                  <span className="ml-1 opacity-70">
+                    ({rule.triggerConfig.hoursThreshold}h)
+                  </span>
+                )}
+              </span>
+            )}
             {!rule.enabled && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
                 Desativada
@@ -462,7 +507,9 @@ function RuleFormDialog({
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [kind, setKind] = useState<RuleKind>('auto');
   const [trigger, setTrigger] = useState<string>('conversation.created');
+  const [hoursThreshold, setHoursThreshold] = useState<number>(24);
   const [conditions, setConditions] = useState<Condition[]>([]);
   const [actions, setActions] = useState<Action[]>([]);
   const [enabled, setEnabled] = useState(true);
@@ -492,19 +539,29 @@ function RuleFormDialog({
     if (editing) {
       setName(editing.name);
       setDescription(editing.description ?? '');
+      setKind(editing.kind ?? 'auto');
       setTrigger(editing.trigger);
+      setHoursThreshold(editing.triggerConfig?.hoursThreshold ?? 24);
       setConditions(editing.conditions ?? []);
       setActions(editing.actions ?? []);
       setEnabled(editing.enabled);
     } else {
       setName('');
       setDescription('');
+      setKind('auto');
       setTrigger('conversation.created');
+      setHoursThreshold(24);
       setConditions([]);
       setActions([]);
       setEnabled(true);
     }
   }, [open, editing?.id]);
+
+  // Auto-ajusta trigger ao trocar kind
+  useEffect(() => {
+    if (kind === 'macro' && trigger !== 'manual') setTrigger('manual');
+    if (kind === 'auto' && trigger === 'manual') setTrigger('conversation.created');
+  }, [kind]);
 
   const triggerFields = FIELDS_BY_TRIGGER[trigger] ?? [];
 
@@ -521,19 +578,27 @@ function RuleFormDialog({
     setConditions((cs) => cs.filter((_, i) => i !== idx));
   }
 
-  function addAction(kind: ActionKind) {
+  function addAction(actionKind: ActionKind) {
     const newAction: Action =
-      kind === 'assign_agent'
-        ? { kind, userId: null }
-        : kind === 'set_status'
-          ? { kind, status: 'RESOLVED' }
-          : kind === 'apply_label'
-            ? { kind, labelId: labelsData?.labels[0]?.id ?? '', target: 'conversation' }
-            : kind === 'send_template'
-              ? { kind, templateId: templatesData?.templates[0]?.id ?? '' }
-              : kind === 'send_message'
-                ? { kind, text: '' }
-                : { kind, stageId: '' };
+      actionKind === 'assign_agent'
+        ? { kind: 'assign_agent', userId: null }
+        : actionKind === 'set_status'
+          ? { kind: 'set_status', status: 'RESOLVED' }
+          : actionKind === 'apply_label'
+            ? {
+                kind: 'apply_label',
+                labelId: labelsData?.labels[0]?.id ?? '',
+                target: 'conversation',
+              }
+            : actionKind === 'send_template'
+              ? { kind: 'send_template', templateId: templatesData?.templates[0]?.id ?? '' }
+              : actionKind === 'send_message'
+                ? { kind: 'send_message', text: '' }
+                : actionKind === 'move_card'
+                  ? { kind: 'move_card', stageId: '' }
+                  : actionKind === 'wait'
+                    ? { kind: 'wait', seconds: 60 }
+                    : { kind: 'set_card_value', value: 0, currency: 'BRL' };
     setActions((as) => [...as, newAction]);
   }
 
@@ -554,7 +619,9 @@ function RuleFormDialog({
       const payload = {
         name: name.trim(),
         description: description.trim() || undefined,
+        kind,
         trigger,
+        triggerConfig: TIME_TRIGGERS.has(trigger) ? { hoursThreshold } : null,
         conditions: conditions.map((c) => ({
           ...c,
           value:
@@ -635,25 +702,101 @@ function RuleFormDialog({
             />
           </div>
 
+          {/* Tipo: automação automática ou macro manual */}
           <div className="space-y-2">
-            <Label htmlFor="rule-trigger">Gatilho</Label>
-            <select
-              id="rule-trigger"
-              value={trigger}
-              onChange={(e) => {
-                setTrigger(e.target.value);
-                setConditions([]); // limpa conditions ao trocar gatilho
-              }}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            >
-              {availableTriggers.map((t) => (
-                <option key={t} value={t}>
-                  {TRIGGER_LABEL[t] ?? t}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-muted-foreground">{TRIGGER_HINT[trigger] ?? ''}</p>
+            <Label>Tipo</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setKind('auto')}
+                className={`rounded-lg border-2 p-3 text-left transition ${
+                  kind === 'auto'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-input hover:border-foreground/30'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Automação (dispara sozinha)
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Roda quando o gatilho acontece — evento ou tempo.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setKind('macro')}
+                className={`rounded-lg border-2 p-3 text-left transition ${
+                  kind === 'macro'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-input hover:border-foreground/30'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Wand2 className="h-4 w-4 text-indigo-500" />
+                  Macro (manual no chat)
+                </div>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Aparece como botão no header da conversa — agente aplica em 1 click.
+                </p>
+              </button>
+            </div>
           </div>
+
+          {kind === 'auto' && (
+            <div className="space-y-2">
+              <Label htmlFor="rule-trigger">Gatilho</Label>
+              <select
+                id="rule-trigger"
+                value={trigger}
+                onChange={(e) => {
+                  setTrigger(e.target.value);
+                  setConditions([]); // limpa conditions ao trocar gatilho
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {AUTO_TRIGGERS.map((t) => (
+                  <option key={t} value={t}>
+                    {TRIGGER_LABEL[t] ?? t}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">{TRIGGER_HINT[trigger] ?? ''}</p>
+              {TIME_TRIGGERS.has(trigger) && (
+                <div className="rounded-md border bg-amber-50/50 p-3 dark:bg-amber-950/20">
+                  <Label htmlFor="hours-threshold" className="text-xs">
+                    Horas até disparar
+                  </Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <Input
+                      id="hours-threshold"
+                      type="number"
+                      min={0.1}
+                      max={672}
+                      step={0.5}
+                      value={hoursThreshold}
+                      onChange={(e) => setHoursThreshold(Number(e.target.value) || 0)}
+                      className="w-32"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      horas (min 0.1, max 672 = 4 semanas)
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Scheduler varre a cada 5min. Dispara 1× por conversa.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {kind === 'macro' && (
+            <div className="rounded-md border bg-indigo-50/50 p-3 dark:bg-indigo-950/20 text-xs text-muted-foreground">
+              <Wand2 className="inline h-3 w-3 mr-1 text-indigo-500" />
+              Macro só dispara quando o agente clica no botão da conversa. Pula condições.
+              Aparece no dropdown <strong>Macros</strong> do header /inbox.
+            </div>
+          )}
 
           {/* Conditions */}
           <section className="space-y-2 rounded-lg border bg-muted/20 p-3">
@@ -914,6 +1057,48 @@ function ActionEditor({
         placeholder="ID do stage de destino"
         className="mt-1 h-8 text-xs"
       />
+    );
+  }
+  if (action.kind === 'wait') {
+    return (
+      <div className="mt-1 flex items-center gap-2">
+        <Input
+          type="number"
+          min={1}
+          max={300}
+          value={action.seconds}
+          onChange={(e) =>
+            onChange({ seconds: Math.max(1, Math.min(300, Number(e.target.value) || 1)) } as Partial<Action>)
+          }
+          className="h-8 w-24 text-xs"
+        />
+        <span className="text-[11px] text-muted-foreground">
+          segundos (max 300 = 5min)
+        </span>
+      </div>
+    );
+  }
+  if (action.kind === 'set_card_value') {
+    return (
+      <div className="mt-1 flex items-center gap-2">
+        <Input
+          type="number"
+          min={0}
+          step={0.01}
+          value={action.value}
+          onChange={(e) =>
+            onChange({ value: Math.max(0, Number(e.target.value) || 0) } as Partial<Action>)
+          }
+          className="h-8 w-32 text-xs"
+        />
+        <Input
+          value={action.currency ?? 'BRL'}
+          onChange={(e) => onChange({ currency: e.target.value } as Partial<Action>)}
+          placeholder="BRL"
+          className="h-8 w-20 text-xs"
+        />
+        <span className="text-[11px] text-muted-foreground">no card linkado</span>
+      </div>
     );
   }
   return null;

@@ -5,7 +5,7 @@ import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
 import { audit } from '../services/audit';
-import { AUTOMATION_TRIGGERS } from '../services/automation';
+import { AUTOMATION_TRIGGERS, executeMacro } from '../services/automation';
 
 export const automationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -28,12 +28,30 @@ const actionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('send_template'), templateId: z.string().min(1) }),
   z.object({ kind: z.literal('send_message'), text: z.string().min(1).max(2000) }),
   z.object({ kind: z.literal('move_card'), stageId: z.string().min(1) }),
+  z.object({ kind: z.literal('wait'), seconds: z.number().int().min(1).max(300) }),
+  z.object({
+    kind: z.literal('set_card_value'),
+    value: z.number().min(0),
+    currency: z.string().min(2).max(8).optional(),
+  }),
 ]);
+
+// Triggers permitidos pra kind=auto. Macros sempre usam trigger='manual'.
+const AUTO_TRIGGERS = AUTOMATION_TRIGGERS as readonly string[];
+
+const triggerConfigSchema = z
+  .object({
+    hoursThreshold: z.number().min(0.1).max(672).optional(), // 6min a 4 semanas
+  })
+  .nullable()
+  .optional();
 
 const createSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
-  trigger: z.enum(AUTOMATION_TRIGGERS),
+  kind: z.enum(['auto', 'macro']).default('auto'),
+  trigger: z.string().min(1).max(80), // valida em runtime conforme kind
+  triggerConfig: triggerConfigSchema,
   conditions: z.array(conditionSchema).default([]),
   actions: z.array(actionSchema).min(1),
   enabled: z.boolean().default(true),
@@ -128,13 +146,22 @@ automationsRouter.post(
     if (!parsed.success) {
       return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     }
+    // Validação cruzada kind ↔ trigger
+    if (parsed.data.kind === 'macro' && parsed.data.trigger !== 'manual') {
+      return c.json({ error: 'invalid_input', message: 'macros require trigger="manual"' }, 400);
+    }
+    if (parsed.data.kind === 'auto' && !AUTO_TRIGGERS.includes(parsed.data.trigger)) {
+      return c.json({ error: 'invalid_input', message: 'invalid trigger for kind=auto' }, 400);
+    }
     const workspaceId = c.get('workspaceId') as string;
     const rule = await prisma.automationRule.create({
       data: {
         workspaceId,
         name: parsed.data.name,
         description: parsed.data.description,
+        kind: parsed.data.kind,
         trigger: parsed.data.trigger,
+        triggerConfig: parsed.data.triggerConfig ?? undefined,
         conditions: parsed.data.conditions,
         actions: parsed.data.actions,
         enabled: parsed.data.enabled,
@@ -146,7 +173,7 @@ automationsRouter.post(
       actorId: c.get('userId'),
       action: 'automation.created',
       resource: `AutomationRule:${rule.id}`,
-      metadata: { name: rule.name, trigger: rule.trigger },
+      metadata: { name: rule.name, kind: rule.kind, trigger: rule.trigger },
     });
     return c.json({ rule }, 201);
   },
@@ -169,7 +196,9 @@ automationsRouter.patch(
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
     if (parsed.data.description !== undefined) data.description = parsed.data.description;
+    if (parsed.data.kind !== undefined) data.kind = parsed.data.kind;
     if (parsed.data.trigger !== undefined) data.trigger = parsed.data.trigger;
+    if (parsed.data.triggerConfig !== undefined) data.triggerConfig = parsed.data.triggerConfig;
     if (parsed.data.conditions !== undefined) data.conditions = parsed.data.conditions;
     if (parsed.data.actions !== undefined) data.actions = parsed.data.actions;
     if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
@@ -257,5 +286,88 @@ automationsRouter.get(
     }
 
     return c.json({ rule, runs, total, page, perPage, summary });
+  },
+);
+
+// ============================================================
+// MACROS — endpoints específicos pra disparar manualmente no chat
+// ============================================================
+
+// GET /api/automations/macros — lista macros enabled do workspace (qualquer role)
+automationsRouter.get(
+  '/macros',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const macros = await prisma.automationRule.findMany({
+      where: { workspaceId, kind: 'macro', enabled: true },
+      orderBy: [{ priority: 'desc' }, { name: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        actions: true,
+        runCount: true,
+      },
+    });
+    return c.json({ macros });
+  },
+);
+
+// POST /api/automations/macros/:id/execute — dispara macro numa conversa
+const macroExecuteBody = z.object({
+  conversationId: z.string().min(1),
+});
+
+automationsRouter.post(
+  '/macros/:id/execute',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = macroExecuteBody.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const userId = c.get('userId');
+    const id = c.req.param('id');
+    const role = c.get('role')!;
+
+    // AGENT só pode executar macro em conversa atribuída ou sem agente
+    if (role === 'AGENT') {
+      const conv = await prisma.conversation.findFirst({
+        where: { id: parsed.data.conversationId, workspaceId },
+        select: { assignedAgentId: true },
+      });
+      if (!conv) return c.json({ error: 'not_found' }, 404);
+      if (conv.assignedAgentId && conv.assignedAgentId !== userId) {
+        return c.json({ error: 'forbidden' }, 403);
+      }
+    }
+
+    const result = await executeMacro({
+      ruleId: id,
+      workspaceId,
+      conversationId: parsed.data.conversationId,
+      actorUserId: userId,
+    });
+    if (result.status === 'NOT_FOUND') {
+      return c.json({ error: 'not_found' }, 404);
+    }
+    await audit({
+      workspaceId,
+      actorId: userId,
+      action: 'macro.executed',
+      resource: `AutomationRule:${id}`,
+      metadata: {
+        conversationId: parsed.data.conversationId,
+        status: result.status,
+      },
+    });
+    return c.json({
+      status: result.status,
+      actionsResult: result.actionsResult,
+      errorMessage: result.errorMessage,
+    });
   },
 );

@@ -35,6 +35,7 @@ import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
 import { startSnoozeScheduler } from './snooze';
 import { startAutoResolveScheduler } from './auto-resolve';
+import { startAutomationScheduler } from './automation-scheduler';
 import { transcribeWorker } from './transcribe';
 import { aiWorker } from './ai-worker';
 
@@ -110,6 +111,8 @@ startSnoozeScheduler().catch((err) => logger.error({ err }, 'Failed to start Sno
 startAutoResolveScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start AutoResolve scheduler'),
 );
+// Automation scheduler — varre triggers tempo-based a cada 5min
+startAutomationScheduler();
 // Scheduled messages scheduler — verifica msgs agendadas a cada 30s
 startScheduledMsgsScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start ScheduledMessages scheduler'),
