@@ -20,21 +20,34 @@ import { randomBytes } from 'node:crypto';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { Prisma } from '@neura/database';
 import { prisma } from '../db';
-import { logger } from '../logger';
 import { publishEvent } from '../redis-pub';
 import { aiQueue } from '../queue';
 
 export const webchatRouter = new Hono();
 
-// Rate limiter: 30 req/min por (slug+ip). Limita ataque trivial.
+// Rate limiter: 30 req/min por bucket. Limita ataque trivial.
+// Bucket key: prefere IP real (x-forwarded-for/x-real-ip/cf-connecting-ip), fallback
+// pra sessionToken quando disponível, fallback final pra slug+'anon' (toda visita
+// anônima sem IP compartilha bucket — aceito porque é cenário degradado raro).
 const webchatLimiter = new RateLimiterMemory({
   points: 30,
   duration: 60,
 });
 
-async function applyRateLimit(slug: string, ip: string): Promise<boolean> {
+function extractClientIp(headerForwarded: string | undefined, headerReal: string | undefined, headerCf: string | undefined): string | null {
+  // x-forwarded-for pode vir como "client, proxy1, proxy2" — pega o primeiro.
+  if (headerForwarded) {
+    const first = headerForwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  if (headerReal && headerReal.trim()) return headerReal.trim();
+  if (headerCf && headerCf.trim()) return headerCf.trim();
+  return null;
+}
+
+async function applyRateLimit(slug: string, bucket: string): Promise<boolean> {
   try {
-    await webchatLimiter.consume(`${slug}:${ip}`);
+    await webchatLimiter.consume(`${slug}:${bucket}`);
     return true;
   } catch {
     return false;
@@ -90,8 +103,15 @@ const sessionSchema = z.object({
 
 webchatRouter.post('/:widgetSlug/session', async (c) => {
   const slug = c.req.param('widgetSlug');
-  const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-  if (!(await applyRateLimit(slug, ip))) return c.json({ error: 'rate_limited' }, 429);
+  // Body parse adiantado pra extrair sessionToken (fallback do bucket).
+  const body = await c.req.json().catch(() => ({}));
+  const ip = extractClientIp(
+    c.req.header('x-forwarded-for'),
+    c.req.header('x-real-ip'),
+    c.req.header('cf-connecting-ip'),
+  );
+  const bucket = ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
+  if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);
   if (!inbox) return c.json({ error: 'widget_not_found' }, 404);
@@ -99,7 +119,6 @@ webchatRouter.post('/:widgetSlug/session', async (c) => {
     return c.json({ error: 'widget_disabled' }, 403);
   }
 
-  const body = await c.req.json().catch(() => ({}));
   const parsed = sessionSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
 
@@ -273,14 +292,19 @@ const sendSchema = z.object({
 
 webchatRouter.post('/:widgetSlug/messages', async (c) => {
   const slug = c.req.param('widgetSlug');
-  const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-  if (!(await applyRateLimit(slug, ip))) return c.json({ error: 'rate_limited' }, 429);
+  const body = await c.req.json().catch(() => null);
+  const ip = extractClientIp(
+    c.req.header('x-forwarded-for'),
+    c.req.header('x-real-ip'),
+    c.req.header('cf-connecting-ip'),
+  );
+  const bucket = ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
+  if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);
   if (!inbox) return c.json({ error: 'widget_not_found' }, 404);
   if (inbox.status !== 'CONNECTED') return c.json({ error: 'widget_disabled' }, 403);
 
-  const body = await c.req.json().catch(() => null);
   const parsed = sendSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
 
@@ -377,14 +401,18 @@ webchatRouter.post('/:widgetSlug/messages', async (c) => {
 
 webchatRouter.get('/:widgetSlug/poll', async (c) => {
   const slug = c.req.param('widgetSlug');
-  const ip = c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown';
-  if (!(await applyRateLimit(slug, ip))) return c.json({ error: 'rate_limited' }, 429);
-
   const url = new URL(c.req.url);
   const sessionToken = url.searchParams.get('sessionToken') || '';
   const sinceParam = url.searchParams.get('since');
-
   if (!sessionToken) return c.json({ error: 'invalid_session' }, 401);
+
+  const ip = extractClientIp(
+    c.req.header('x-forwarded-for'),
+    c.req.header('x-real-ip'),
+    c.req.header('cf-connecting-ip'),
+  );
+  const bucket = ip ?? `tok:${sessionToken}`;
+  if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);
   if (!inbox) return c.json({ error: 'widget_not_found' }, 404);
@@ -447,5 +475,3 @@ webchatRouter.get('/:widgetSlug/poll', async (c) => {
     messages,
   });
 });
-
-void logger;

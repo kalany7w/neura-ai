@@ -573,8 +573,10 @@ contactsRouter.get('/:id/journey', requireAuth, requireWorkspace, async (c) => {
     }
   }
 
-  // ContactNote
-  if (allowedTypes.has('note')) {
+  // ContactNote — AGENT só vê se tem ao menos 1 conv atribuída desse contato.
+  // Notas long-term são privadas e não podem vazar pra agente sem vínculo.
+  const agentCanSeeContactScoped = role !== 'AGENT' || convIds.length > 0;
+  if (allowedTypes.has('note') && agentCanSeeContactScoped) {
     const contactNotes = await prisma.contactNote.findMany({
       where: {
         contactId: contact.id,
@@ -635,11 +637,13 @@ contactsRouter.get('/:id/journey', requireAuth, requireWorkspace, async (c) => {
     }
   }
 
-  // CsatResponse
-  if (allowedTypes.has('csat')) {
+  // CsatResponse — AGENT só vê surveys ligadas a conversas que pode ver.
+  if (allowedTypes.has('csat') && agentCanSeeContactScoped) {
     const csats = await prisma.csatResponse.findMany({
       where: {
         contactId: contact.id,
+        // Pra AGENT, restringe ao subset de conversas que ele pode ver.
+        ...(role === 'AGENT' ? { conversationId: { in: convIds } } : {}),
         ...(since ? { respondedAt: { gte: since } } : {}),
         ...(until ? { respondedAt: { lte: until } } : {}),
       },
