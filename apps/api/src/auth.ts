@@ -11,14 +11,23 @@ export const auth = betterAuth({
     requireEmailVerification: env.NODE_ENV === 'production',
     autoSignIn: true,
     sendResetPassword: async ({ user, url }) => {
-      const tpl = emailTemplates.resetPassword(url);
+      // Mesmo padrão: redireciona pro web app após reset.
+      const appBase = env.APP_URL ?? env.TRUSTED_ORIGINS[0] ?? env.BETTER_AUTH_URL;
+      const target = `${appBase.replace(/\/$/, '')}/reset-password`;
+      const fixedUrl = url.replace(/([?&])callbackURL=[^&]*/, `$1callbackURL=${encodeURIComponent(target)}`);
+      const tpl = emailTemplates.resetPassword(fixedUrl);
       await sendEmail({ to: user.email, subject: tpl.subject, html: tpl.html });
     },
   },
   emailVerification: {
     sendOnSignUp: true,
     sendVerificationEmail: async ({ user, url }) => {
-      const tpl = emailTemplates.verifyEmail(url);
+      // Better Auth gera URL com callbackURL default = baseURL (api), que cai em 404.
+      // Reescreve pra mandar o user pro web app após verify.
+      const appBase = env.APP_URL ?? env.TRUSTED_ORIGINS[0] ?? env.BETTER_AUTH_URL;
+      const target = `${appBase.replace(/\/$/, '')}/login?verified=true`;
+      const fixedUrl = url.replace(/([?&])callbackURL=[^&]*/, `$1callbackURL=${encodeURIComponent(target)}`);
+      const tpl = emailTemplates.verifyEmail(fixedUrl);
       await sendEmail({ to: user.email, subject: tpl.subject, html: tpl.html });
     },
   },
