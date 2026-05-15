@@ -36,6 +36,24 @@
   var LS_KEY = 'neura-webchat-session-' + widgetSlug;
 
   // ============================================
+  // sessionToken — gerado client-side ANTES do 1º request pra eliminar race
+  // condition de dois POST /session simultâneos criarem 2 Contacts.
+  // ============================================
+  function makeSessionToken() {
+    // crypto.randomUUID quando disponível (todos browsers modernos pós-2022);
+    // fallback Math.random pra browsers antigos. Não precisa ser secure-strong:
+    // o token é privacy/idempotency-only, sem garantias de auth.
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID().replace(/-/g, '');
+    }
+    var s = '';
+    for (var i = 0; i < 32; i++) {
+      s += Math.floor(Math.random() * 16).toString(16);
+    }
+    return s;
+  }
+
+  // ============================================
   // State
   // ============================================
   var state = {
@@ -64,6 +82,11 @@
     }
   } catch (e) {
     /* ignore */
+  }
+
+  // Se ainda não temos token, gera agora — antes do 1º request bater na API.
+  if (!state.sessionToken) {
+    state.sessionToken = makeSessionToken();
   }
 
   function persist() {
@@ -103,8 +126,10 @@
 
   function bootstrapSession(opts) {
     opts = opts || {};
-    var body = {};
-    if (state.sessionToken) body.sessionToken = state.sessionToken;
+    // sessionToken já está garantido (gerado client-side no boot se não havia).
+    // Persistir antes do request previne perda se network falhar — retry usa mesmo token.
+    persist();
+    var body = { sessionToken: state.sessionToken };
     if (opts.name) body.name = opts.name;
     if (opts.email) body.email = opts.email;
     return api('/api/webchat/' + widgetSlug + '/session', {

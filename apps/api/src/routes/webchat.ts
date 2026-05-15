@@ -16,9 +16,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { randomBytes } from 'node:crypto';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
-import { Prisma } from '@neura/database';
 import { prisma } from '../db';
 import { publishEvent } from '../redis-pub';
 import { aiQueue } from '../queue';
@@ -89,14 +87,17 @@ async function resolveInbox(slug: string): Promise<{
 }
 
 // ============================================================
-// POST /:widgetSlug/session — bootstrap session + contact
+// POST /:widgetSlug/session — bootstrap session + contact (idempotente)
 // ============================================================
-// Body opcional: { name?, email?, sessionToken? }
-// - Sem sessionToken: gera novo + cria Contact + cria Conversation OPEN
-// - Com sessionToken existente: retorna contact + active conversation se houver
+// Body obrigatório: { sessionToken, name?, email? }
+// O widget gera o token client-side ANTES do 1º request (elimina race
+// condition de POSTs simultâneos criando 2 Contacts).
+//
+// Servidor faz upsert por unique (workspaceId, webchatSessionId) — chamadas
+// repetidas com mesmo token são no-op (só atualizam name/email se informados).
 
 const sessionSchema = z.object({
-  sessionToken: z.string().min(8).max(128).optional(),
+  sessionToken: z.string().min(16).max(128).regex(/^[a-f0-9-]+$/i, 'token inválido'),
   name: z.string().min(1).max(80).optional(),
   email: z.string().email().max(120).optional(),
 });
@@ -122,43 +123,34 @@ webchatRouter.post('/:widgetSlug/session', async (c) => {
   const parsed = sessionSchema.safeParse(body);
   if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
 
-  let sessionToken = parsed.data.sessionToken;
-  let contact: { id: string; name: string | null } | null = null;
+  const sessionToken = parsed.data.sessionToken;
+  const namePatch = parsed.data.name?.trim() || null;
+  const emailPatch = parsed.data.email?.toLowerCase() || null;
 
-  if (sessionToken) {
-    const existing = await prisma.contact.findFirst({
-      where: { workspaceId: inbox.workspaceId, webchatSessionId: sessionToken },
-      select: { id: true, name: true },
-    });
-    if (existing) contact = existing;
-  }
-
-  // Cria contact + session se não houver válido
-  if (!contact) {
-    sessionToken = randomBytes(16).toString('hex');
-    contact = await prisma.contact.create({
-      data: {
+  // Upsert idempotente — duas chamadas simultâneas com mesmo token convergem
+  // pra mesmo Contact (unique constraint workspaceId + webchatSessionId).
+  // Update conservador: só preenche name se ainda vazio (não sobrescreve user input prévio).
+  const contact = await prisma.contact.upsert({
+    where: {
+      workspaceId_webchatSessionId: {
         workspaceId: inbox.workspaceId,
         webchatSessionId: sessionToken,
-        name: parsed.data.name?.trim() || null,
-        email: parsed.data.email?.toLowerCase() || null,
       },
-      select: { id: true, name: true },
-    });
-  } else if (parsed.data.name || parsed.data.email) {
-    // Atualiza name/email se cliente informou agora
-    const data: Prisma.ContactUpdateInput = {};
-    if (parsed.data.name && !contact.name) data.name = parsed.data.name.trim();
-    if (parsed.data.email) data.email = parsed.data.email.toLowerCase();
-    if (Object.keys(data).length > 0) {
-      const updated = await prisma.contact.update({
-        where: { id: contact.id },
-        data,
-        select: { id: true, name: true },
-      });
-      contact = updated;
-    }
-  }
+    },
+    create: {
+      workspaceId: inbox.workspaceId,
+      webchatSessionId: sessionToken,
+      name: namePatch,
+      email: emailPatch,
+    },
+    update: {
+      // Só atualiza email/name se vieram no payload (não nullify silencioso).
+      ...(emailPatch ? { email: emailPatch } : {}),
+      // name só preenche se ainda for null — preserva edição prévia.
+      ...(namePatch ? { name: namePatch } : {}),
+    },
+    select: { id: true, name: true },
+  });
 
   // Acha conversation ativa ou cria nova
   let conversation = await prisma.conversation.findFirst({
