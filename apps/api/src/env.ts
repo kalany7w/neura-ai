@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { baseEnvSchema, loadEnv } from '@neura/shared/env';
 
+// Coolify exposes declared compose envs as "" when unset — treat empty as absent
+// pra que `.optional()` funcione corretamente em vars opcionais.
+const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
+
 const apiEnvSchema = baseEnvSchema.extend({
   API_PORT: z.coerce.number().int().default(7301),
   BETTER_AUTH_SECRET: z.string().min(32),
@@ -22,7 +26,7 @@ const apiEnvSchema = baseEnvSchema.extend({
     .default('false')
     .transform((v) => v === 'true'),
   // Whisper transcription (opcional — se vazio, transcrição é desligada)
-  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   WHISPER_MODEL: z.string().default('whisper-1'),
   WHISPER_API_BASE: z.string().url().default('https://api.openai.com/v1'),
   // Sugestões de resposta com IA (mesma chave do Whisper). Default: gpt-4o-mini
@@ -30,9 +34,9 @@ const apiEnvSchema = baseEnvSchema.extend({
   OPENAI_CHAT_MODEL: z.string().default('gpt-4o-mini'),
   // URL pública da API pra Telegram registrar webhook (ex: https://api.neura-ai.net)
   // Obrigatório quando se conecta inbox Telegram.
-  PUBLIC_API_URL: z.string().url().optional(),
+  PUBLIC_API_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
   // URL do app (web), usada como fallback se PUBLIC_API_URL não setada.
-  APP_URL: z.string().url().optional(),
+  APP_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
 });
 
 export const env = loadEnv(apiEnvSchema);
