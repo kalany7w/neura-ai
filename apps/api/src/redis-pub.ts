@@ -1,8 +1,8 @@
-import { redis } from './redis';
-import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/webhooks';
-import { dispatchAutomationRules } from './services/automation';
-import { dispatchNotifications } from './services/notification-hooks';
-import { detectCsatResponse } from './services/csat-detect';
+import { redis } from './redis.js';
+import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/webhooks.js';
+import { dispatchAutomationRules } from './services/automation.js';
+import { dispatchNotifications } from './services/notification-hooks.js';
+import { detectCsatResponse } from './services/csat-detect.js';
 
 const KNOWN_EVENTS = new Set<string>(WEBHOOK_EVENTS);
 

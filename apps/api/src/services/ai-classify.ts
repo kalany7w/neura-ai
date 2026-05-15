@@ -10,8 +10,8 @@
  */
 
 import { z } from 'zod';
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 export const CLASSIFICATION_INTENTS = ['sale', 'support', 'complaint', 'info', 'other'] as const;
 export const CLASSIFICATION_URGENCY = ['low', 'medium', 'high', 'critical'] as const;

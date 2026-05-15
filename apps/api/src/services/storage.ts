@@ -6,8 +6,8 @@ import {
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 const protocol = env.MINIO_USE_SSL ? 'https' : 'http';
 const endpoint = `${protocol}://${env.MINIO_ENDPOINT}:${env.MINIO_PORT}`;

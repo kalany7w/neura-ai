@@ -1,20 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { prisma } from '../db';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
-import { requirePermission } from '../middlewares/permissions';
-import { audit } from '../services/audit';
-import { encrypt } from '../services/crypto';
+import { prisma } from '../db.js';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
+import { requirePermission } from '../middlewares/permissions.js';
+import { audit } from '../services/audit.js';
+import { encrypt } from '../services/crypto.js';
 import {
   getMe,
   setWebhook,
   deleteWebhook,
-} from '../services/telegram-client';
-import { decrypt } from '../services/crypto';
-import { env } from '../env';
-import { logger } from '../logger';
+} from '../services/telegram-client.js';
+import { decrypt } from '../services/crypto.js';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 export const inboxesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -155,7 +155,7 @@ inboxesRouter.post(
     const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
-    const { redis } = await import('../redis');
+    const { redis } = await import('../redis.js');
     await redis.publish(
       'worker:commands',
       JSON.stringify({ cmd: 'session.stop', inboxId: id }),
@@ -186,7 +186,7 @@ inboxesRouter.post(
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
     // Publica comando pro worker iniciar sessão
-    const { redis } = await import('../redis');
+    const { redis } = await import('../redis.js');
     await redis.publish(
       'worker:commands',
       JSON.stringify({ cmd: 'session.start', inboxId: id }),
@@ -207,7 +207,7 @@ inboxesRouter.post(
     const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
-    const { redis } = await import('../redis');
+    const { redis } = await import('../redis.js');
     await redis.publish(
       'worker:commands',
       JSON.stringify({ cmd: 'session.stop', inboxId: id }),
@@ -230,7 +230,7 @@ inboxesRouter.delete(
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
     // Para sessão antes de deletar
-    const { redis } = await import('../redis');
+    const { redis } = await import('../redis.js');
     await redis.publish(
       'worker:commands',
       JSON.stringify({ cmd: 'session.stop', inboxId: id }),

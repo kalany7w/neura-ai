@@ -14,10 +14,10 @@ import {
   type KbEmbedJob,
   type CsatSendJob,
 } from '@neura/shared/queue';
-import { prisma } from './db';
-import { env } from './env';
-import { logger } from './logger';
-import { publishEvent } from './redis-pub';
+import { prisma } from './db.js';
+import { env } from './env.js';
+import { logger } from './logger.js';
+import { publishEvent } from './redis-pub.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

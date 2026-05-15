@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Prisma } from '@neura/database';
-import { prisma } from '../db';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
-import { requirePermission } from '../middlewares/permissions';
-import { audit } from '../services/audit';
-import { publishEvent } from '../redis-pub';
-import { forecastCard } from '../services/ai-forecast';
-import { aiQueue } from '../queue';
-import { env } from '../env';
+import { prisma } from '../db.js';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
+import { requirePermission } from '../middlewares/permissions.js';
+import { audit } from '../services/audit.js';
+import { publishEvent } from '../redis-pub.js';
+import { forecastCard } from '../services/ai-forecast.js';
+import { aiQueue } from '../queue.js';
+import { env } from '../env.js';
 
 export const kanbanRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;

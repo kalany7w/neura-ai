@@ -9,10 +9,10 @@
  * quando agente responde (patchFirstResponse limpa).
  */
 
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { publishEvent } from '../redis-pub';
-import { resolveSlaPolicy } from './sla-policies';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { publishEvent } from '../redis-pub.js';
+import { resolveSlaPolicy } from './sla-policies.js';
 
 const MAX_BATCH = 100;
 

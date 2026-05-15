@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { prisma } from '../db';
-import { redis } from '../redis';
+import { prisma } from '../db.js';
+import { redis } from '../redis.js';
 
 export const healthRouter = new Hono();
 

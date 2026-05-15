@@ -1,7 +1,7 @@
 import { Redis } from 'ioredis';
-import { env } from './env';
-import { logger } from './logger';
-import { sessionManager } from './baileys/manager';
+import { env } from './env.js';
+import { logger } from './logger.js';
+import { sessionManager } from './baileys/manager.js';
 
 const subscriber = new Redis(env.REDIS_URL);
 

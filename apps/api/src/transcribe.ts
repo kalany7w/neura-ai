@@ -1,11 +1,11 @@
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { QUEUE_TRANSCRIBE, type TranscribeJob } from '@neura/shared/queue';
-import { prisma } from './db';
-import { logger } from './logger';
-import { env } from './env';
-import { publishEvent } from './redis-pub';
-import { getMediaBuffer, keyFromUrl } from './services/storage';
+import { prisma } from './db.js';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { publishEvent } from './redis-pub.js';
+import { getMediaBuffer, keyFromUrl } from './services/storage.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

@@ -2,39 +2,40 @@
   "name": "@neura/shared",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     },
     "./auth": {
-      "types": "./src/auth.ts",
-      "default": "./src/auth.ts"
+      "types": "./dist/auth.d.ts",
+      "default": "./dist/auth.js"
     },
     "./permissions": {
-      "types": "./src/permissions.ts",
-      "default": "./src/permissions.ts"
+      "types": "./dist/permissions.d.ts",
+      "default": "./dist/permissions.js"
     },
     "./env": {
-      "types": "./src/env.ts",
-      "default": "./src/env.ts"
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
     },
     "./crypto": {
-      "types": "./src/crypto.ts",
-      "default": "./src/crypto.ts"
+      "types": "./dist/crypto.d.ts",
+      "default": "./dist/crypto.js"
     },
     "./queue": {
-      "types": "./src/queue.ts",
-      "default": "./src/queue.ts"
+      "types": "./dist/queue.d.ts",
+      "default": "./dist/queue.js"
     },
     "./template-render": {
-      "types": "./src/template-render.ts",
-      "default": "./src/template-render.ts"
+      "types": "./dist/template-render.d.ts",
+      "default": "./dist/template-render.js"
     }
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

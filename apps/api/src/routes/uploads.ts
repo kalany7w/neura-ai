@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
-import { presignUpload } from '../services/storage';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
+import { presignUpload } from '../services/storage.js';
 
 export const uploadsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;

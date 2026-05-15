@@ -3,8 +3,9 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "module": "ESNext",
-    "moduleResolution": "bundler"
+    "noEmit": false,
+    "module": "Node16",
+    "moduleResolution": "Node16"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

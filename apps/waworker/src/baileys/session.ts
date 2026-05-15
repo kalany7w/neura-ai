@@ -3,16 +3,16 @@ import makeWASocket, {
   type WASocket,
 } from '@whiskeysockets/baileys';
 import { pino } from 'pino';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { publishEvent } from '../redis';
-import { makeEncryptedAuthState } from './auth-state';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { publishEvent } from '../redis.js';
+import { makeEncryptedAuthState } from './auth-state.js';
 import {
   handleConnectionUpdate,
   handleMessagesUpsert,
   handleMessagesUpdate,
   handlePresenceUpdate,
-} from './events';
+} from './events.js';
 
 const baileysLogger = pino({ level: 'silent' });
 

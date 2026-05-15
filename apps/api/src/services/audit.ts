@@ -1,6 +1,6 @@
 import { Prisma } from '@neura/database';
-import { prisma } from '../db';
-import { logger } from '../logger';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
 
 interface AuditParams {
   workspaceId: string;

@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { prisma } from '../db';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
-import { requirePermission } from '../middlewares/permissions';
-import { audit } from '../services/audit';
-import { AUTOMATION_TRIGGERS, executeMacro } from '../services/automation';
+import { prisma } from '../db.js';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
+import { requirePermission } from '../middlewares/permissions.js';
+import { audit } from '../services/audit.js';
+import { AUTOMATION_TRIGGERS, executeMacro } from '../services/automation.js';
 
 export const automationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;

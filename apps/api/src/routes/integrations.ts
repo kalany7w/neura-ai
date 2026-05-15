@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { prisma } from '../db';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
-import { requirePermission } from '../middlewares/permissions';
-import { audit } from '../services/audit';
-import { WEBHOOK_EVENTS } from '../services/webhooks';
+import { prisma } from '../db.js';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
+import { requirePermission } from '../middlewares/permissions.js';
+import { audit } from '../services/audit.js';
+import { WEBHOOK_EVENTS } from '../services/webhooks.js';
 
 export const integrationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;

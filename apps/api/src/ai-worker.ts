@@ -9,14 +9,14 @@ import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { Prisma } from '@neura/database';
 import { QUEUE_AI, type AiJob } from '@neura/shared/queue';
-import { prisma } from './db';
-import { logger } from './logger';
-import { env } from './env';
-import { publishEvent } from './redis-pub';
-import { classifyConversation } from './services/ai-classify';
-import { forecastCard } from './services/ai-forecast';
-import { computeKbSuggestion } from './services/ai-kb-suggest';
-import { aiQueue } from './queue';
+import { prisma } from './db.js';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { publishEvent } from './redis-pub.js';
+import { classifyConversation } from './services/ai-classify.js';
+import { forecastCard } from './services/ai-forecast.js';
+import { computeKbSuggestion } from './services/ai-kb-suggest.js';
+import { aiQueue } from './queue.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

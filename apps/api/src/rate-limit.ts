@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import { RateLimiterRedis } from 'rate-limiter-flexible';
-import { redis } from './redis';
-import { env } from './env';
+import { redis } from './redis.js';
+import { env } from './env.js';
 
 export const loginLimiter = new RateLimiterRedis({
   storeClient: redis,

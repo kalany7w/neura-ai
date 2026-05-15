@@ -8,8 +8,8 @@
  */
 
 import { z } from 'zod';
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 export const forecastSchema = z.object({
   probability: z.number().min(0).max(1),

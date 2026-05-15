@@ -1,12 +1,12 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { prisma } from '../db';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
-import { requirePermission } from '../middlewares/permissions';
-import { outboundQueue, dispatchOutbound } from '../queue';
-import { publishEvent } from '../redis-pub';
-import { patchFirstResponse } from '../services/sla-compute';
+import { prisma } from '../db.js';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
+import { requirePermission } from '../middlewares/permissions.js';
+import { outboundQueue, dispatchOutbound } from '../queue.js';
+import { publishEvent } from '../redis-pub.js';
+import { patchFirstResponse } from '../services/sla-compute.js';
 
 export const messagesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;

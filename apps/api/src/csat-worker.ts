@@ -9,9 +9,9 @@
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { QUEUE_CSAT_SEND, type CsatSendJob } from '@neura/shared/queue';
-import { logger } from './logger';
-import { env } from './env';
-import { sendCsatSurvey } from './services/csat-send';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { sendCsatSurvey } from './services/csat-send.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

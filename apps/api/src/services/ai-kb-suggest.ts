@@ -9,9 +9,9 @@
  */
 
 import { Prisma } from '@neura/database';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { generateEmbedding, formatVectorLiteral } from './kb-embed';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { generateEmbedding, formatVectorLiteral } from './kb-embed.js';
 
 export const KB_SUGGEST_MIN_SCORE = 0.65;
 const CONTEXT_HISTORY_LIMIT = 6;

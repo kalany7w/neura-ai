@@ -10,10 +10,10 @@
  * silenciosamente. Janela de aceitação é 7 dias (config no csat-send).
  */
 
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { dispatchOutbound } from '../queue';
-import { publishEvent } from '../redis-pub';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { dispatchOutbound } from '../queue.js';
+import { publishEvent } from '../redis-pub.js';
 import { renderTemplate } from '@neura/shared/template-render';
 
 interface ParsedScore {

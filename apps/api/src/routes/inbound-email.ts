@@ -28,15 +28,15 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { publishEvent } from '../redis-pub';
-import { aiQueue } from '../queue';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { publishEvent } from '../redis-pub.js';
+import { aiQueue } from '../queue.js';
 import {
   parseEmailAddress,
   ensureAngleBrackets,
   htmlToPlainText,
-} from '../services/email-client';
+} from '../services/email-client.js';
 
 export const inboundEmailRouter = new Hono();
 

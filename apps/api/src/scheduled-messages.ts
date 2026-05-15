@@ -1,11 +1,11 @@
 import { Queue, Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
-import { prisma } from './db';
-import { env } from './env';
-import { logger } from './logger';
-import { outboundQueue, dispatchOutbound } from './queue';
-import { publishEvent } from './redis-pub';
-import { patchFirstResponse } from './services/sla-compute';
+import { prisma } from './db.js';
+import { env } from './env.js';
+import { logger } from './logger.js';
+import { outboundQueue, dispatchOutbound } from './queue.js';
+import { publishEvent } from './redis-pub.js';
+import { patchFirstResponse } from './services/sla-compute.js';
 
 const QUEUE_SCHEDULED_MSGS = 'scheduled-messages';
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });

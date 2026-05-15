@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import type { Role } from '@neura/database';
-import { prisma } from '../db';
-import type { AuthVars } from './auth';
+import { prisma } from '../db.js';
+import type { AuthVars } from './auth.js';
 
 export interface WorkspaceVars extends AuthVars {
   workspaceId: string;

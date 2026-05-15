@@ -8,8 +8,8 @@
  * lidar com degradação silenciosa (não enfileirar, não estourar 500).
  */
 
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 export const KB_EMBED_DIM = 1536;
 export const KB_EMBED_MODEL = 'text-embedding-3-small';

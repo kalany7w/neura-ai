@@ -13,7 +13,7 @@
  * prisma.conversation.update.
  */
 
-import { prisma } from '../db';
+import { prisma } from '../db.js';
 
 export async function patchFirstResponse(
   conversationId: string,

@@ -6,9 +6,9 @@ import {
   type AuthenticationState,
   type SignalDataTypeMap,
 } from '@whiskeysockets/baileys';
-import { prisma } from '../db';
-import { encrypt, decrypt } from '../crypto';
-import { logger } from '../logger';
+import { prisma } from '../db.js';
+import { encrypt, decrypt } from '../crypto.js';
+import { logger } from '../logger.js';
 
 interface AuthBlob {
   creds: AuthenticationCreds;

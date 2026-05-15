@@ -11,9 +11,9 @@
  * naturalmente conforme volume cresce.
  */
 
-import { tickTimeBasedTriggers } from './services/automation';
-import { tickSlaBreachDetection } from './services/sla-breach';
-import { logger } from './logger';
+import { tickTimeBasedTriggers } from './services/automation.js';
+import { tickSlaBreachDetection } from './services/sla-breach.js';
+import { logger } from './logger.js';
 
 const TICK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
 
