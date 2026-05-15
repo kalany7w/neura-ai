@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -327,31 +327,31 @@ function CsatDialog({
   const [enabled, setEnabled] = useState(true);
   const [isDefault, setIsDefault] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
-  // Carrega ou reseta quando dialog abre / muda
-  if (open && survey && loadedFor !== survey.id) {
-    setName(survey.name);
-    setScoreType(survey.scoreType);
-    setChannelScope(survey.channelScope);
-    setDelayMinutes(survey.delayMinutes);
-    setMessageBody(survey.messageBody);
-    setThankYouMessage(survey.thankYouMessage ?? '');
-    setEnabled(survey.enabled);
-    setIsDefault(survey.isDefault);
-    setLoadedFor(survey.id);
-  }
-  if (open && !survey && loadedFor !== null) {
-    setName('');
-    setScoreType('CSAT');
-    setChannelScope('ALL');
-    setDelayMinutes(5);
-    setMessageBody(DEFAULT_BODY_CSAT);
-    setThankYouMessage('Obrigado pela resposta! 🙏');
-    setEnabled(true);
-    setIsDefault(false);
-    setLoadedFor(null);
-  }
+  // Sincroniza form com survey carregado (edit) ou reseta defaults (new).
+  // useEffect evita setState-during-render antipattern.
+  useEffect(() => {
+    if (!open) return;
+    if (survey) {
+      setName(survey.name);
+      setScoreType(survey.scoreType);
+      setChannelScope(survey.channelScope);
+      setDelayMinutes(survey.delayMinutes);
+      setMessageBody(survey.messageBody);
+      setThankYouMessage(survey.thankYouMessage ?? '');
+      setEnabled(survey.enabled);
+      setIsDefault(survey.isDefault);
+    } else {
+      setName('');
+      setScoreType('CSAT');
+      setChannelScope('ALL');
+      setDelayMinutes(5);
+      setMessageBody(DEFAULT_BODY_CSAT);
+      setThankYouMessage('Obrigado pela resposta! 🙏');
+      setEnabled(true);
+      setIsDefault(false);
+    }
+  }, [open, survey]);
 
   function applyDefaultBody(t: ScoreType) {
     setScoreType(t);
@@ -422,10 +422,7 @@ function CsatDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) {
-          onClose();
-          setLoadedFor(null);
-        }
+        if (!o) onClose();
       }}
     >
       <DialogContent className="max-w-2xl">

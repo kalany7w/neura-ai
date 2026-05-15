@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -568,24 +568,25 @@ function ArticleEditorDialog({
   const [categoryId, setCategoryId] = useState<string>('');
   const [status, setStatus] = useState<ArticleStatus>('DRAFT');
   const [submitting, setSubmitting] = useState(false);
-  const [loadedForId, setLoadedForId] = useState<string | null>(null);
 
-  // Carrega ou reseta quando o dialog abre / id muda
-  if (open && articleId && detailQ.data && loadedForId !== articleId) {
-    const a = detailQ.data.article;
-    setTitle(a.title);
-    setBody(a.body);
-    setCategoryId(a.categoryId ?? '');
-    setStatus(a.status);
-    setLoadedForId(articleId);
-  }
-  if (open && !articleId && loadedForId !== null) {
-    setTitle('');
-    setBody('');
-    setCategoryId('');
-    setStatus('DRAFT');
-    setLoadedForId(null);
-  }
+  // Sincroniza form com artigo carregado (edit) ou reseta (new article).
+  // Roda quando dialog abre, id muda, ou query resolve. useEffect evita
+  // setState-during-render antipattern.
+  const article = detailQ.data?.article;
+  useEffect(() => {
+    if (!open) return;
+    if (articleId && article && article.id === articleId) {
+      setTitle(article.title);
+      setBody(article.body);
+      setCategoryId(article.categoryId ?? '');
+      setStatus(article.status);
+    } else if (!articleId) {
+      setTitle('');
+      setBody('');
+      setCategoryId('');
+      setStatus('DRAFT');
+    }
+  }, [open, articleId, article]);
 
   async function save() {
     if (!title.trim()) {
@@ -634,10 +635,7 @@ function ArticleEditorDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) {
-          onClose();
-          setLoadedForId(null);
-        }
+        if (!o) onClose();
       }}
     >
       <DialogContent className="max-w-3xl">
