@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InviteForm } from '@/components/forms/invite-form';
+import { useOnlineAgents } from '@/hooks/use-online-agents';
 
 type Role = 'ADMIN' | 'SUPERVISOR' | 'AGENT';
 
@@ -83,6 +84,7 @@ export default function MembersPage() {
   const confirm = useConfirm();
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
+  const online = useOnlineAgents();
 
   const { data, isLoading } = useQuery<WorkspaceMe>({
     queryKey: ['workspace', 'me'],
@@ -282,10 +284,19 @@ export default function MembersPage() {
               {data?.workspace.members.map((m) => {
                 const isSelf = m.userId === currentUserId;
                 const isLastAdmin = m.role === 'ADMIN' && adminCount <= 1;
+                const isOnline = online.has(m.userId);
                 return (
                   <li key={m.id} className="flex items-center gap-3 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-xs font-semibold uppercase text-white">
-                      {initialsFrom(m.user.name ?? m.user.email)}
+                    <div className="relative shrink-0">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-xs font-semibold uppercase text-white">
+                        {initialsFrom(m.user.name ?? m.user.email)}
+                      </div>
+                      <span
+                        title={isOnline ? 'Online agora' : 'Offline'}
+                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${
+                          isOnline ? 'bg-emerald-500' : 'bg-slate-400'
+                        }`}
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">
@@ -293,6 +304,11 @@ export default function MembersPage() {
                         {isSelf && (
                           <span className="ml-2 text-[10px] uppercase tracking-wider text-muted-foreground">
                             você
+                          </span>
+                        )}
+                        {isOnline && !isSelf && (
+                          <span className="ml-2 text-[10px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            online
                           </span>
                         )}
                       </p>

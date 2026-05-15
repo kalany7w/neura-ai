@@ -6,8 +6,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Archive,
   ArchiveRestore,
+  CheckSquare,
   Filter,
   Search,
+  Square,
   UserCheck,
   UserMinus,
   X,
@@ -16,6 +18,8 @@ import { api } from '@/lib/api';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { InboxBulkActionsBar } from '@/components/inbox/bulk-actions-bar';
+import { useSession } from '@/lib/auth-client';
 
 type ConversationStatus = 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED';
 
@@ -35,6 +39,8 @@ interface ConversationListItem {
   unreadCount: number;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
+  lastInboundAt: string | null;
+  lastOutboundAt: string | null;
   assignedAgentId: string | null;
   archivedAt: string | null;
   contact: { id: string; name: string | null; phoneNumber: string; avatarUrl: string | null };
@@ -42,6 +48,38 @@ interface ConversationListItem {
   labels: LabelOnConv[];
   lastAgentRepliedBy: AgentRef | null;
 }
+
+type SlaStatus = 'ok' | 'soft' | 'hard' | 'critical' | null;
+
+const SLA_LIMITS = { soft: 15, hard: 30, critical: 60 }; // minutos
+
+function computeSla(item: ConversationListItem): SlaStatus {
+  if (item.status === 'RESOLVED' || item.status === 'SNOOZED') return null;
+  if (item.archivedAt) return null;
+  if (!item.lastInboundAt) return null;
+  const inboundMs = new Date(item.lastInboundAt).getTime();
+  const outboundMs = item.lastOutboundAt ? new Date(item.lastOutboundAt).getTime() : 0;
+  if (outboundMs >= inboundMs) return null;
+  const ageMin = (Date.now() - inboundMs) / 60_000;
+  if (ageMin < SLA_LIMITS.soft) return 'ok';
+  if (ageMin < SLA_LIMITS.hard) return 'soft';
+  if (ageMin < SLA_LIMITS.critical) return 'hard';
+  return 'critical';
+}
+
+const SLA_DOT: Record<NonNullable<SlaStatus>, string> = {
+  ok: 'bg-emerald-500',
+  soft: 'bg-amber-500',
+  hard: 'bg-orange-500',
+  critical: 'bg-red-500 animate-pulse',
+};
+
+const SLA_LABEL: Record<NonNullable<SlaStatus>, string> = {
+  ok: 'Resposta dentro do prazo',
+  soft: 'Atrasada > 15min',
+  hard: 'Atrasada > 30min',
+  critical: 'Crítica > 1h',
+};
 
 type Tab = 'ALL' | 'AWAITING' | 'OPEN' | 'UNASSIGNED' | 'PENDING' | 'RESOLVED' | 'ARCHIVED';
 
@@ -130,6 +168,46 @@ export default function InboxPage() {
     queryFn: () => api('/api/conversations/counts'),
     refetchInterval: 60_000,
   });
+
+  const { data: wsData } = useQuery<{
+    workspace: {
+      members: Array<{
+        userId: string;
+        role: 'ADMIN' | 'SUPERVISOR' | 'AGENT';
+        user: { id: string; name: string | null; email: string };
+      }>;
+    };
+  }>({
+    queryKey: ['workspace-me'],
+    queryFn: () => api('/api/workspaces/me'),
+  });
+  const { data: session } = useSession();
+  const currentUserId = session?.user.id;
+  const currentRole =
+    wsData?.workspace.members.find((m) => m.userId === currentUserId)?.role ?? 'AGENT';
+  const agentsForAssign = useMemo(
+    () =>
+      (wsData?.workspace.members ?? []).map((m) => ({
+        userId: m.userId,
+        name: m.user.name,
+        email: m.user.email,
+      })),
+    [wsData?.workspace.members],
+  );
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
 
   const advActiveCount =
     (advStatuses.size > 0 ? 1 : 0) +
@@ -420,6 +498,41 @@ export default function InboxPage() {
         </div>
       )}
 
+      {(data?.items.length ?? 0) > 0 && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => {
+              const ids = (data?.items ?? []).map((c) => c.id);
+              const allSelected = ids.every((id) => selectedIds.has(id));
+              if (allSelected) {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  ids.forEach((id) => next.delete(id));
+                  return next;
+                });
+              } else {
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  ids.forEach((id) => next.add(id));
+                  return next;
+                });
+              }
+            }}
+            className="rounded-md border px-2 py-0.5 hover:bg-accent"
+          >
+            {(data?.items ?? []).every((c) => selectedIds.has(c.id))
+              ? 'Desselecionar página'
+              : `Selecionar página (${data?.items.length})`}
+          </button>
+          {selectedIds.size > 0 && (
+            <span>
+              {selectedIds.size} selecionada{selectedIds.size > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="rounded-lg border bg-card divide-y">
         {isLoading ? (
           <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
@@ -434,16 +547,46 @@ export default function InboxPage() {
         ) : (
           data.items.map((c) => {
             const isArchived = !!c.archivedAt;
+            const sla = computeSla(c);
+            const isSelected = selectedIds.has(c.id);
+            const hasSelection = selectedIds.size > 0;
             return (
-              <Link
+              <div
                 key={c.id}
-                href={`/inbox/${c.id}`}
-                className={`flex items-start gap-3 p-4 transition-colors hover:bg-accent/50 ${
+                className={`group flex items-start gap-3 p-4 transition-colors hover:bg-accent/50 ${
                   isArchived ? 'opacity-70' : ''
-                }`}
+                } ${isSelected ? 'bg-accent/40' : ''}`}
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-xs font-semibold uppercase text-slate-700 ring-2 ring-card">
-                  {initialsFrom(c.contact.name ?? c.contact.phoneNumber)}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    toggleSelect(c.id);
+                  }}
+                  aria-label={isSelected ? 'Desselecionar' : 'Selecionar'}
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                    isSelected
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input bg-background opacity-0 group-hover:opacity-100'
+                  } ${hasSelection ? 'opacity-100' : ''}`}
+                >
+                  {isSelected ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3 opacity-0" />}
+                </button>
+                <Link
+                  href={`/inbox/${c.id}`}
+                  className="flex min-w-0 flex-1 items-start gap-3"
+                >
+                <div className="relative shrink-0">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-xs font-semibold uppercase text-slate-700 ring-2 ring-card">
+                    {initialsFrom(c.contact.name ?? c.contact.phoneNumber)}
+                  </div>
+                  {sla && (
+                    <span
+                      title={SLA_LABEL[sla]}
+                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${SLA_DOT[sla]}`}
+                    />
+                  )}
                 </div>
 
                 <div className="min-w-0 flex-1">
@@ -523,7 +666,8 @@ export default function InboxPage() {
                     <UserCheck className="h-3 w-3 opacity-0" />
                   )}
                 </div>
-              </Link>
+                </Link>
+              </div>
             );
           })
         )}
@@ -554,6 +698,15 @@ export default function InboxPage() {
           </div>
         </div>
       )}
+
+      <InboxBulkActionsBar
+        selectedIds={Array.from(selectedIds)}
+        labels={labelsData?.labels ?? []}
+        agents={agentsForAssign}
+        role={currentRole}
+        tab={tab}
+        onClear={clearSelection}
+      />
     </div>
   );
 }

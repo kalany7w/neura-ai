@@ -9,6 +9,7 @@ import { audit } from '../services/audit';
 import { sendEmail, emailTemplates } from '../email';
 import { inviteSchema, switchWorkspaceSchema } from '@neura/shared/auth';
 import { buildMentionTargets } from '../services/mentions';
+import { redis } from '../redis';
 import { env } from '../env';
 
 export const workspacesRouter = new Hono<{
@@ -135,6 +136,21 @@ workspacesRouter.get('/me', requireAuth, requireWorkspace, async (c) => {
       })),
     },
   });
+});
+
+// GET /api/workspaces/me/presence — userIds dos agentes ativos no WS (últimos 90s)
+const PRESENCE_TTL_MS = 90_000;
+workspacesRouter.get('/me/presence', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const minScore = Date.now() - PRESENCE_TTL_MS;
+  // Limpa scores velhos antes de listar (housekeeping leve, fire-and-forget)
+  void redis.zremrangebyscore(`presence:agents:${workspaceId}`, 0, minScore - 1);
+  const online = await redis.zrangebyscore(
+    `presence:agents:${workspaceId}`,
+    minScore,
+    '+inf',
+  );
+  return c.json({ online });
 });
 
 // GET /api/workspaces/me/mention-targets — lista members com slug pronto pra @mention
