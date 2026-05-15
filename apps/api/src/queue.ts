@@ -17,6 +17,7 @@ import {
 import { prisma } from './db';
 import { env } from './env';
 import { logger } from './logger';
+import { publishEvent } from './redis-pub';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
@@ -71,6 +72,26 @@ export async function dispatchOutbound(job: SendMessageJob, jobName = 'send'): P
     await outboundTelegramQueue.add(jobName, job);
   } else if (inbox.type === 'EMAIL') {
     await outboundEmailQueue.add(jobName, job);
+  } else if (inbox.type === 'WEBCHAT') {
+    // Webchat é pull-based: agente envia → marca SENT direto. Widget pega no /poll.
+    // Não precisa de worker externo nem rede saindo. Reactions/edit/revoke skip.
+    if (job.kind === 'reaction' || job.kind === 'edit' || job.kind === 'revoke') {
+      logger.info({ messageId: job.messageId, kind: job.kind }, 'webchat: kind not supported, skip');
+      return;
+    }
+    await prisma.message.update({
+      where: { id: job.messageId },
+      data: { status: 'SENT', sentAt: new Date() },
+    });
+    await prisma.conversation.update({
+      where: { id: job.conversationId },
+      data: { lastMessageAt: new Date() },
+    });
+    await publishEvent(job.workspaceId, 'messages', 'message.status', {
+      messageId: job.messageId,
+      status: 'SENT',
+      sentAt: new Date().toISOString(),
+    });
   } else {
     logger.warn(
       { inboxId: job.inboxId, type: inbox.type },

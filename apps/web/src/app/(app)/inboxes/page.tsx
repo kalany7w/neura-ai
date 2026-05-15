@@ -2,7 +2,17 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Send, Wifi, WifiOff, Mail, Copy, Check as CheckIcon } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Send,
+  Wifi,
+  WifiOff,
+  Mail,
+  Copy,
+  Check as CheckIcon,
+  Globe,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -40,6 +50,13 @@ export default function InboxesPage() {
     url: string;
     secret: string;
     fromAddress: string;
+    inboxName: string;
+  }>(null);
+  const [webchatOpen, setWebchatOpen] = useState(false);
+  const [webchatResult, setWebchatResult] = useState<null | {
+    script: string;
+    slug: string;
+    primaryColor: string;
     inboxName: string;
   }>(null);
   const [search, setSearch] = useState('');
@@ -101,10 +118,36 @@ export default function InboxesPage() {
           </h1>
           <p className="text-muted-foreground">
             Conecte canais (WhatsApp via Baileys, Telegram via Bot API, Email via Resend
-            inbound) para receber e enviar mensagens. Cada inbox = 1 canal.
+            inbound, Webchat embedável) para receber e enviar mensagens. Cada inbox = 1
+            canal.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={webchatOpen} onOpenChange={setWebchatOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Globe className="h-4 w-4" />
+                Conectar Webchat
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Conectar widget de webchat</DialogTitle>
+                <DialogDescription>
+                  Crie um inbox e cole o <code>&lt;script&gt;</code> gerado no HTML do
+                  seu site. Visitantes anônimos abrem chat direto na página.
+                </DialogDescription>
+              </DialogHeader>
+              <WebchatConnectForm
+                onCancel={() => setWebchatOpen(false)}
+                onDone={(result) => {
+                  setWebchatOpen(false);
+                  setWebchatResult(result);
+                  qc.invalidateQueries({ queryKey: ['inboxes'] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
           <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -255,7 +298,234 @@ export default function InboxesPage() {
       )}
 
       <EmailWebhookDialog webhook={emailWebhook} onClose={() => setEmailWebhook(null)} />
+      <WebchatScriptDialog result={webchatResult} onClose={() => setWebchatResult(null)} />
     </div>
+  );
+}
+
+function WebchatConnectForm({
+  onDone,
+  onCancel,
+}: {
+  onDone: (r: {
+    script: string;
+    slug: string;
+    primaryColor: string;
+    inboxName: string;
+  }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [primaryColor, setPrimaryColor] = useState('#6366f1');
+  const [title, setTitle] = useState('Atendimento');
+  const [welcomeMessage, setWelcomeMessage] = useState(
+    'Olá! Como podemos te ajudar hoje?',
+  );
+  const [submitting, setSubmitting] = useState(false);
+  async function submit() {
+    if (!name.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await api<{
+        inbox: { id: string; name: string };
+        widget: { script: string; slug: string; primaryColor: string };
+      }>(`/api/inboxes/webchat/connect`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(),
+          primaryColor,
+          title,
+          welcomeMessage: welcomeMessage.trim() || undefined,
+        }),
+      });
+      toast.success(`Webchat criado · ${res.inbox.name}`);
+      onDone({
+        script: res.widget.script,
+        slug: res.widget.slug,
+        primaryColor: res.widget.primaryColor,
+        inboxName: res.inbox.name,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao criar widget');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label htmlFor="wc-name" className="text-sm font-medium">
+          Nome da inbox
+        </label>
+        <Input
+          id="wc-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Site institucional"
+        />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label htmlFor="wc-color" className="text-sm font-medium">
+            Cor primária
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="wc-color"
+              type="color"
+              value={primaryColor}
+              onChange={(e) => setPrimaryColor(e.target.value)}
+              className="h-9 w-14 cursor-pointer rounded-md border bg-background"
+            />
+            <Input
+              value={primaryColor}
+              onChange={(e) => setPrimaryColor(e.target.value)}
+              className="flex-1 font-mono text-xs"
+            />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="wc-title" className="text-sm font-medium">
+            Título do widget
+          </label>
+          <Input
+            id="wc-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Atendimento"
+          />
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="wc-welcome" className="text-sm font-medium">
+          Mensagem de boas-vindas (opcional)
+        </label>
+        <textarea
+          id="wc-welcome"
+          value={welcomeMessage}
+          onChange={(e) => setWelcomeMessage(e.target.value)}
+          rows={2}
+          maxLength={500}
+          className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Enviada automaticamente assim que o visitante abre o chat pela primeira vez.
+        </p>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          Cancelar
+        </Button>
+        <Button onClick={submit} disabled={submitting || !name.trim()}>
+          {submitting ? 'Criando…' : 'Criar widget'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function WebchatScriptDialog({
+  result,
+  onClose,
+}: {
+  result: {
+    script: string;
+    slug: string;
+    primaryColor: string;
+    inboxName: string;
+  } | null;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  if (!result) return null;
+
+  async function copy() {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(result.script);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error('Falha ao copiar — copie manualmente.');
+    }
+  }
+
+  return (
+    <Dialog open={!!result} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Widget &quot;{result.inboxName}&quot; pronto</DialogTitle>
+          <DialogDescription>
+            Cole o <code>&lt;script&gt;</code> abaixo antes do <code>&lt;/body&gt;</code>{' '}
+            de cada página onde o chat deve aparecer.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Snippet (HTML)
+            </label>
+            <div className="relative">
+              <pre className="max-h-[120px] overflow-x-auto rounded-md bg-muted px-3 py-2.5 text-xs font-mono">
+                {result.script}
+              </pre>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={copy}
+                title="Copiar snippet"
+                className="absolute right-1.5 top-1.5"
+              >
+                {copied ? (
+                  <CheckIcon className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-indigo-200 bg-indigo-50/50 p-3 text-xs dark:border-indigo-800 dark:bg-indigo-950/30">
+            <p className="mb-1.5 font-semibold text-indigo-900 dark:text-indigo-200">
+              Como funciona
+            </p>
+            <ul className="space-y-1.5 text-indigo-900/80 dark:text-indigo-200/80">
+              <li>
+                Cliente abre o chat → widget cria <strong>sessão anônima</strong>{' '}
+                (persiste em localStorage) e gera <strong>Contact + Conversation</strong>{' '}
+                no Neura.
+              </li>
+              <li>
+                Mensagens do cliente aparecem instantaneamente no <strong>/inbox</strong>{' '}
+                como se fossem WhatsApp/Telegram.
+              </li>
+              <li>
+                Agente responde no Neura → widget puxa via polling 3s e mostra a resposta
+                no chat.
+              </li>
+              <li>
+                IA Copilot (classify, KB suggest, summarize) funcionam idêntico ao
+                WhatsApp.
+              </li>
+              <li>
+                Sessão persiste — se o cliente fechar e voltar 2 dias depois, mesma
+                conversa continua.
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Snippet disponível novamente em{' '}
+            <code>GET /api/inboxes/&lt;id&gt;/webchat/snippet</code> via API.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button onClick={onClose}>Fechar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

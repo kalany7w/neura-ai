@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dialog';
 
 type ScoreType = 'CSAT' | 'NPS' | 'THUMBS';
-type ChannelScope = 'ALL' | 'WHATSAPP' | 'TELEGRAM' | 'EMAIL';
+type ChannelScope = 'ALL' | 'WHATSAPP' | 'TELEGRAM' | 'EMAIL' | 'WEBCHAT';
 
 interface Survey {
   id: string;
@@ -62,6 +62,7 @@ const CHANNEL_LABEL: Record<ChannelScope, string> = {
   WHATSAPP: 'WhatsApp',
   TELEGRAM: 'Telegram',
   EMAIL: 'Email',
+  WEBCHAT: 'Webchat',
 };
 
 const DEFAULT_BODY_CSAT =
@@ -455,7 +456,7 @@ function CsatDialog({
                 onChange={(e) => setChannelScope(e.target.value as ChannelScope)}
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
-                {(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL'] as ChannelScope[]).map((c) => (
+                {(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL', 'WEBCHAT'] as ChannelScope[]).map((c) => (
                   <option key={c} value={c}>
                     {CHANNEL_LABEL[c]}
                   </option>

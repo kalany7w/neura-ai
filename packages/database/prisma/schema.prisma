@@ -195,6 +195,7 @@ enum InboxType {
   WHATSAPP
   TELEGRAM
   EMAIL
+  WEBCHAT
 }
 
 enum InboxStatus {
@@ -265,6 +266,9 @@ model Contact {
   telegramChatId String?
   // Email pra inbox tipo EMAIL — ID externo do contato.
   email          String?
+  // Session token opaco pra inboxes tipo WEBCHAT — random 32 hex gerado no widget.
+  // Persiste no localStorage do browser pra reuso de sessão.
+  webchatSessionId String?
   name        String?
   avatarUrl   String?
   // Custom attributes — populado na Fase 5 com defs por workspace
@@ -281,6 +285,7 @@ model Contact {
   @@unique([workspaceId, phoneNumber])
   @@unique([workspaceId, telegramChatId])
   @@unique([workspaceId, email])
+  @@unique([workspaceId, webchatSessionId])
   @@index([workspaceId])
   @@map("contacts")
 }
@@ -1078,6 +1083,7 @@ enum CsatChannelScope {
   WHATSAPP
   TELEGRAM
   EMAIL
+  WEBCHAT
 }
 
 model CsatSurvey {
