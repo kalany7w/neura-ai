@@ -8,6 +8,8 @@ export const QUEUE_OUTBOUND = 'outbound';
 export const QUEUE_OUTBOUND_TELEGRAM = 'outbound-telegram';
 export const QUEUE_TRANSCRIBE = 'transcribe';
 export const QUEUE_AI = 'ai';
+// Queue de embedding de artigos da KB (RAG). Processado pelo kb-embed worker.
+export const QUEUE_KB_EMBED = 'kb-embed';
 
 export interface TranscribeJob {
   /** Workspace pra publishEvent + audit */
@@ -27,6 +29,17 @@ export interface AiJob {
   kind: 'classify' | 'forecast';
   /** Para 'classify': conversationId. Para 'forecast': cardId. */
   targetId: string;
+}
+
+/**
+ * Job de embedding de artigo da KB. Disparado quando o artigo é criado ou
+ * tem body/title atualizados. JobId determinístico `kb-embed:<articleId>`
+ * funciona como dedup — múltiplos writes em sequência colapsam num único job
+ * pegando a versão mais recente do banco no momento da execução.
+ */
+export interface KbEmbedJob {
+  workspaceId: string;
+  articleId: string;
 }
 
 export interface SendMessageJob {
