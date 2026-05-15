@@ -10,6 +10,7 @@ import { publishEvent } from '../redis-pub';
 import { outboundLimiter } from '../rate-limit';
 import { logger } from '../logger';
 import { suggestReplies, type SuggestReplyInput } from '../services/ai-suggest';
+import { audit } from '../services/audit';
 import { env } from '../env';
 
 export const conversationsRouter = new Hono<{
@@ -195,6 +196,160 @@ conversationsRouter.get('/counts', requireAuth, requireWorkspace, async (c) => {
 
   const awaiting = await prisma.conversation.count({ where: awaitingWhere });
   return c.json({ awaiting });
+});
+
+// POST /api/conversations/bulk — ações em lote (assign/label/status/archive)
+// NÃO inclui send_message (risco ban Baileys); essas ações alteram só state interno.
+const bulkSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('assign_agent'),
+    conversationIds: z.array(z.string().min(1)).min(1).max(200),
+    agentId: z.string().min(1).nullable(),
+  }),
+  z.object({
+    action: z.literal('apply_label'),
+    conversationIds: z.array(z.string().min(1)).min(1).max(200),
+    labelId: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('unapply_label'),
+    conversationIds: z.array(z.string().min(1)).min(1).max(200),
+    labelId: z.string().min(1),
+  }),
+  z.object({
+    action: z.literal('set_status'),
+    conversationIds: z.array(z.string().min(1)).min(1).max(200),
+    status: z.enum(['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED']),
+  }),
+  z.object({
+    action: z.literal('archive'),
+    conversationIds: z.array(z.string().min(1)).min(1).max(200),
+  }),
+  z.object({
+    action: z.literal('unarchive'),
+    conversationIds: z.array(z.string().min(1)).min(1).max(200),
+  }),
+]);
+
+conversationsRouter.post('/bulk', requireAuth, requireWorkspace, async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = bulkSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+  const workspaceId = c.get('workspaceId') as string;
+  const role = c.get('role')!;
+  const actorId = c.get('userId');
+  const data = parsed.data;
+
+  // Garante que todas as conversas pertencem ao workspace
+  const owned = await prisma.conversation.findMany({
+    where: { id: { in: data.conversationIds }, workspaceId },
+    select: { id: true },
+  });
+  const ids = owned.map((o) => o.id);
+  if (ids.length === 0) return c.json({ affected: 0 });
+
+  // AGENT: bloqueia delete/archive/status_resolved em batch — só assign/label
+  // (evita agente fechar massa de conversas alheias). Pode operar nas próprias só single via UI.
+  if (role === 'AGENT') {
+    if (data.action === 'archive' || data.action === 'unarchive' || data.action === 'set_status') {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+  }
+
+  let affected = 0;
+  if (data.action === 'assign_agent') {
+    if (data.agentId) {
+      // Confirma membership do agente atribuído
+      const member = await prisma.membership.findFirst({
+        where: { workspaceId, userId: data.agentId },
+        select: { id: true },
+      });
+      if (!member) return c.json({ error: 'agent_not_in_workspace' }, 400);
+    }
+    const res = await prisma.conversation.updateMany({
+      where: { id: { in: ids } },
+      data: { assignedAgentId: data.agentId },
+    });
+    affected = res.count;
+    for (const id of ids) {
+      await publishEvent(workspaceId, 'conversations', 'conversation.assigned', {
+        conversationId: id,
+        assignedAgentId: data.agentId,
+        reason: 'bulk',
+      });
+    }
+  } else if (data.action === 'apply_label') {
+    const label = await prisma.label.findFirst({
+      where: { id: data.labelId, workspaceId },
+      select: { id: true },
+    });
+    if (!label) return c.json({ error: 'label_not_found' }, 404);
+    const res = await prisma.conversationLabel.createMany({
+      data: ids.map((id) => ({ conversationId: id, labelId: label.id })),
+      skipDuplicates: true,
+    });
+    affected = res.count;
+  } else if (data.action === 'unapply_label') {
+    const res = await prisma.conversationLabel.deleteMany({
+      where: { conversationId: { in: ids }, labelId: data.labelId },
+    });
+    affected = res.count;
+  } else if (data.action === 'set_status') {
+    const res = await prisma.conversation.updateMany({
+      where: { id: { in: ids } },
+      data: { status: data.status },
+    });
+    affected = res.count;
+    for (const id of ids) {
+      await publishEvent(workspaceId, 'conversations', 'conversation.status_changed', {
+        conversationId: id,
+        status: data.status,
+        reason: 'bulk',
+      });
+    }
+  } else if (data.action === 'archive') {
+    const res = await prisma.conversation.updateMany({
+      where: { id: { in: ids } },
+      data: { archivedAt: new Date() },
+    });
+    affected = res.count;
+    for (const id of ids) {
+      await publishEvent(workspaceId, 'conversations', 'conversation.archived', {
+        conversationId: id,
+        reason: 'bulk',
+      });
+    }
+  } else {
+    // unarchive
+    const res = await prisma.conversation.updateMany({
+      where: { id: { in: ids } },
+      data: { archivedAt: null },
+    });
+    affected = res.count;
+    for (const id of ids) {
+      await publishEvent(workspaceId, 'conversations', 'conversation.unarchived', {
+        conversationId: id,
+        reason: 'bulk',
+      });
+    }
+  }
+
+  await audit({
+    workspaceId,
+    actorId,
+    action: `conversation.bulk_${data.action}`,
+    metadata: {
+      count: ids.length,
+      affected,
+      ...(data.action === 'apply_label' || data.action === 'unapply_label'
+        ? { labelId: data.labelId }
+        : {}),
+      ...(data.action === 'assign_agent' ? { agentId: data.agentId } : {}),
+      ...(data.action === 'set_status' ? { status: data.status } : {}),
+    },
+  });
+
+  return c.json({ affected });
 });
 
 // GET /api/conversations/:id (com mensagens)

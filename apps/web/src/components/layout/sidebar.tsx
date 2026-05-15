@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { TeamPresence } from '@/components/layout/team-presence';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -271,6 +272,13 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
           );
         })}
       </nav>
+
+      {/* Team presence (acima do user footer) */}
+      {user.id && (
+        <div className="px-3 pb-2">
+          <TeamPresence currentUserId={user.id} />
+        </div>
+      )}
 
       {/* User footer */}
       <div className="border-t p-2">

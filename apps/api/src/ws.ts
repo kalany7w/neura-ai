@@ -83,6 +83,7 @@ export function setupWebSocket(app: Hono) {
             `workspace:${workspaceId}:messages`,
             `workspace:${workspaceId}:inboxes`,
             `workspace:${workspaceId}:conversations`,
+            `workspace:${workspaceId}:presence`,
           ]
         : [];
 
@@ -97,6 +98,21 @@ export function setupWebSocket(app: Hono) {
             if (!channelClients.has(ch)) channelClients.set(ch, new Set());
             channelClients.get(ch)!.add(ws);
           }
+          // Presence: marca user como online no workspace via ZADD com score=timestamp.
+          // Outras tabs do mesmo user mantêm o score atualizado via ping. Sem ZREM no
+          // onClose pra evitar derrubar presence se uma tab fecha mas outras seguem.
+          if (workspaceId && userId) {
+            void redis.zadd(`presence:agents:${workspaceId}`, Date.now(), userId);
+            // Notifica outros clients que presence mudou
+            void redis.publish(
+              `workspace:${workspaceId}:presence`,
+              JSON.stringify({
+                event: 'presence.changed',
+                payload: { userId, state: 'online' },
+                ts: Date.now(),
+              }),
+            );
+          }
           ws.send(
             JSON.stringify({
               event: 'connected',
@@ -110,6 +126,10 @@ export function setupWebSocket(app: Hono) {
             const data = JSON.parse(evt.data.toString());
             if (data?.event === 'ping') {
               ws.send(JSON.stringify({ event: 'pong', ts: Date.now() }));
+              // Renova presence a cada ping (~30s)
+              if (workspaceId && userId) {
+                void redis.zadd(`presence:agents:${workspaceId}`, Date.now(), userId);
+              }
               return;
             }
             if (data?.event === 'typing' && workspaceId) {
@@ -131,6 +151,8 @@ export function setupWebSocket(app: Hono) {
           for (const ch of channels) {
             channelClients.get(ch)?.delete(ws);
           }
+          // NÃO faz ZREM aqui — outras tabs do mesmo user podem estar abertas.
+          // Score expira naturalmente após PRESENCE_TTL_MS sem ping.
         },
         onError: (err) => logger.error({ err }, 'WS connection error'),
       };
