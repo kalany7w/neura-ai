@@ -1,4 +1,4 @@
-# Coolify — Pacote pra colar (gerado 2026-05-14)
+# Coolify — Pacote pra colar (gerado 2026-05-14, atualizado 2026-05-15)
 
 Sequência exata pra subir o Neura AI em produção via Coolify. Secrets já gerados — basta colar.
 
@@ -81,6 +81,12 @@ BETTER_AUTH_SECRET=034393ab9827ed02f6c7804d9b2ab69b4ed8d71faf3fac057865341da7549
 BETTER_AUTH_URL=https://api.neura-ai.net
 TRUSTED_ORIGINS=https://app.neura-ai.net,https://neura-ai.net
 
+# === URLs públicas (obrigatórias pra Telegram webhook + emails transacionais) ===
+# PUBLIC_API_URL é o endpoint HTTPS público que o Telegram chama de volta (setWebhook).
+# APP_URL é fallback (links em emails de invite/reset etc.).
+PUBLIC_API_URL=https://api.neura-ai.net
+APP_URL=https://app.neura-ai.net
+
 # === Crypto (AES-256-GCM pra auth state Baileys) ===
 ENCRYPTION_KEY=e1486083b01763b1f17b78565b55be67ec3cb8c27b33b1a0a8e4571e616e7395
 
@@ -107,9 +113,13 @@ NEXT_PUBLIC_API_URL=https://api.neura-ai.net
 NEXT_PUBLIC_WS_URL=wss://api.neura-ai.net/ws
 
 # === OpenAI (opcional — deixa vazio se não quiser usar agora) ===
-# Mesma chave habilita 2 features:
-#   1) Transcrição automática de áudios (Whisper, ~$0.006/min)
-#   2) Sugestões de resposta com IA no composer (gpt-4o-mini, ~$0.0005/sugestão)
+# Mesma chave habilita 6 features (todas degradam silenciosamente sem key):
+#   1) Whisper — transcrição automática de áudios inbound (~$0.006/min)
+#   2) Sugestões de resposta no composer (gpt-4o-mini, ~$0.0005/sug)
+#   3) Auto-classify de conversa — intent/urgency/sentiment, trigger 30s pós-inbound (~$0.0003)
+#   4) Auto-summarize on-demand — botão "Resumir" no header (~$0.0003)
+#   5) Next-action suggestions — botão "Sugerir ações" com whitelist anti-alucinação (~$0.0004)
+#   6) Forecast IA por card kanban — probabilidade de fechar + reasoning (~$0.0005/card)
 OPENAI_API_KEY=
 WHISPER_MODEL=whisper-1
 WHISPER_API_BASE=https://api.openai.com/v1
@@ -171,17 +181,34 @@ SERVICE_URL_WEB=https://app.neura-ai.net
 
 ---
 
-## 9. Ativar Whisper depois (opcional)
+## 9. Ativar IA (opcional, mesma chave habilita tudo)
 
 1. Conta em https://platform.openai.com
 2. **API keys → Create** → copia `sk-...`
 3. Coolify → ENV → `OPENAI_API_KEY=sk-...` → Deploy
-4. Logs do `api` mostram `Whisper transcribe worker started`.
-5. Áudios novos chegam com transcrição inline no chat (~15s pra transcrever 30s de áudio).
+4. Logs do `api` mostram `Whisper transcribe worker started` + `AI worker started`.
+5. Features ativas: Whisper (áudios inbound), sugestões de resposta (✨ composer),
+   auto-classify (badges intent/urgency), summarize/next-action (botões no header chat),
+   forecast IA (kanban — probabilidade por card + KPI "Receita prevista").
+6. Custo médio por conversa ativa: ~$0.002 (classify + summarize + 1 forecast).
 
 ---
 
-## 10. Portas reservadas
+## 10. Conectar Telegram (opcional)
+
+1. No Telegram, abre `@BotFather` → `/newbot` → escolhe nome + username terminando em `bot`.
+2. Copia o token `123456:ABC-DEF...`
+3. No Neura: `/inboxes` → **Conectar Telegram** → cola nome + token → Conectar.
+4. Backend valida via `getMe`, gera slug + secret, configura webhook
+   em `${PUBLIC_API_URL}/api/telegram/webhook/<slug>` automaticamente.
+5. Mande qualquer mensagem pro bot — chega no /inbox do workspace.
+
+> ⚠️ `PUBLIC_API_URL` precisa ser HTTPS acessível ao Telegram (Coolify Caddy
+> resolve isso em prod). Em dev local, use ngrok.
+
+---
+
+## 11. Portas reservadas
 
 Pra referência (host-exposed reservadas em `~/.claude/CLAUDE.md`):
 
