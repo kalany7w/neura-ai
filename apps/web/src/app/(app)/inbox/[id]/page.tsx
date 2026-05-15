@@ -60,6 +60,8 @@ import {
 import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
 import { ScheduleMessageDialog } from '@/components/inbox/schedule-message-dialog';
 import { ForwardMessageDialog } from '@/components/inbox/forward-message-dialog';
+import type { MentionTarget } from '@/components/ui/mention-textarea';
+import { renderMentions } from '@/lib/render-mentions';
 import {
   Dialog,
   DialogContent,
@@ -403,6 +405,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     queryKey: ['conversation', id, 'notes'],
     queryFn: () => api(`/api/conversations/${id}/notes`),
   });
+
+  const { data: mentionsData } = useQuery<{ targets: MentionTarget[] }>({
+    queryKey: ['mention-targets'],
+    queryFn: () => api('/api/workspaces/me/mention-targets'),
+    staleTime: 60_000,
+  });
+  const mentionSlugs = useMemo(
+    () => new Set((mentionsData?.targets ?? []).map((t) => t.slug.toLowerCase())),
+    [mentionsData?.targets],
+  );
 
   const { data: templatesData } = useQuery<{ templates: TemplateItem[] }>({
     queryKey: ['templates'],
@@ -971,7 +983,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <StickyNote className="h-3 w-3" />
                   Nota interna
                 </div>
-                <p className="whitespace-pre-wrap break-words">{item.body}</p>
+                <p className="whitespace-pre-wrap break-words">
+                  {renderMentions(item.body, mentionSlugs)}
+                </p>
                 <p className="mt-1 text-[10px] opacity-60">
                   {new Date(item.createdAt).toLocaleString('pt-BR')}
                 </p>

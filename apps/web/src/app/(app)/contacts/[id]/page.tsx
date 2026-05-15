@@ -39,6 +39,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { MentionTextarea, type MentionTarget } from '@/components/ui/mention-textarea';
+import { renderMentions } from '@/lib/render-mentions';
 
 interface LabelItem {
   id: string;
@@ -160,6 +162,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const { data: notesData, isLoading: notesLoading } = useQuery<{ notes: ContactNoteItem[] }>({
     queryKey: ['contact-notes', id],
     queryFn: () => api(`/api/contacts/${id}/notes`),
+    enabled: tab === 'notes',
+  });
+
+  const { data: mentionsData } = useQuery<{ targets: MentionTarget[] }>({
+    queryKey: ['mention-targets'],
+    queryFn: () => api('/api/workspaces/me/mention-targets'),
+    staleTime: 60_000,
     enabled: tab === 'notes',
   });
 
@@ -478,6 +487,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           notes={notesData?.notes ?? []}
           loading={notesLoading}
           onChange={refreshNotes}
+          mentionTargets={mentionsData?.targets ?? []}
         />
       )}
 
@@ -525,12 +535,15 @@ function NotesTab({
   notes,
   loading,
   onChange,
+  mentionTargets,
 }: {
   contactId: string;
   notes: ContactNoteItem[];
   loading: boolean;
   onChange: () => void;
+  mentionTargets: MentionTarget[];
 }) {
+  const validSlugs = new Set(mentionTargets.map((t) => t.slug.toLowerCase()));
   const confirm = useConfirm();
   const [composer, setComposer] = useState('');
   const [composerSubmitting, setComposerSubmitting] = useState(false);
@@ -614,10 +627,11 @@ function NotesTab({
           <StickyNote className="h-3.5 w-3.5" />
           Adicionar nota
         </Label>
-        <textarea
+        <MentionTextarea
           id="contact-note-composer"
           value={composer}
-          onChange={(e) => setComposer(e.target.value)}
+          onChange={setComposer}
+          targets={mentionTargets}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
               e.preventDefault();
@@ -626,12 +640,12 @@ function NotesTab({
           }}
           rows={3}
           maxLength={2000}
-          placeholder="Informações que persistem além de uma conversa: histórico, preferências, contexto de relacionamento…"
+          placeholder="Informações que persistem além de uma conversa: histórico, preferências, contexto de relacionamento… (use @ para mencionar um agente)"
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-[11px] text-muted-foreground">
-            {composer.length}/2000 · Cmd/Ctrl+Enter pra salvar
+            {composer.length}/2000 · Cmd/Ctrl+Enter pra salvar · @ menciona agente
           </p>
           <Button
             size="sm"
@@ -713,9 +727,10 @@ function NotesTab({
                 </header>
                 {isEditing ? (
                   <div className="space-y-2">
-                    <textarea
+                    <MentionTextarea
                       value={editDraft}
-                      onChange={(e) => setEditDraft(e.target.value)}
+                      onChange={setEditDraft}
+                      targets={mentionTargets}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') {
                           e.preventDefault();
@@ -748,7 +763,7 @@ function NotesTab({
                   </div>
                 ) : (
                   <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                    {note.body}
+                    {renderMentions(note.body, validSlugs)}
                   </p>
                 )}
               </li>
