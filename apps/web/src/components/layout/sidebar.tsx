@@ -22,6 +22,7 @@ import {
   ScrollText,
   Timer,
   BookOpen,
+  Smile,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -82,6 +83,7 @@ const groups: NavGroup[] = [
       { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/sla', label: 'SLA', icon: Timer, roles: ['ADMIN', 'SUPERVISOR'] },
+      { href: '/settings/csat', label: 'CSAT / NPS', icon: Smile, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
       { href: '/settings/custom-attributes', label: 'Atributos', icon: Tag, roles: ['ADMIN'] },
       { href: '/settings/api-keys', label: 'API Keys', icon: Key, roles: ['ADMIN'] },

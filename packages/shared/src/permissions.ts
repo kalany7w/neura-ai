@@ -61,6 +61,10 @@ export const PERMISSIONS = {
   // Knowledge base (Fase 34)
   'kb.manage': ['ADMIN', 'SUPERVISOR'],
   'kb.use': ['ADMIN', 'SUPERVISOR', 'AGENT'],
+
+  // CSAT/NPS (Fase 37)
+  'csat.manage': ['ADMIN', 'SUPERVISOR'],
+  'csat.read': ['ADMIN', 'SUPERVISOR', 'AGENT'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

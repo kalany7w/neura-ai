@@ -68,7 +68,46 @@ function toInputDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-type Tab = 'overview' | 'agents' | 'inboxes' | 'sla';
+type Tab = 'overview' | 'agents' | 'inboxes' | 'sla' | 'csat';
+
+interface CsatAgentRow {
+  userId: string;
+  name: string | null;
+  email: string;
+  responses: number;
+  csatAvg: number | null;
+  npsScore: number | null;
+  thumbsRate: number | null;
+}
+interface CsatReport {
+  summary: {
+    totalSent: number;
+    totalResponses: number;
+    responseRate: number | null;
+    csatAvg: number | null;
+    csatSatisfactionRate: number | null;
+    npsScore: number | null;
+    npsBreakdown: { promoters: number; passives: number; detractors: number };
+    thumbsPositiveRate: number | null;
+    thumbsBreakdown: { positives: number; negatives: number };
+  };
+  csatDistribution: Array<{ score: number; count: number }>;
+  agents: CsatAgentRow[];
+  recentComments: Array<{
+    score: number;
+    scoreType: 'CSAT' | 'NPS' | 'THUMBS';
+    comment: string | null;
+    respondedAt: string;
+  }>;
+  surveys: Array<{
+    id: string;
+    name: string;
+    scoreType: 'CSAT' | 'NPS' | 'THUMBS';
+    sentCount: number;
+    responseCount: number;
+    enabled: boolean;
+  }>;
+}
 
 interface SlaSummary {
   totalConversations: number;
@@ -137,6 +176,11 @@ export default function ReportsPage() {
     queryKey: ['reports-sla', sinceIso, untilIso],
     queryFn: () => api(`/api/reports/sla?${queryStr}`),
     enabled: tab === 'sla',
+  });
+  const csatQ = useQuery<CsatReport>({
+    queryKey: ['reports-csat', sinceIso, untilIso],
+    queryFn: () => api(`/api/reports/csat?${queryStr}`),
+    enabled: tab === 'csat',
   });
 
   function downloadCsv(type: 'conversations' | 'messages') {
@@ -210,7 +254,7 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'agents', 'inboxes', 'sla'] as const).map((t) => (
+        {(['overview', 'agents', 'inboxes', 'sla', 'csat'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -227,7 +271,9 @@ export default function ReportsPage() {
                 ? 'Por agente'
                 : t === 'inboxes'
                   ? 'Por inbox'
-                  : 'SLA'}
+                  : t === 'sla'
+                    ? 'SLA'
+                    : 'Satisfação'}
           </button>
         ))}
       </div>
@@ -271,6 +317,231 @@ export default function ReportsPage() {
           ) : null}
         </>
       )}
+
+      {tab === 'csat' && (
+        <>
+          {csatQ.isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : csatQ.data ? (
+            <CsatTab data={csatQ.data} />
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function CsatTab({ data }: { data: CsatReport }) {
+  const { summary, csatDistribution, agents, recentComments, surveys } = data;
+  const enabledSurveys = surveys.filter((s) => s.enabled);
+  const hasCsat = csatDistribution.some((d) => d.count > 0);
+  const hasNps = summary.npsScore !== null;
+  const hasThumbs = summary.thumbsPositiveRate !== null;
+
+  const maxCsatCount = csatDistribution.reduce((m, d) => Math.max(m, d.count), 1);
+  const npsColor =
+    summary.npsScore == null
+      ? 'text-muted-foreground'
+      : summary.npsScore >= 50
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : summary.npsScore >= 0
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-red-600 dark:text-red-400';
+  const csatAvgColor =
+    summary.csatAvg == null
+      ? 'text-muted-foreground'
+      : summary.csatAvg >= 4
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : summary.csatAvg >= 3
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-red-600 dark:text-red-400';
+
+  return (
+    <div className="space-y-6">
+      {enabledSurveys.length === 0 && summary.totalSent === 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50/40 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+          Nenhum survey ativo. Configure em{' '}
+          <a href="/settings/csat" className="font-medium underline">
+            /settings/csat
+          </a>{' '}
+          pra começar a coletar satisfação.
+        </div>
+      )}
+
+      {/* KPIs */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CsatKpiCard label="Surveys enviados" value={summary.totalSent.toString()} />
+        <CsatKpiCard
+          label="Respostas"
+          value={summary.totalResponses.toString()}
+          sub={summary.responseRate !== null ? `${summary.responseRate}% taxa` : '—'}
+        />
+        {hasCsat && (
+          <CsatKpiCard
+            label="CSAT médio"
+            value={summary.csatAvg !== null ? summary.csatAvg.toFixed(2) : '—'}
+            sub={
+              summary.csatSatisfactionRate !== null
+                ? `${summary.csatSatisfactionRate}% satisfeitos (4-5★)`
+                : '—'
+            }
+            valueClass={csatAvgColor}
+          />
+        )}
+        {hasNps && (
+          <CsatKpiCard
+            label="NPS"
+            value={summary.npsScore !== null ? String(summary.npsScore) : '—'}
+            sub={`${summary.npsBreakdown.promoters} prom · ${summary.npsBreakdown.passives} pas · ${summary.npsBreakdown.detractors} det`}
+            valueClass={npsColor}
+          />
+        )}
+        {hasThumbs && (
+          <CsatKpiCard
+            label="👍 positivos"
+            value={
+              summary.thumbsPositiveRate !== null ? `${summary.thumbsPositiveRate}%` : '—'
+            }
+            sub={`${summary.thumbsBreakdown.positives} 👍 · ${summary.thumbsBreakdown.negatives} 👎`}
+          />
+        )}
+      </div>
+
+      {/* Distribuição CSAT */}
+      {hasCsat && (
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="mb-3 font-semibold">Distribuição CSAT</h3>
+          <div className="space-y-1.5">
+            {csatDistribution
+              .slice()
+              .reverse()
+              .map((d) => {
+                const pct = maxCsatCount > 0 ? Math.round((d.count / maxCsatCount) * 100) : 0;
+                const total = csatDistribution.reduce((a, b) => a + b.count, 0);
+                const sharePct = total > 0 ? Math.round((d.count / total) * 100) : 0;
+                const fill =
+                  d.score >= 4
+                    ? 'bg-emerald-500'
+                    : d.score === 3
+                      ? 'bg-amber-500'
+                      : 'bg-red-500';
+                return (
+                  <div key={d.score} className="flex items-center gap-3">
+                    <span className="w-14 text-sm tabular-nums">
+                      {Array(d.score).fill('★').join('')}
+                    </span>
+                    <div className="relative flex-1">
+                      <div className="h-5 rounded bg-muted/50">
+                        <div
+                          className={`h-5 rounded ${fill}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">
+                      {d.count} ({sharePct}%)
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Por agente */}
+      {agents.length > 0 && (
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="mb-3 font-semibold">Por agente</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="py-2 pr-2">Agente</th>
+                  <th className="py-2 px-2 text-right">Respostas</th>
+                  <th className="py-2 px-2 text-right">CSAT</th>
+                  <th className="py-2 px-2 text-right">NPS</th>
+                  <th className="py-2 pl-2 text-right">👍</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agents.map((a) => (
+                  <tr key={a.userId} className="border-b last:border-0">
+                    <td className="py-2 pr-2">
+                      <p className="font-medium">{a.name ?? a.email}</p>
+                      <p className="text-[10px] text-muted-foreground">{a.email}</p>
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums">{a.responses}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">
+                      {a.csatAvg !== null ? a.csatAvg.toFixed(2) : '—'}
+                    </td>
+                    <td className="py-2 px-2 text-right tabular-nums">
+                      {a.npsScore !== null ? a.npsScore : '—'}
+                    </td>
+                    <td className="py-2 pl-2 text-right tabular-nums">
+                      {a.thumbsRate !== null ? `${a.thumbsRate}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Comentários recentes */}
+      {recentComments.length > 0 && (
+        <div className="rounded-lg border bg-card p-4">
+          <h3 className="mb-3 font-semibold">Comentários recentes</h3>
+          <ul className="space-y-2">
+            {recentComments.map((c, idx) => (
+              <li
+                key={idx}
+                className={`rounded-md border-l-4 p-3 ${
+                  c.scoreType === 'CSAT' && c.score >= 4
+                    ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20'
+                    : c.scoreType === 'CSAT' && c.score <= 2
+                      ? 'border-red-500 bg-red-50/40 dark:bg-red-950/20'
+                      : c.scoreType === 'NPS' && c.score >= 9
+                        ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20'
+                        : c.scoreType === 'NPS' && c.score <= 6
+                          ? 'border-red-500 bg-red-50/40 dark:bg-red-950/20'
+                          : 'border-amber-500 bg-amber-50/40 dark:bg-amber-950/20'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {c.scoreType} {c.score}
+                    {c.scoreType === 'CSAT' && '/5'}
+                    {c.scoreType === 'NPS' && '/10'}
+                  </span>
+                  <span>{new Date(c.respondedAt).toLocaleString('pt-BR')}</span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-sm">{c.comment}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CsatKpiCard({
+  label,
+  value,
+  sub,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={`mt-0.5 text-3xl font-bold tabular-nums ${valueClass ?? ''}`}>{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }
