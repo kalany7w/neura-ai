@@ -3,6 +3,7 @@ import { Redis } from 'ioredis';
 import {
   QUEUE_OUTBOUND,
   QUEUE_OUTBOUND_TELEGRAM,
+  QUEUE_OUTBOUND_EMAIL,
   QUEUE_TRANSCRIBE,
   QUEUE_AI,
   QUEUE_KB_EMBED,
@@ -37,11 +38,21 @@ export const outboundTelegramQueue = new Queue<SendMessageJob>(QUEUE_OUTBOUND_TE
   },
 });
 
+export const outboundEmailQueue = new Queue<SendMessageJob>(QUEUE_OUTBOUND_EMAIL, {
+  connection: bullConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5_000 },
+    removeOnComplete: { age: 60 * 60, count: 1_000 },
+    removeOnFail: { age: 7 * 24 * 60 * 60 },
+  },
+});
+
 /**
  * Dispatcher multi-canal: olha o tipo do inbox e enfileira na queue certa.
  * - WHATSAPP → outbound (consumido por waworker via Baileys)
  * - TELEGRAM → outbound-telegram (consumido por api telegram-outbound worker)
- * - EMAIL    → out of scope nessa fase (futuro: Resend send)
+ * - EMAIL    → outbound-email (consumido por api email-outbound worker, via Resend)
  */
 export async function dispatchOutbound(job: SendMessageJob, jobName = 'send'): Promise<void> {
   const inbox = await prisma.inbox.findUnique({
@@ -56,6 +67,8 @@ export async function dispatchOutbound(job: SendMessageJob, jobName = 'send'): P
     await outboundQueue.add(jobName, job);
   } else if (inbox.type === 'TELEGRAM') {
     await outboundTelegramQueue.add(jobName, job);
+  } else if (inbox.type === 'EMAIL') {
+    await outboundEmailQueue.add(jobName, job);
   } else {
     logger.warn(
       { inboxId: job.inboxId, type: inbox.type },
