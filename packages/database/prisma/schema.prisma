@@ -189,6 +189,8 @@ model Verification {
 
 enum InboxType {
   WHATSAPP
+  TELEGRAM
+  EMAIL
 }
 
 enum InboxStatus {
@@ -208,6 +210,10 @@ model Inbox {
   status      InboxStatus @default(DISCONNECTED)
   // Configurações flexíveis: padrões de auto-roteamento, default funnel, etc.
   settings    Json?
+  // Config específica do canal (criptografada quando contém secrets).
+  // TELEGRAM: { botTokenEncrypted, botUsername, botId, webhookSlug }
+  // EMAIL: { fromAddress, resendDomain, inboundSlug }
+  channelConfig Json?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -248,8 +254,13 @@ model WaSession {
 model Contact {
   id          String   @id @default(cuid())
   workspaceId String
-  // Formato E.164 com prefixo "+" (ex: +5511999999999)
-  phoneNumber String
+  // Formato E.164 com prefixo "+" (ex: +5511999999999). Pra Telegram pode ser null
+  // se contato só veio via Telegram (cliente sem phone visível no Bot API).
+  phoneNumber String?
+  // Identificador único por canal: chat.id do Telegram (string pra suportar negativos de grupos).
+  telegramChatId String?
+  // Email pra inbox tipo EMAIL — ID externo do contato.
+  email          String?
   name        String?
   avatarUrl   String?
   // Custom attributes — populado na Fase 5 com defs por workspace
@@ -263,6 +274,8 @@ model Contact {
   notes         ContactNote[]
 
   @@unique([workspaceId, phoneNumber])
+  @@unique([workspaceId, telegramChatId])
+  @@unique([workspaceId, email])
   @@index([workspaceId])
   @@map("contacts")
 }
@@ -676,8 +689,10 @@ enum TranscriptionStatus {
 model Message {
   id             String           @id @default(cuid())
   conversationId String
-  // ID retornado pelo Baileys (key.id) — único por sessão/jid
+  // ID retornado pelo Baileys (key.id) — único por sessão/jid (apenas inbox WHATSAPP)
   waMessageId    String?
+  // ID retornado pelo Telegram Bot API (message_id é integer) — apenas inbox TELEGRAM
+  telegramMessageId Int?
   direction      MessageDirection
   type           MessageType      @default(TEXT)
   content        String?          @db.Text

@@ -3,7 +3,7 @@ import { Redis } from 'ioredis';
 import { prisma } from './db';
 import { env } from './env';
 import { logger } from './logger';
-import { outboundQueue } from './queue';
+import { outboundQueue, dispatchOutbound } from './queue';
 import { publishEvent } from './redis-pub';
 import { patchFirstResponse } from './services/sla-compute';
 
@@ -63,12 +63,12 @@ async function processScheduledTick(_job: Job): Promise<void> {
           ...slaPatch,
         },
       });
-      await outboundQueue.add('send', {
+      await dispatchOutbound({
         inboxId: conv.inboxId,
         workspaceId: sched.workspaceId,
         conversationId: conv.id,
         messageId: msg.id,
-        to: conv.contact.phoneNumber,
+        to: conv.contact.phoneNumber ?? '',
         type: sched.type as 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT',
         text: sched.content ?? undefined,
         mediaUrl: sched.mediaUrl ?? undefined,

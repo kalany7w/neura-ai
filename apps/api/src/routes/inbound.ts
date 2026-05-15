@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { RateLimiterRedis } from 'rate-limiter-flexible';
 import { prisma } from '../db';
 import { logger } from '../logger';
-import { outboundQueue } from '../queue';
+import { dispatchOutbound } from '../queue';
 import { publishEvent } from '../redis-pub';
 import { redis } from './../redis';
 import { audit } from '../services/audit';
@@ -81,7 +81,7 @@ async function handleAction(
       // Resolve conversation (passada ou via inboxId+phone)
       let conversationId = action.conversationId;
       let conv:
-        | { id: string; inboxId: string; contact: { phoneNumber: string }; inbox: { status: string } }
+        | { id: string; inboxId: string; contact: { phoneNumber: string | null }; inbox: { status: string } }
         | null = null;
 
       if (conversationId) {
@@ -143,12 +143,12 @@ async function handleAction(
           ...slaPatch1,
         },
       });
-      await outboundQueue.add('send', {
+      await dispatchOutbound({
         inboxId: conv.inboxId,
         workspaceId,
         conversationId: conv.id,
         messageId: msg.id,
-        to: conv.contact.phoneNumber,
+        to: conv.contact.phoneNumber ?? '',
         type: 'TEXT',
         text: action.text,
       });
@@ -231,7 +231,7 @@ async function handleAction(
             ...slaPatch2,
           },
         });
-        await outboundQueue.add('send', {
+        await dispatchOutbound({
           inboxId: inbox.id,
           workspaceId,
           conversationId: conv.id,

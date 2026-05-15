@@ -44,6 +44,17 @@ export const outboundWorker = new Worker<SendMessageJob>(
       reactionEmoji,
       editedBy,
     } = job.data;
+    // Filtro multi-canal: waworker só processa inboxes WHATSAPP.
+    // Outros tipos (TELEGRAM, EMAIL) são processados por workers no api side.
+    const inboxMeta = await prisma.inbox.findUnique({
+      where: { id: inboxId },
+      select: { type: true },
+    });
+    if (inboxMeta && inboxMeta.type !== 'WHATSAPP') {
+      // Não é nosso job — silenciosamente ignora. Outro worker pega.
+      logger.debug({ inboxId, type: inboxMeta.type }, 'skip non-WHATSAPP outbound job');
+      return;
+    }
     const handle = sessionManager.get(inboxId);
     if (!handle) {
       throw new Error(`No active session for inbox ${inboxId}`);

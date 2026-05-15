@@ -67,7 +67,7 @@ async function handleAssigned(
     },
   });
   if (!conv) return;
-  const who = conv.contact.name ?? conv.contact.phoneNumber;
+  const who = conv.contact.name ?? conv.contact.phoneNumber ?? 'Contato';
   await createNotification({
     workspaceId,
     userId: agentId,
@@ -103,7 +103,7 @@ async function handleMessageNew(
   // Dedup: 1 notif por (agente, conversa) a cada 30s
   if (shouldDedup(`msg:${conv.assignedAgentId}:${conversationId}`)) return;
 
-  const who = conv.contact.name ?? conv.contact.phoneNumber;
+  const who = conv.contact.name ?? conv.contact.phoneNumber ?? 'Contato';
   const preview = message.content
     ? message.content.slice(0, 80)
     : `[${message.type ?? 'mídia'}]`;
