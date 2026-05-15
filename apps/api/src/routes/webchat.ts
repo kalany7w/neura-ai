@@ -17,9 +17,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { RateLimiterMemory } from 'rate-limiter-flexible';
-import { prisma } from '../db';
-import { publishEvent } from '../redis-pub';
-import { aiQueue } from '../queue';
+import { prisma } from '../db.js';
+import { publishEvent } from '../redis-pub.js';
+import { aiQueue } from '../queue.js';
 
 export const webchatRouter = new Hono();
 

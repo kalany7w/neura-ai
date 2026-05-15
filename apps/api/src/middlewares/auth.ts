@@ -1,8 +1,8 @@
 import { createMiddleware } from 'hono/factory';
 import { createHash } from 'node:crypto';
-import { auth } from '../auth';
-import { prisma } from '../db';
-import { apiKeyLimiter } from '../rate-limit';
+import { auth } from '../auth.js';
+import { prisma } from '../db.js';
+import { apiKeyLimiter } from '../rate-limit.js';
 
 export interface AuthVars {
   userId: string;

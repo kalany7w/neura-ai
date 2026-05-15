@@ -1,10 +1,10 @@
 import type { Prisma } from '@neura/database';
 import { renderTemplate } from '@neura/shared/template-render';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { dispatchOutbound } from '../queue';
-import { publishEvent } from '../redis-pub';
-import { patchFirstResponse, patchResolution } from './sla-compute';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { dispatchOutbound } from '../queue.js';
+import { publishEvent } from '../redis-pub.js';
+import { patchFirstResponse, patchResolution } from './sla-compute.js';
 
 // ============================================================
 // TIPOS

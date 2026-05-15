@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { prisma } from '../db';
-import { requireAuth, type AuthVars } from '../middlewares/auth';
-import { audit } from '../services/audit';
+import { prisma } from '../db.js';
+import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { audit } from '../services/audit.js';
 
 export const invitesRouter = new Hono<{ Variables: AuthVars }>();
 

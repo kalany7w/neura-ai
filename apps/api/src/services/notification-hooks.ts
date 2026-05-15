@@ -1,5 +1,5 @@
-import { prisma } from '../db';
-import { createNotification } from './notifications';
+import { prisma } from '../db.js';
+import { createNotification } from './notifications.js';
 
 /**
  * Dedup window: se a mesma chave criou notif nos últimos N ms, pula.

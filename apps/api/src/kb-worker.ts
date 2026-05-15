@@ -12,11 +12,11 @@ import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { Prisma } from '@neura/database';
 import { QUEUE_KB_EMBED, type KbEmbedJob } from '@neura/shared/queue';
-import { prisma } from './db';
-import { logger } from './logger';
-import { env } from './env';
-import { publishEvent } from './redis-pub';
-import { generateEmbedding, formatVectorLiteral } from './services/kb-embed';
+import { prisma } from './db.js';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { publishEvent } from './redis-pub.js';
+import { generateEmbedding, formatVectorLiteral } from './services/kb-embed.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

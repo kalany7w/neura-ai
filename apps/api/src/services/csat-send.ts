@@ -12,10 +12,10 @@
  * 7. Incrementa survey.sentCount
  */
 
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { dispatchOutbound } from '../queue';
-import { publishEvent } from '../redis-pub';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { dispatchOutbound } from '../queue.js';
+import { publishEvent } from '../redis-pub.js';
 import { renderTemplate } from '@neura/shared/template-render';
 
 const AWAITING_WINDOW_DAYS = 7;

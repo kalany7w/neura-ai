@@ -7,12 +7,12 @@
  */
 
 import { Hono } from 'hono';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { publishEvent } from '../redis-pub';
-import { aiQueue } from '../queue';
-import { patchFirstResponse } from '../services/sla-compute';
-import type { TgUpdate, TgMessage } from '../services/telegram-client';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { publishEvent } from '../redis-pub.js';
+import { aiQueue } from '../queue.js';
+import { patchFirstResponse } from '../services/sla-compute.js';
+import type { TgUpdate, TgMessage } from '../services/telegram-client.js';
 
 export const telegramRouter = new Hono();
 

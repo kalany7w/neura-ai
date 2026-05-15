@@ -1,12 +1,12 @@
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { QUEUE_OUTBOUND, type SendMessageJob } from '@neura/shared/queue';
-import { sessionManager } from '../baileys/manager';
-import { prisma } from '../db';
-import { publishEvent } from '../redis';
-import { logger } from '../logger';
-import { env } from '../env';
-import { getMediaBuffer, keyFromUrl } from '../storage';
+import { sessionManager } from '../baileys/manager.js';
+import { prisma } from '../db.js';
+import { publishEvent } from '../redis.js';
+import { logger } from '../logger.js';
+import { env } from '../env.js';
+import { getMediaBuffer, keyFromUrl } from '../storage.js';
 
 // BullMQ exige conexão dedicada com maxRetriesPerRequest=null
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });

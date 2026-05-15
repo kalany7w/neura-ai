@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
-import { prisma } from '../db';
-import { logger } from '../logger';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
 
 export const WEBHOOK_EVENTS = [
   'message.new',

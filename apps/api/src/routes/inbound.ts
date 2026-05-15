@@ -2,13 +2,13 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { RateLimiterRedis } from 'rate-limiter-flexible';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { dispatchOutbound } from '../queue';
-import { publishEvent } from '../redis-pub';
-import { redis } from './../redis';
-import { audit } from '../services/audit';
-import { patchFirstResponse } from '../services/sla-compute';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { dispatchOutbound } from '../queue.js';
+import { publishEvent } from '../redis-pub.js';
+import { redis } from './../redis.js';
+import { audit } from '../services/audit.js';
+import { patchFirstResponse } from '../services/sla-compute.js';
 
 /**
  * Endpoints PÚBLICOS — sem requireAuth/requireWorkspace. Cada request é

@@ -4,7 +4,7 @@
  * Cache em memória curto-prazo (60s) pra não martelar o DB no scheduler.
  */
 
-import { prisma } from '../db';
+import { prisma } from '../db.js';
 
 export interface ResolvedSlaPolicy {
   id: string;

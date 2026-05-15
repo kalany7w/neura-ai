@@ -14,12 +14,12 @@
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { QUEUE_OUTBOUND_TELEGRAM, type SendMessageJob } from '@neura/shared/queue';
-import { prisma } from './db';
-import { publishEvent } from './redis-pub';
-import { logger } from './logger';
-import { env } from './env';
-import { decrypt } from './services/crypto';
-import { sendMessage, sendPhoto, sendDocument } from './services/telegram-client';
+import { prisma } from './db.js';
+import { publishEvent } from './redis-pub.js';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { decrypt } from './services/crypto.js';
+import { sendMessage, sendPhoto, sendDocument } from './services/telegram-client.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

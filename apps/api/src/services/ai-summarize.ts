@@ -7,8 +7,8 @@
  * Custo gpt-4o-mini: ~$0.0003 por chamada.
  */
 
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 export interface SummarizeInput {
   history: Array<{ direction: 'inbound' | 'outbound'; content: string }>;

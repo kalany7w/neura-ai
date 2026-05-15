@@ -1,8 +1,8 @@
 import { renderTemplate } from '@neura/shared/template-render';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { publishEvent } from '../redis';
-import { enqueueOutbound } from '../queue/dispatcher';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { publishEvent } from '../redis.js';
+import { enqueueOutbound } from '../queue/dispatcher.js';
 
 interface BusinessHours {
   enabled: boolean;

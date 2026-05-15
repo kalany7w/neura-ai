@@ -2,10 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": ".",
-    "module": "ESNext",
-    "moduleResolution": "bundler"
+    "rootDir": "./src",
+    "noEmit": false,
+    "module": "Node16",
+    "moduleResolution": "Node16"
   },
-  "include": ["src/**/*.ts", "generated/**/*.ts"],
+  "include": ["src/index.ts"],
   "exclude": ["node_modules", "dist"]
 }

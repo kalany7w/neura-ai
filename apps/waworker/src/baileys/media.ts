@@ -1,8 +1,8 @@
 import { downloadMediaMessage, type WAMessage, type MessageType } from '@whiskeysockets/baileys';
 import { pino } from 'pino';
 import sharp from 'sharp';
-import { putMedia } from '../storage';
-import { logger } from '../logger';
+import { putMedia } from '../storage.js';
+import { logger } from '../logger.js';
 
 const baileysLogger = pino({ level: 'silent' });
 

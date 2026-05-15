@@ -12,11 +12,11 @@
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { QUEUE_OUTBOUND_EMAIL, type SendMessageJob } from '@neura/shared/queue';
-import { prisma } from './db';
-import { publishEvent } from './redis-pub';
-import { logger } from './logger';
-import { env } from './env';
-import { sendInboxEmail } from './services/email-client';
+import { prisma } from './db.js';
+import { publishEvent } from './redis-pub.js';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { sendInboxEmail } from './services/email-client.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

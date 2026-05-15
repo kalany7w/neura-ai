@@ -6,14 +6,14 @@ import type {
 } from '@whiskeysockets/baileys';
 import { DisconnectReason } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { publishEvent } from '../redis';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { publishEvent } from '../redis.js';
 import type { MessageDirection, MessageType } from '@neura/database';
-import { downloadAndStoreMedia } from './media';
-import { applyInboxRules } from './inbox-rules';
-import { enqueueTranscribe } from '../queue/transcribe';
-import { enqueueAi } from '../queue/ai';
+import { downloadAndStoreMedia } from './media.js';
+import { applyInboxRules } from './inbox-rules.js';
+import { enqueueTranscribe } from '../queue/transcribe.js';
+import { enqueueAi } from '../queue/ai.js';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 

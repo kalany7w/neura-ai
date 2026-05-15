@@ -1,7 +1,7 @@
-import { prisma } from '../db';
-import { logger } from '../logger';
-import { startSession, type SessionHandle } from './session';
-import { clearAuthState, flushPendingAuthState } from './auth-state';
+import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { startSession, type SessionHandle } from './session.js';
+import { clearAuthState, flushPendingAuthState } from './auth-state.js';
 
 interface ManagedSession {
   handle: SessionHandle;
@@ -84,7 +84,7 @@ class SessionManager {
     // Flush qualquer save de auth state pendente antes de soltar
     await flushPendingAuthState(inboxId);
     // Importa lazily pra evitar circular com baileys/events
-    const { clearSessionState } = await import('./events');
+    const { clearSessionState } = await import('./events.js');
     clearSessionState(inboxId);
     logger.info({ inboxId }, 'Session stopped');
   }

@@ -11,8 +11,8 @@
  */
 
 import { Resend } from 'resend';
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 const resend = new Resend(env.RESEND_API_KEY);
 

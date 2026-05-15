@@ -7,8 +7,8 @@
  * tokens. Custo estimado por chamada: <$0.0005.
  */
 
-import { env } from '../env';
-import { logger } from '../logger';
+import { env } from '../env.js';
+import { logger } from '../logger.js';
 
 export interface SuggestReplyInput {
   /** Direção da msg ('inbound' = cliente; 'outbound' = agente nosso) */

@@ -1,7 +1,7 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { QUEUE_TRANSCRIBE, type TranscribeJob } from '@neura/shared/queue';
-import { env } from '../env';
+import { env } from '../env.js';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 

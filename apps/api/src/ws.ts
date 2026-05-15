@@ -2,11 +2,11 @@ import { createNodeWebSocket } from '@hono/node-ws';
 import type { Hono } from 'hono';
 import type { WSContext } from 'hono/ws';
 import { Redis } from 'ioredis';
-import { auth } from './auth';
-import { prisma } from './db';
-import { env } from './env';
-import { logger } from './logger';
-import { redis } from './redis';
+import { auth } from './auth.js';
+import { prisma } from './db.js';
+import { env } from './env.js';
+import { logger } from './logger.js';
+import { redis } from './redis.js';
 
 /**
  * Cada cliente WS está inscrito em 3 canais do workspace ativo:

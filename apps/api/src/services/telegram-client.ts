@@ -6,7 +6,7 @@
  * Storage: criptografado em Inbox.channelConfig.botTokenEncrypted via AES-256-GCM.
  */
 
-import { logger } from '../logger';
+import { logger } from '../logger.js';
 
 const TG_BASE = 'https://api.telegram.org';
 

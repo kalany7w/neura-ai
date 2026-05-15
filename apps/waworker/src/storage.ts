@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import { env } from './env';
-import { logger } from './logger';
+import { env } from './env.js';
+import { logger } from './logger.js';
 
 const protocol = env.MINIO_USE_SSL ? 'https' : 'http';
 const endpoint = `${protocol}://${env.MINIO_ENDPOINT}:${env.MINIO_PORT}`;

@@ -1,10 +1,10 @@
-import { logger } from './logger';
-import { env } from './env';
-import { sessionManager } from './baileys/manager';
-import { outboundWorker } from './queue/outbound';
-import { startCommandsListener, shutdownCommandsListener } from './commands';
-import { prisma } from './db';
-import { redis } from './redis';
+import { logger } from './logger.js';
+import { env } from './env.js';
+import { sessionManager } from './baileys/manager.js';
+import { outboundWorker } from './queue/outbound.js';
+import { startCommandsListener, shutdownCommandsListener } from './commands.js';
+import { prisma } from './db.js';
+import { redis } from './redis.js';
 
 async function main() {
   logger.info({ env: env.NODE_ENV }, '🟡 Neura waworker booting');
