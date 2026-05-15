@@ -1044,6 +1044,10 @@ conversationsRouter.post(
         return c.json({ error: 'email_only_text', message: 'Email só suporta texto no MVP — anexos virão depois.' }, 400);
       }
     }
+    // Webchat: só texto no MVP. Mídia inline futura.
+    if (conv.inbox.type === 'WEBCHAT' && parsed.data.type !== 'TEXT') {
+      return c.json({ error: 'webchat_only_text', message: 'Webchat só suporta texto no MVP.' }, 400);
+    }
 
     // Rate limit anti-ban WhatsApp: 30 msgs/min por inbox.
     try {

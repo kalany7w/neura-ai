@@ -35,6 +35,7 @@ import { scheduledMessagesRouter } from './routes/scheduled-messages';
 import { kbRouter } from './routes/kb';
 import { inboundEmailRouter } from './routes/inbound-email';
 import { csatSurveysRouter } from './routes/csat-surveys';
+import { webchatRouter } from './routes/webchat';
 import { startScheduledMsgsScheduler } from './scheduled-messages';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
@@ -98,6 +99,7 @@ app.route('/api/scheduled-messages', scheduledMessagesRouter);
 app.route('/api/kb', kbRouter);
 app.route('/api/inbound/email', inboundEmailRouter);
 app.route('/api/csat-surveys', csatSurveysRouter);
+app.route('/api/webchat', webchatRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);

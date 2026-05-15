@@ -149,7 +149,7 @@ export async function sendCsatSurvey(
  */
 export async function resolveSurveyForConversation(
   workspaceId: string,
-  inboxType: 'WHATSAPP' | 'TELEGRAM' | 'EMAIL',
+  inboxType: 'WHATSAPP' | 'TELEGRAM' | 'EMAIL' | 'WEBCHAT',
 ): Promise<{ id: string } | null> {
   // Tenta canal específico primeiro
   const channelSpecific = await prisma.csatSurvey.findFirst({

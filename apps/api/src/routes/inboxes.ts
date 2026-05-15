@@ -525,3 +525,181 @@ inboxesRouter.get(
     });
   },
 );
+
+// ============================================================
+// WEBCHAT — conectar / desconectar (Onda 6A)
+// ============================================================
+// Cria inbox tipo WEBCHAT com widgetSlug random. UI mostra <script> pra paste
+// no site do cliente. Visitantes anônimos conectam via /api/webchat/<slug>/*.
+
+const webchatConnectSchema = z.object({
+  name: z.string().min(1).max(80),
+  primaryColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'cor hex inválida')
+    .default('#6366f1'),
+  title: z.string().min(1).max(60).default('Atendimento'),
+  placeholder: z.string().min(1).max(80).default('Digite sua mensagem…'),
+  welcomeMessage: z.string().max(500).optional(),
+});
+
+function buildWidgetScript(widgetSlug: string, baseUrl: string): string {
+  const src = `${baseUrl.replace(/\/$/, '')}/widget.js`;
+  return `<script async defer src="${src}" data-neura-widget="${widgetSlug}" data-neura-api="${baseUrl.replace(/\/$/, '')}"></script>`;
+}
+
+inboxesRouter.post(
+  '/webchat/connect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = webchatConnectSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const widgetSlug = randomBytes(16).toString('hex');
+
+    const inbox = await prisma.inbox.create({
+      data: {
+        workspaceId,
+        name: parsed.data.name,
+        type: 'WEBCHAT',
+        status: 'CONNECTED',
+        channelConfig: {
+          widgetSlug,
+          primaryColor: parsed.data.primaryColor,
+          title: parsed.data.title,
+          placeholder: parsed.data.placeholder,
+          welcomeMessage: parsed.data.welcomeMessage?.trim() || null,
+        },
+      },
+    });
+
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'inbox.webchat_connected',
+      resource: `Inbox:${inbox.id}`,
+      metadata: { widgetSlug },
+    });
+
+    const baseUrl =
+      env.PUBLIC_API_URL || env.APP_URL || '';
+    const appBase = env.APP_URL || baseUrl;
+
+    return c.json(
+      {
+        inbox: {
+          id: inbox.id,
+          name: inbox.name,
+          type: inbox.type,
+          status: inbox.status,
+        },
+        widget: {
+          slug: widgetSlug,
+          // O script é servido pelo app web (apps/web/public/widget.js) — usa APP_URL.
+          script: buildWidgetScript(widgetSlug, appBase),
+          apiBaseUrl: baseUrl,
+          primaryColor: parsed.data.primaryColor,
+        },
+      },
+      201,
+    );
+  },
+);
+
+// PATCH /api/inboxes/:id/webchat/config — atualiza tema/welcome (ADMIN+SUPERVISOR).
+inboxesRouter.patch(
+  '/:id/webchat/config',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = webchatConnectSchema
+      .partial({ name: true })
+      .extend({
+        // Permite atualizar individual sem precisar enviar nome de novo
+        name: z.string().min(1).max(80).optional(),
+      })
+      .safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox || inbox.type !== 'WEBCHAT') return c.json({ error: 'not_found' }, 404);
+    const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
+    const updated = await prisma.inbox.update({
+      where: { id },
+      data: {
+        ...(parsed.data.name ? { name: parsed.data.name } : {}),
+        channelConfig: {
+          ...cfg,
+          ...(parsed.data.primaryColor ? { primaryColor: parsed.data.primaryColor } : {}),
+          ...(parsed.data.title ? { title: parsed.data.title } : {}),
+          ...(parsed.data.placeholder ? { placeholder: parsed.data.placeholder } : {}),
+          ...(parsed.data.welcomeMessage !== undefined
+            ? { welcomeMessage: parsed.data.welcomeMessage?.trim() || null }
+            : {}),
+        },
+      },
+    });
+    return c.json({ inbox: updated });
+  },
+);
+
+// GET /api/inboxes/:id/webchat/snippet — retorna script tag pra paste no site.
+inboxesRouter.get(
+  '/:id/webchat/snippet',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox || inbox.type !== 'WEBCHAT') return c.json({ error: 'not_found' }, 404);
+    const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
+    const slug = cfg.widgetSlug as string | undefined;
+    if (!slug) return c.json({ error: 'not_configured' }, 500);
+    const baseUrl = env.PUBLIC_API_URL || env.APP_URL || '';
+    const appBase = env.APP_URL || baseUrl;
+    return c.json({
+      slug,
+      script: buildWidgetScript(slug, appBase),
+      apiBaseUrl: baseUrl,
+      primaryColor: cfg.primaryColor ?? '#6366f1',
+      title: cfg.title ?? 'Atendimento',
+      placeholder: cfg.placeholder ?? 'Digite sua mensagem…',
+      welcomeMessage: cfg.welcomeMessage ?? null,
+    });
+  },
+);
+
+// POST /api/inboxes/:id/webchat/disconnect — desativa widget.
+inboxesRouter.post(
+  '/:id/webchat/disconnect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox || inbox.type !== 'WEBCHAT') return c.json({ error: 'not_found' }, 404);
+    await prisma.inbox.update({
+      where: { id },
+      data: { status: 'DISCONNECTED' },
+    });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'inbox.webchat_disconnected',
+      resource: `Inbox:${id}`,
+    });
+    return c.json({ ok: true });
+  },
+);

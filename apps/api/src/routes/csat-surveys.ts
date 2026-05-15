@@ -22,7 +22,7 @@ export const csatSurveysRouter = new Hono<{
 const baseSchema = {
   name: z.string().min(1).max(80),
   scoreType: z.enum(['CSAT', 'NPS', 'THUMBS']),
-  channelScope: z.enum(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL']).default('ALL'),
+  channelScope: z.enum(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL', 'WEBCHAT']).default('ALL'),
   delayMinutes: z.number().int().min(0).max(7 * 24 * 60).default(5),
   messageBody: z.string().min(1).max(2000),
   thankYouMessage: z.string().max(2000).nullable().optional(),
