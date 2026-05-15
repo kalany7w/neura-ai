@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Trash2, FileText, Eye } from 'lucide-react';
+import { Trash2, FileText, Eye, Pin, PinOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { renderTemplate, TEMPLATE_VARIABLES } from '@neura/shared/template-render';
@@ -25,6 +25,7 @@ interface TemplateItem {
   name: string;
   shortcut: string | null;
   body: string;
+  pinnedAt: string | null;
 }
 
 const schema = z.object({
@@ -118,6 +119,18 @@ export default function TemplatesPage() {
       toast.error(err instanceof Error ? err.message : 'Erro');
     }
   }
+
+  async function togglePin(tpl: TemplateItem) {
+    try {
+      await api(`/api/templates/${tpl.id}/${tpl.pinnedAt ? 'unpin' : 'pin'}`, { method: 'POST' });
+      await qc.invalidateQueries({ queryKey: ['templates'] });
+      toast.success(tpl.pinnedAt ? 'Desafixado' : 'Fixado no composer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  const pinnedCount = (data?.templates ?? []).filter((t) => t.pinnedAt).length;
 
   return (
     <div className="space-y-6">
@@ -213,36 +226,69 @@ export default function TemplatesPage() {
         </div>
 
         <div className="rounded-lg border bg-card p-5">
-          <h2 className="mb-4 font-semibold">Existentes</h2>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="font-semibold">Existentes</h2>
+            <p className="text-[11px] text-muted-foreground">
+              {pinnedCount > 0
+                ? `${pinnedCount} fixado${pinnedCount > 1 ? 's' : ''} no composer (top 3 aparecem)`
+                : 'Fixe até 3 pra aparecerem como botão no composer'}
+            </p>
+          </div>
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : !data?.templates.length ? (
             <p className="text-sm text-muted-foreground">Nenhum template.</p>
           ) : (
             <ul className="space-y-2">
-              {data.templates.map((t) => (
-                <li key={t.id} className="rounded-md border p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                        <p className="font-medium">{t.name}</p>
-                        {t.shortcut && (
-                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {t.shortcut}
-                          </span>
-                        )}
+              {data.templates.map((t) => {
+                const isPinned = !!t.pinnedAt;
+                return (
+                  <li
+                    key={t.id}
+                    className={`rounded-md border p-3 ${isPinned ? 'border-indigo-300 bg-indigo-50/40 dark:border-indigo-800 dark:bg-indigo-950/30' : ''}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                          <p className="font-medium">{t.name}</p>
+                          {t.shortcut && (
+                            <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              {t.shortcut}
+                            </span>
+                          )}
+                          {isPinned && (
+                            <span className="inline-flex items-center gap-0.5 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
+                              <Pin className="h-2.5 w-2.5" />
+                              Fixado
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
+                          {t.body}
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
-                        {t.body}
-                      </p>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => togglePin(t)}
+                          title={isPinned ? 'Desafixar' : 'Fixar no composer'}
+                        >
+                          {isPinned ? (
+                            <PinOff className="h-4 w-4" />
+                          ) : (
+                            <Pin className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => remove(t.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <Button size="icon" variant="ghost" onClick={() => remove(t.id)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

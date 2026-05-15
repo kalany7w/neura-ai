@@ -162,6 +162,7 @@ interface TemplateItem {
   name: string;
   shortcut: string | null;
   body: string;
+  pinnedAt: string | null;
 }
 
 interface ConversationDetail {
@@ -419,7 +420,17 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const { data: templatesData } = useQuery<{ templates: TemplateItem[] }>({
     queryKey: ['templates'],
     queryFn: () => api('/api/templates'),
+    // Recarrega quando volta pra aba — pra pegar pin/unpin feito em /settings/templates
+    refetchOnWindowFocus: 'always',
   });
+  const pinnedTemplates = useMemo(
+    () =>
+      (templatesData?.templates ?? [])
+        .filter((t) => !!t.pinnedAt)
+        .sort((a, b) => (b.pinnedAt ?? '').localeCompare(a.pinnedAt ?? ''))
+        .slice(0, 3),
+    [templatesData?.templates],
+  );
 
   const { data: wsData } = useQuery<{ workspace: { members: Member[] } }>({
     queryKey: ['workspace-me'],
@@ -1446,6 +1457,27 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 </button>
               ))
             )}
+          </div>
+        )}
+
+        {/* Top 3 templates fixados — atalho direto sem digitar /shortcut */}
+        {mode === 'reply' && pinnedTemplates.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Atalhos
+            </span>
+            {pinnedTemplates.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => pickTemplate(tpl)}
+                title={tpl.body}
+                className="inline-flex items-center gap-1 rounded-full border border-indigo-300 bg-indigo-50 px-2.5 py-0.5 text-[11px] font-medium text-indigo-700 transition hover:border-indigo-500 hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
+              >
+                <Pin className="h-2.5 w-2.5" />
+                {tpl.name}
+              </button>
+            ))}
           </div>
         )}
 
