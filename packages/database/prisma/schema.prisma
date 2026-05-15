@@ -702,6 +702,9 @@ model Message {
   waMessageId    String?
   // ID retornado pelo Telegram Bot API (message_id é integer) — apenas inbox TELEGRAM
   telegramMessageId Int?
+  // Header Message-ID do email (inbound parsed OU retornado por Resend send) —
+  // apenas inbox EMAIL. Usado pra threading (In-Reply-To cliente lado, match inbound nosso lado).
+  emailMessageId String?
   direction      MessageDirection
   type           MessageType      @default(TEXT)
   content        String?          @db.Text
@@ -745,6 +748,7 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([waMessageId])
+  @@index([emailMessageId])
   @@map("messages")
 }
 

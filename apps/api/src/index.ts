@@ -33,6 +33,7 @@ import { auditRouter } from './routes/audit';
 import { customAttributesRouter } from './routes/custom-attributes';
 import { scheduledMessagesRouter } from './routes/scheduled-messages';
 import { kbRouter } from './routes/kb';
+import { inboundEmailRouter } from './routes/inbound-email';
 import { startScheduledMsgsScheduler } from './scheduled-messages';
 import { setupWebSocket } from './ws';
 import { startSlaScheduler } from './sla';
@@ -43,6 +44,7 @@ import { transcribeWorker } from './transcribe';
 import { aiWorker } from './ai-worker';
 import { kbEmbedWorker } from './kb-worker';
 import { telegramOutboundWorker } from './telegram-outbound';
+import { emailOutboundWorker } from './email-outbound';
 
 const app = new Hono();
 
@@ -92,6 +94,7 @@ app.route('/api/audit-log', auditRouter);
 app.route('/api/custom-attributes', customAttributesRouter);
 app.route('/api/scheduled-messages', scheduledMessagesRouter);
 app.route('/api/kb', kbRouter);
+app.route('/api/inbound/email', inboundEmailRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
@@ -141,5 +144,6 @@ void transcribeWorker;
 void aiWorker;
 void kbEmbedWorker;
 void telegramOutboundWorker;
+void emailOutboundWorker;
 
 export { app };

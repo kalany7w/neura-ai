@@ -6,6 +6,9 @@ export const QUEUE_OUTBOUND = 'outbound';
 // Queue de envio específica pra inboxes Telegram (HTTP Bot API, sem Baileys).
 // Processada pelo api side worker em telegram-outbound.ts.
 export const QUEUE_OUTBOUND_TELEGRAM = 'outbound-telegram';
+// Queue de envio específica pra inboxes Email (Resend send via HTTPS).
+// Processada pelo api side worker em email-outbound.ts.
+export const QUEUE_OUTBOUND_EMAIL = 'outbound-email';
 export const QUEUE_TRANSCRIBE = 'transcribe';
 export const QUEUE_AI = 'ai';
 // Queue de embedding de artigos da KB (RAG). Processado pelo kb-embed worker.

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Send, Wifi, WifiOff } from 'lucide-react';
+import { Plus, Search, Send, Wifi, WifiOff, Mail, Copy, Check as CheckIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -34,6 +34,14 @@ export default function InboxesPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
+  // Resultado do connect — mostra webhook URL + secret pra paste no provedor.
+  const [emailWebhook, setEmailWebhook] = useState<null | {
+    url: string;
+    secret: string;
+    fromAddress: string;
+    inboxName: string;
+  }>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const wsState = useRealtimeStore((s) => s.state);
@@ -92,11 +100,36 @@ export default function InboxesPage() {
             )}
           </h1>
           <p className="text-muted-foreground">
-            Conecte canais (WhatsApp via Baileys, Telegram via Bot API) para receber e
-            enviar mensagens. Cada inbox = 1 canal.
+            Conecte canais (WhatsApp via Baileys, Telegram via Bot API, Email via Resend
+            inbound) para receber e enviar mensagens. Cada inbox = 1 canal.
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Mail className="h-4 w-4" />
+                Conectar Email
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Conectar inbox de Email</DialogTitle>
+                <DialogDescription>
+                  Configure o endereço from. Depois você cola o webhook gerado no painel
+                  do seu provedor (Resend Inbound, Postmark, AWS SES + Lambda etc.).
+                </DialogDescription>
+              </DialogHeader>
+              <EmailConnectForm
+                onCancel={() => setEmailOpen(false)}
+                onDone={(webhook) => {
+                  setEmailOpen(false);
+                  setEmailWebhook(webhook);
+                  qc.invalidateQueries({ queryKey: ['inboxes'] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
           <Dialog open={telegramOpen} onOpenChange={setTelegramOpen}>
             <DialogTrigger asChild>
               <Button variant="outline">
@@ -220,7 +253,240 @@ export default function InboxesPage() {
           ))}
         </div>
       )}
+
+      <EmailWebhookDialog webhook={emailWebhook} onClose={() => setEmailWebhook(null)} />
     </div>
+  );
+}
+
+function EmailConnectForm({
+  onDone,
+  onCancel,
+}: {
+  onDone: (webhook: {
+    url: string;
+    secret: string;
+    fromAddress: string;
+    inboxName: string;
+  }) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [fromAddress, setFromAddress] = useState('');
+  const [fromName, setFromName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  async function submit() {
+    if (!name.trim() || !fromAddress.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await api<{
+        inbox: { id: string; name: string };
+        webhook: { url: string; secret: string; slug: string };
+      }>(`/api/inboxes/email/connect`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(),
+          fromAddress: fromAddress.trim(),
+          fromName: fromName.trim() || undefined,
+        }),
+      });
+      toast.success(`Inbox Email criada · ${fromAddress.trim()}`);
+      onDone({
+        url: res.webhook.url,
+        secret: res.webhook.secret,
+        fromAddress: fromAddress.trim(),
+        inboxName: res.inbox.name,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao conectar');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label htmlFor="em-name" className="text-sm font-medium">
+          Nome da inbox
+        </label>
+        <Input
+          id="em-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Suporte Email"
+        />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="em-from" className="text-sm font-medium">
+          Endereço from
+        </label>
+        <Input
+          id="em-from"
+          type="email"
+          value={fromAddress}
+          onChange={(e) => setFromAddress(e.target.value)}
+          placeholder="suporte@empresa.com"
+          autoComplete="off"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Domínio precisa estar verificado no Resend pra emails saírem.
+        </p>
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="em-from-name" className="text-sm font-medium">
+          Nome humano (opcional)
+        </label>
+        <Input
+          id="em-from-name"
+          value={fromName}
+          onChange={(e) => setFromName(e.target.value)}
+          placeholder="Suporte Acme"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Aparece como remetente no Gmail/Outlook. Default = nome da inbox.
+        </p>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onCancel} disabled={submitting}>
+          Cancelar
+        </Button>
+        <Button
+          onClick={submit}
+          disabled={submitting || !name.trim() || !fromAddress.trim()}
+        >
+          {submitting ? 'Criando…' : 'Criar inbox'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function EmailWebhookDialog({
+  webhook,
+  onClose,
+}: {
+  webhook: {
+    url: string;
+    secret: string;
+    fromAddress: string;
+    inboxName: string;
+  } | null;
+  onClose: () => void;
+}) {
+  const [copiedField, setCopiedField] = useState<'url' | 'secret' | null>(null);
+  if (!webhook) return null;
+
+  async function copy(field: 'url' | 'secret', value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    } catch {
+      toast.error('Falha ao copiar — copie manualmente.');
+    }
+  }
+
+  return (
+    <Dialog open={!!webhook} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Inbox &quot;{webhook.inboxName}&quot; criada</DialogTitle>
+          <DialogDescription>
+            Configure agora o webhook no provedor de email pra encaminhar mensagens
+            recebidas em <strong>{webhook.fromAddress}</strong> pro Neura.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Webhook URL
+            </label>
+            <div className="flex items-center gap-1.5">
+              <code className="flex-1 truncate rounded-md bg-muted px-2.5 py-2 text-xs font-mono">
+                {webhook.url}
+              </code>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => copy('url', webhook.url)}
+                title="Copiar URL"
+              >
+                {copiedField === 'url' ? (
+                  <CheckIcon className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Header secret (X-Neura-Email-Secret)
+            </label>
+            <div className="flex items-center gap-1.5">
+              <code className="flex-1 truncate rounded-md bg-muted px-2.5 py-2 text-xs font-mono">
+                {webhook.secret}
+              </code>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => copy('secret', webhook.secret)}
+                title="Copiar secret"
+              >
+                {copiedField === 'secret' ? (
+                  <CheckIcon className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Adicione como header HTTP na configuração do webhook do provedor.
+            </p>
+          </div>
+
+          <div className="rounded-md border border-indigo-200 bg-indigo-50/50 p-3 text-xs dark:border-indigo-800 dark:bg-indigo-950/30">
+            <p className="mb-1.5 font-semibold text-indigo-900 dark:text-indigo-200">
+              Configurar no provedor
+            </p>
+            <ul className="space-y-1.5 text-indigo-900/80 dark:text-indigo-200/80">
+              <li>
+                <strong>Resend Inbound:</strong> Dashboard → Inbound → Add address →{' '}
+                <code className="rounded bg-indigo-100 px-1 dark:bg-indigo-900">
+                  {webhook.fromAddress}
+                </code>{' '}
+                → Forward to webhook URL acima.
+              </li>
+              <li>
+                <strong>Postmark:</strong> Servers → Inbound stream → Webhook URL = URL
+                acima · Custom Headers = secret acima.
+              </li>
+              <li>
+                <strong>AWS SES + Lambda:</strong> Receipt rule → Lambda function parsea
+                MIME → POST com payload Postmark-style + header secret.
+              </li>
+              <li>
+                <strong>Cloudflare Email Workers:</strong> Worker parsea {`message`} →{' '}
+                <code className="rounded bg-indigo-100 px-1 dark:bg-indigo-900">
+                  fetch(url, {`{ method: 'POST', headers, body: JSON }`})
+                </code>
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Esses dados estão disponíveis novamente em{' '}
+            <code>GET /api/inboxes/&lt;id&gt;/email/webhook</code> via API.
+          </p>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose}>Fechar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

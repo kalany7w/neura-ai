@@ -208,7 +208,24 @@ SERVICE_URL_WEB=https://app.neura-ai.net
 
 ---
 
-## 11. Portas reservadas
+## 11. Conectar Email (opcional)
+
+1. No Neura: `/inboxes` → **Conectar Email** → preenche nome + endereço from + nome humano → Criar.
+2. O Neura mostra um diálogo com **Webhook URL** + **Header secret**.
+3. Configure o provedor de email pra encaminhar inbound pro webhook acima:
+   - **Resend Inbound**: Dashboard → Inbound → Add address → forward to webhook URL.
+   - **Postmark**: Servers → Inbound stream → Webhook URL + Custom Header `X-Neura-Email-Secret: <secret>`.
+   - **AWS SES + Lambda**: Receipt rule → Lambda parsea MIME → POST com payload Postmark-style.
+   - **Cloudflare Email Workers**: Worker parsea `message` → `fetch(url, { method: 'POST', headers, body })`.
+4. Quando email chegar → vira conversation no /inbox (auto-card no funil default).
+5. Outbound: composer envia via Resend SDK (mesma `RESEND_API_KEY` do app, domínio `RESEND_FROM` precisa estar verificado).
+
+> ⚠️ Domínio do `fromAddress` precisa estar verificado no Resend (SPF + DKIM)
+> pra emails saírem sem cair em spam. Resend Dashboard → Domains → Add.
+
+---
+
+## 12. Portas reservadas
 
 Pra referência (host-exposed reservadas em `~/.claude/CLAUDE.md`):
 

@@ -1003,7 +1003,7 @@ conversationsRouter.post(
 
     const conv = await prisma.conversation.findFirst({
       where: { id, workspaceId },
-      include: { contact: true, inbox: { select: { id: true, status: true } } },
+      include: { contact: true, inbox: { select: { id: true, status: true, type: true } } },
     });
     if (!conv) return c.json({ error: 'not_found' }, 404);
     if (role === 'AGENT' && conv.assignedAgentId && conv.assignedAgentId !== userId) {
@@ -1011,6 +1011,15 @@ conversationsRouter.post(
     }
     if (conv.inbox.status !== 'CONNECTED') {
       return c.json({ error: 'inbox_not_connected' }, 409);
+    }
+    // Email-specific: precisa de contact.email + só TEXT no MVP (sem anexos).
+    if (conv.inbox.type === 'EMAIL') {
+      if (!conv.contact.email) {
+        return c.json({ error: 'contact_no_email' }, 400);
+      }
+      if (parsed.data.type !== 'TEXT') {
+        return c.json({ error: 'email_only_text', message: 'Email só suporta texto no MVP — anexos virão depois.' }, 400);
+      }
     }
 
     // Rate limit anti-ban WhatsApp: 30 msgs/min por inbox.

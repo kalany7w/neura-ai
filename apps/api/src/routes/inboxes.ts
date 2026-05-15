@@ -382,3 +382,146 @@ inboxesRouter.post(
     return c.json({ ok: true });
   },
 );
+
+// ============================================================
+// EMAIL — conectar / desconectar (Onda 4.5)
+// ============================================================
+// Não precisa "conectar" no provedor — o agente cadastra o endereço from + o
+// URL do webhook inbound. O Resend (ou Postmark/SES) deve ser configurado pra
+// chamar nosso webhook quando email chegar. Retornamos o URL + secret pra
+// paste no painel do provedor.
+
+const emailConnectSchema = z.object({
+  name: z.string().min(1).max(80),
+  // Endereço from completo: ex "suporte@empresa.com". Validação básica.
+  fromAddress: z
+    .string()
+    .email('email inválido')
+    .max(120)
+    .transform((s) => s.toLowerCase()),
+  // Nome humano que aparece no From — ex "Suporte Acme".
+  fromName: z.string().min(1).max(80).optional(),
+});
+
+inboxesRouter.post(
+  '/email/connect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = emailConnectSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+
+    // Slug aleatório pra URL do webhook (anti-enumeração) + secret HMAC opcional
+    const inboundSlug = randomBytes(16).toString('hex');
+    const inboundSecret = randomBytes(24).toString('hex');
+
+    const inbox = await prisma.inbox.create({
+      data: {
+        workspaceId,
+        name: parsed.data.name,
+        type: 'EMAIL',
+        // EMAIL inbox fica CONNECTED imediatamente — não há handshake com provedor.
+        // O fluxo só funciona quando o user configura o webhook no Resend/Postmark/SES.
+        status: 'CONNECTED',
+        channelConfig: {
+          fromAddress: parsed.data.fromAddress,
+          fromName: parsed.data.fromName ?? parsed.data.name,
+          inboundSlug,
+          inboundSecret,
+        },
+      },
+    });
+
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'inbox.email_connected',
+      resource: `Inbox:${inbox.id}`,
+      metadata: { fromAddress: parsed.data.fromAddress },
+    });
+
+    const baseUrl = env.PUBLIC_API_URL || env.APP_URL || '';
+    const webhookUrl = baseUrl
+      ? `${baseUrl.replace(/\/$/, '')}/api/inbound/email/${inboundSlug}`
+      : `/api/inbound/email/${inboundSlug}`;
+
+    return c.json(
+      {
+        inbox: {
+          id: inbox.id,
+          name: inbox.name,
+          type: inbox.type,
+          status: inbox.status,
+          fromAddress: parsed.data.fromAddress,
+          fromName: parsed.data.fromName ?? parsed.data.name,
+        },
+        webhook: {
+          url: webhookUrl,
+          secret: inboundSecret,
+          slug: inboundSlug,
+        },
+      },
+      201,
+    );
+  },
+);
+
+// POST /api/inboxes/:id/email/disconnect — só marca DISCONNECTED.
+// Não consegue desconfigurar webhook no provedor (não temos credentials dele).
+inboxesRouter.post(
+  '/:id/email/disconnect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox || inbox.type !== 'EMAIL') return c.json({ error: 'not_found' }, 404);
+    await prisma.inbox.update({
+      where: { id },
+      data: { status: 'DISCONNECTED' },
+    });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'inbox.email_disconnected',
+      resource: `Inbox:${id}`,
+    });
+    return c.json({ ok: true });
+  },
+);
+
+// GET /api/inboxes/:id/email/webhook — retorna URL + secret pra paste no provedor.
+// ADMIN+SUPERVISOR (pra setup) — não expõe via lista pública pra evitar leak.
+inboxesRouter.get(
+  '/:id/email/webhook',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox || inbox.type !== 'EMAIL') return c.json({ error: 'not_found' }, 404);
+    const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
+    const slug = cfg.inboundSlug as string | undefined;
+    const secret = cfg.inboundSecret as string | undefined;
+    if (!slug || !secret) return c.json({ error: 'not_configured' }, 500);
+    const baseUrl = env.PUBLIC_API_URL || env.APP_URL || '';
+    return c.json({
+      url: baseUrl
+        ? `${baseUrl.replace(/\/$/, '')}/api/inbound/email/${slug}`
+        : `/api/inbound/email/${slug}`,
+      secret,
+      slug,
+      fromAddress: cfg.fromAddress,
+      fromName: cfg.fromName,
+    });
+  },
+);
