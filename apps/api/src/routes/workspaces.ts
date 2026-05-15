@@ -8,6 +8,7 @@ import { requirePermission } from '../middlewares/permissions';
 import { audit } from '../services/audit';
 import { sendEmail, emailTemplates } from '../email';
 import { inviteSchema, switchWorkspaceSchema } from '@neura/shared/auth';
+import { buildMentionTargets } from '../services/mentions';
 import { env } from '../env';
 
 export const workspacesRouter = new Hono<{
@@ -133,6 +134,26 @@ workspacesRouter.get('/me', requireAuth, requireWorkspace, async (c) => {
         joinedAt: m.createdAt,
       })),
     },
+  });
+});
+
+// GET /api/workspaces/me/mention-targets — lista members com slug pronto pra @mention
+workspacesRouter.get('/me/mention-targets', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const members = await prisma.membership.findMany({
+    where: { workspaceId },
+    include: { user: { select: { id: true, name: true, email: true, image: true } } },
+  });
+  const targets = buildMentionTargets(
+    members.map((m) => ({ userId: m.userId, user: m.user })),
+  );
+  // Enriquece com avatar pro picker
+  const userMap = new Map(members.map((m) => [m.userId, m.user]));
+  return c.json({
+    targets: targets.map((t) => ({
+      ...t,
+      image: userMap.get(t.userId)?.image ?? null,
+    })),
   });
 });
 

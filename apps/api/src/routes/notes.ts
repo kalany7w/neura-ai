@@ -5,6 +5,11 @@ import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
 import { publishEvent } from '../redis-pub';
+import {
+  buildMentionTargets,
+  parseMentions,
+  createMentionNotifications,
+} from '../services/mentions';
 
 export const notesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -73,6 +78,42 @@ notesRouter.post(
       conversationId: conv.id,
       note,
     });
+
+    // Mentions: cria notification pros agentes mencionados
+    try {
+      const members = await prisma.membership.findMany({
+        where: { workspaceId },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+      const targets = buildMentionTargets(
+        members.map((m) => ({ userId: m.userId, user: m.user })),
+      );
+      const mentionedIds = parseMentions(parsed.data.body, targets);
+      if (mentionedIds.length > 0) {
+        const author = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true },
+        });
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: conv.id },
+          include: { contact: { select: { name: true, phoneNumber: true } } },
+        });
+        const contactLabel =
+          conversation?.contact.name ?? conversation?.contact.phoneNumber ?? 'Conversa';
+        await createMentionNotifications({
+          workspaceId,
+          authorId: userId,
+          authorName: author?.name ?? null,
+          mentionedUserIds: mentionedIds,
+          link: `/inbox/${conv.id}`,
+          context: `Nota na conversa com ${contactLabel}`,
+          bodyPreview: parsed.data.body,
+        });
+      }
+    } catch {
+      // Mentions não devem bloquear criação da nota
+    }
+
     return c.json({ note }, 201);
   },
 );
@@ -174,6 +215,37 @@ notesRouter.post(
       contactId: contact.id,
       note: { ...note, author },
     });
+
+    // Mentions: cria notification pros agentes mencionados
+    try {
+      const members = await prisma.membership.findMany({
+        where: { workspaceId },
+        include: { user: { select: { id: true, name: true, email: true } } },
+      });
+      const targets = buildMentionTargets(
+        members.map((m) => ({ userId: m.userId, user: m.user })),
+      );
+      const mentionedIds = parseMentions(parsed.data.body, targets);
+      if (mentionedIds.length > 0) {
+        const contactInfo = await prisma.contact.findUnique({
+          where: { id: contact.id },
+          select: { name: true, phoneNumber: true },
+        });
+        const contactLabel = contactInfo?.name ?? contactInfo?.phoneNumber ?? 'Contato';
+        await createMentionNotifications({
+          workspaceId,
+          authorId: userId,
+          authorName: author?.name ?? null,
+          mentionedUserIds: mentionedIds,
+          link: `/contacts/${contact.id}`,
+          context: `Nota no contato ${contactLabel}`,
+          bodyPreview: parsed.data.body,
+        });
+      }
+    } catch {
+      // Mentions não devem bloquear criação da nota
+    }
+
     return c.json({ note: { ...note, author } }, 201);
   },
 );
