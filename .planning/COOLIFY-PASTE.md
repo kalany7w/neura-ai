@@ -37,7 +37,7 @@ Propagação: ~5min em provedores comuns. Verifique com `dig app.neura-ai.net +s
 3. Repository URL: `https://github.com/kalany7w/neura-ai` (privado — usa deploy key SSH; copie a chave SSH que o Coolify gera e adicione em GitHub → Repo → Settings → Deploy keys com write disabled)
 4. Branch: `main`
 5. Build Pack: **Docker Compose**
-6. Docker Compose File: `docker-compose.yml`
+6. Docker Compose File: `docker-compose.yaml`
 7. Salva (não deploy ainda).
 
 ### Domains (na mesma application)
@@ -234,4 +234,4 @@ Pra referência (host-exposed reservadas em `~/.claude/CLAUDE.md`):
 - `7303`: waworker (interno, sem expor)
 - Postgres/Redis/MinIO: portas padrão internas, isoladas
 
-**Coolify regra**: `docker-compose.yml` não declara `ports:` em service nenhum. Apenas roteamento via Caddy.
+**Coolify regra**: `docker-compose.yaml` não declara `ports:` em service nenhum. Apenas roteamento via Caddy.

@@ -83,7 +83,7 @@ SERVICE_URL_WEB=https://app.neura-ai.net
 2. Repository: `kalany7w/neura-ai` (privado — usa SSH deploy key)
 3. Branch: `main`
 4. Build pack: Docker Compose
-5. Compose file: `docker-compose.yml`
+5. Compose file: `docker-compose.yaml`
 6. Cola o ENV block acima
 7. **Domains**:
    - service `api` → `api.neura-ai.net` (port: 7301)
