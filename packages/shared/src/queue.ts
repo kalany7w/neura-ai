@@ -13,6 +13,8 @@ export const QUEUE_TRANSCRIBE = 'transcribe';
 export const QUEUE_AI = 'ai';
 // Queue de embedding de artigos da KB (RAG). Processado pelo kb-embed worker.
 export const QUEUE_KB_EMBED = 'kb-embed';
+// Queue de envio de surveys CSAT/NPS pós-RESOLVED. Delayed jobs (delay = survey.delayMinutes).
+export const QUEUE_CSAT_SEND = 'csat-send';
 
 export interface TranscribeJob {
   /** Workspace pra publishEvent + audit */
@@ -44,6 +46,17 @@ export interface AiJob {
 export interface KbEmbedJob {
   workspaceId: string;
   articleId: string;
+}
+
+/**
+ * Job de envio de survey CSAT/NPS. Disparado fire-and-forget quando uma
+ * conversa vira RESOLVED. JobId determinístico `csat:<conversationId>`
+ * (1 survey por conversa). Cancelado se conversa reabrir antes do delay vencer.
+ */
+export interface CsatSendJob {
+  workspaceId: string;
+  conversationId: string;
+  surveyId: string;
 }
 
 export interface SendMessageJob {

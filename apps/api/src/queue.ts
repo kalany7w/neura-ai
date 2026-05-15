@@ -7,10 +7,12 @@ import {
   QUEUE_TRANSCRIBE,
   QUEUE_AI,
   QUEUE_KB_EMBED,
+  QUEUE_CSAT_SEND,
   type SendMessageJob,
   type TranscribeJob,
   type AiJob,
   type KbEmbedJob,
+  type CsatSendJob,
 } from '@neura/shared/queue';
 import { prisma } from './db';
 import { env } from './env';
@@ -121,5 +123,52 @@ export async function enqueueKbEmbed(workspaceId: string, articleId: string): Pr
     );
   } catch (err) {
     logger.warn({ err, articleId }, 'enqueueKbEmbed failed');
+  }
+}
+
+// Queue de envio delayed de CSAT/NPS survey pós-RESOLVED.
+export const csatSendQueue = new Queue<CsatSendJob>(QUEUE_CSAT_SEND, {
+  connection: bullConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 30_000 },
+    removeOnComplete: { age: 24 * 60 * 60, count: 1_000 },
+    removeOnFail: { age: 7 * 24 * 60 * 60 },
+  },
+});
+
+/**
+ * Enfileira envio de survey com delay. JobId determinístico `csat:<convId>`
+ * garante 1 survey por conversa — re-enqueue substitui o job pendente.
+ */
+export async function enqueueCsatSend(
+  workspaceId: string,
+  conversationId: string,
+  surveyId: string,
+  delayMs: number,
+): Promise<void> {
+  try {
+    await csatSendQueue.add(
+      'send',
+      { workspaceId, conversationId, surveyId },
+      { jobId: `csat:${conversationId}`, delay: Math.max(0, delayMs) },
+    );
+  } catch (err) {
+    logger.warn({ err, conversationId }, 'enqueueCsatSend failed');
+  }
+}
+
+/**
+ * Cancela survey pendente (chamado quando conversa reabre antes do envio).
+ */
+export async function cancelCsatSend(conversationId: string): Promise<void> {
+  try {
+    const job = await csatSendQueue.getJob(`csat:${conversationId}`);
+    if (job) {
+      await job.remove();
+      logger.info({ conversationId }, 'CSAT job cancelled');
+    }
+  } catch (err) {
+    logger.warn({ err, conversationId }, 'cancelCsatSend failed');
   }
 }

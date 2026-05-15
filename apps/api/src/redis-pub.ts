@@ -2,6 +2,7 @@ import { redis } from './redis';
 import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/webhooks';
 import { dispatchAutomationRules } from './services/automation';
 import { dispatchNotifications } from './services/notification-hooks';
+import { detectCsatResponse } from './services/csat-detect';
 
 const KNOWN_EVENTS = new Set<string>(WEBHOOK_EVENTS);
 
@@ -33,4 +34,20 @@ export async function publishEvent(
 
   // Notifications — cria notif persistente + publica em canal user:<id>
   dispatchNotifications(event, workspaceId, data);
+
+  // CSAT detection: roda em message.new INBOUND. Fire-and-forget.
+  if (event === 'message.new') {
+    const msg = data.message as
+      | { direction?: string; content?: string | null }
+      | undefined;
+    const conversationId = data.conversationId as string | undefined;
+    if (
+      msg?.direction === 'INBOUND' &&
+      typeof msg.content === 'string' &&
+      msg.content.trim() &&
+      conversationId
+    ) {
+      void detectCsatResponse(workspaceId, conversationId, msg.content);
+    }
+  }
 }

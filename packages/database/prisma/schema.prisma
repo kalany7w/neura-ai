@@ -46,6 +46,8 @@ model Workspace {
   scheduledMessages   ScheduledMessage[]
   kbCategories        KbCategory[]
   kbArticles          KbArticle[]
+  csatSurveys         CsatSurvey[]
+  csatResponses       CsatResponse[]
 
   @@map("workspaces")
 }
@@ -274,6 +276,7 @@ model Contact {
   conversations Conversation[]
   labels        ContactLabel[]
   notes         ContactNote[]
+  csatResponses CsatResponse[]
 
   @@unique([workspaceId, phoneNumber])
   @@unique([workspaceId, telegramChatId])
@@ -356,6 +359,11 @@ model Conversation {
   aiKbSuggestionAt       DateTime?
   // accepted=true quando o agente inseriu o conteúdo e mandou — métrica de eficácia.
   aiKbSuggestionAccepted Boolean   @default(false)
+  // CSAT/NPS pós-resolução: survey enviado + janela aguardando resposta.
+  csatSurveyId              String?
+  csatSentAt                DateTime?
+  // Quando set + agora < deadline → próximo inbound conta como possível resposta.
+  csatAwaitingResponseUntil DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -365,6 +373,7 @@ model Conversation {
   messages  Message[]
   labels    ConversationLabel[]
   notes     ConversationNote[]
+  csatResponse CsatResponse?
 
   @@index([workspaceId, status, lastMessageAt])
   @@index([workspaceId, archivedAt])
@@ -373,6 +382,7 @@ model Conversation {
   @@index([contactId])
   @@index([inboxId])
   @@index([workspaceId, aiKbSuggestionAccepted])
+  @@index([csatAwaitingResponseUntil])
   @@map("conversations")
 }
 
@@ -1048,6 +1058,74 @@ model KbArticle {
   @@index([workspaceId, status])
   @@index([categoryId])
   @@map("kb_articles")
+}
+
+// ============================================
+// CSAT + NPS (Fase 37 — Onda 8)
+// ============================================
+// Survey automático pós-RESOLVED. Múltiplos surveys por workspace (A/B test
+// + variantes por canal). Resposta inbound (1-5 / 0-10 / emoji) é parseada
+// e cria CsatResponse — 1 por conversa (unique).
+
+enum CsatScoreType {
+  CSAT   // 1-5 (estrelas)
+  NPS    // 0-10 (likelihood to recommend)
+  THUMBS // 0 ou 1 (negativo/positivo)
+}
+
+enum CsatChannelScope {
+  ALL
+  WHATSAPP
+  TELEGRAM
+  EMAIL
+}
+
+model CsatSurvey {
+  id              String           @id @default(cuid())
+  workspaceId     String
+  name            String
+  scoreType       CsatScoreType    @default(CSAT)
+  channelScope    CsatChannelScope @default(ALL)
+  delayMinutes    Int              @default(5)
+  messageBody     String           @db.Text
+  thankYouMessage String?          @db.Text
+  enabled         Boolean          @default(true)
+  isDefault       Boolean          @default(false)
+  sentCount       Int              @default(0)
+  responseCount   Int              @default(0)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  responses CsatResponse[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, enabled])
+  @@map("csat_surveys")
+}
+
+model CsatResponse {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  surveyId       String
+  conversationId String        @unique
+  contactId      String
+  agentId        String?
+  score          Int
+  scoreType      CsatScoreType
+  comment        String?       @db.Text
+  sentAt         DateTime
+  respondedAt    DateTime      @default(now())
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  survey       CsatSurvey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, respondedAt])
+  @@index([surveyId])
+  @@index([agentId])
+  @@map("csat_responses")
 }
 
 // ============================================

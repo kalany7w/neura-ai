@@ -565,3 +565,167 @@ reportsRouter.get('/sla', requireAuth, requireWorkspace, async (c) => {
     agents,
   });
 });
+
+// GET /api/reports/csat — métricas de satisfação no período.
+// CSAT: avg score (1-5), %satisfeitos (score>=4)
+// NPS: NPS score = %promoters (9-10) - %detractors (0-6)
+// THUMBS: %positivos (score=1) vs %negativos (score=0)
+reportsRouter.get('/csat', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const url = new URL(c.req.url);
+  const range = rangeSchema.safeParse({
+    since: url.searchParams.get('since') ?? undefined,
+    until: url.searchParams.get('until') ?? undefined,
+  });
+  if (!range.success) return c.json({ error: 'invalid_range' }, 400);
+  const until = range.data.until ? new Date(range.data.until) : new Date();
+  const since = range.data.since
+    ? new Date(range.data.since)
+    : new Date(until.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [responses, surveys, sentInRange] = await Promise.all([
+    prisma.csatResponse.findMany({
+      where: { workspaceId, respondedAt: { gte: since, lte: until } },
+      select: {
+        score: true,
+        scoreType: true,
+        comment: true,
+        agentId: true,
+        respondedAt: true,
+        surveyId: true,
+      },
+    }),
+    prisma.csatSurvey.findMany({
+      where: { workspaceId },
+      select: {
+        id: true,
+        name: true,
+        scoreType: true,
+        sentCount: true,
+        responseCount: true,
+        enabled: true,
+      },
+    }),
+    // Total enviado no período = conversations com csatSentAt no range.
+    prisma.conversation.count({
+      where: {
+        workspaceId,
+        csatSentAt: { gte: since, lte: until, not: null },
+      },
+    }),
+  ]);
+
+  const totalResponses = responses.length;
+  const responseRate = sentInRange > 0 ? Math.round((totalResponses / sentInRange) * 100) : null;
+
+  // Calcula métricas separadas por scoreType (cada survey pode ter um tipo diferente)
+  const byType = { CSAT: [] as number[], NPS: [] as number[], THUMBS: [] as number[] };
+  for (const r of responses) {
+    byType[r.scoreType].push(r.score);
+  }
+
+  // CSAT: avg (1-5), satisfação=score>=4
+  const csatScores = byType.CSAT;
+  const csatAvg = csatScores.length > 0 ? csatScores.reduce((a, b) => a + b, 0) / csatScores.length : null;
+  const csatSatisfiedCount = csatScores.filter((s) => s >= 4).length;
+  const csatSatisfactionRate =
+    csatScores.length > 0 ? Math.round((csatSatisfiedCount / csatScores.length) * 100) : null;
+
+  // NPS: promoters (9-10), detractors (0-6), passives (7-8)
+  const npsScores = byType.NPS;
+  const promoters = npsScores.filter((s) => s >= 9).length;
+  const detractors = npsScores.filter((s) => s <= 6).length;
+  const passives = npsScores.filter((s) => s >= 7 && s <= 8).length;
+  const npsScore =
+    npsScores.length > 0
+      ? Math.round(((promoters - detractors) / npsScores.length) * 100)
+      : null;
+
+  // THUMBS: positivos vs negativos
+  const thumbsScores = byType.THUMBS;
+  const positives = thumbsScores.filter((s) => s === 1).length;
+  const negatives = thumbsScores.length - positives;
+  const thumbsPositiveRate =
+    thumbsScores.length > 0 ? Math.round((positives / thumbsScores.length) * 100) : null;
+
+  // Distribuição CSAT (1, 2, 3, 4, 5)
+  const csatDistribution = [1, 2, 3, 4, 5].map((star) => ({
+    score: star,
+    count: csatScores.filter((s) => s === star).length,
+  }));
+
+  // Por agente
+  const agentIds = Array.from(
+    new Set(responses.map((r) => r.agentId).filter((v): v is string => !!v)),
+  );
+  const users = await prisma.user.findMany({
+    where: { id: { in: agentIds } },
+    select: { id: true, name: true, email: true },
+  });
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  const byAgent = new Map<string, { csat: number[]; nps: number[]; thumbs: number[] }>();
+  for (const r of responses) {
+    if (!r.agentId) continue;
+    if (!byAgent.has(r.agentId)) byAgent.set(r.agentId, { csat: [], nps: [], thumbs: [] });
+    const bucket = byAgent.get(r.agentId)!;
+    if (r.scoreType === 'CSAT') bucket.csat.push(r.score);
+    else if (r.scoreType === 'NPS') bucket.nps.push(r.score);
+    else bucket.thumbs.push(r.score);
+  }
+
+  const agents = Array.from(byAgent.entries())
+    .map(([userId, b]) => {
+      const u = userMap.get(userId);
+      const csatAvg = b.csat.length > 0 ? b.csat.reduce((a, x) => a + x, 0) / b.csat.length : null;
+      const npsScore =
+        b.nps.length > 0
+          ? Math.round(((b.nps.filter((s) => s >= 9).length - b.nps.filter((s) => s <= 6).length) / b.nps.length) * 100)
+          : null;
+      const thumbsRate =
+        b.thumbs.length > 0
+          ? Math.round((b.thumbs.filter((s) => s === 1).length / b.thumbs.length) * 100)
+          : null;
+      return {
+        userId,
+        name: u?.name ?? null,
+        email: u?.email ?? '',
+        responses: b.csat.length + b.nps.length + b.thumbs.length,
+        csatAvg,
+        npsScore,
+        thumbsRate,
+      };
+    })
+    .sort((a, b) => b.responses - a.responses);
+
+  // Comments recentes (últimos 10 com texto)
+  const recentComments = responses
+    .filter((r) => r.comment && r.comment.trim())
+    .sort((a, b) => b.respondedAt.getTime() - a.respondedAt.getTime())
+    .slice(0, 10)
+    .map((r) => ({
+      score: r.score,
+      scoreType: r.scoreType,
+      comment: r.comment,
+      respondedAt: r.respondedAt,
+    }));
+
+  return c.json({
+    range: { since: since.toISOString(), until: until.toISOString() },
+    summary: {
+      totalSent: sentInRange,
+      totalResponses,
+      responseRate,
+      csatAvg,
+      csatSatisfactionRate,
+      npsScore,
+      npsBreakdown: { promoters, passives, detractors },
+      thumbsPositiveRate,
+      thumbsBreakdown: { positives, negatives },
+    },
+    csatDistribution,
+    agents,
+    recentComments,
+    surveys,
+  });
+});

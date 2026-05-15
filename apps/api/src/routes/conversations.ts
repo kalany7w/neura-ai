@@ -16,7 +16,8 @@ import { classifyConversation } from '../services/ai-classify';
 import { buildMentionTargets } from '../services/mentions';
 import { patchFirstResponse, patchResolution } from '../services/sla-compute';
 import { audit } from '../services/audit';
-import { aiQueue } from '../queue';
+import { aiQueue, enqueueCsatSend, cancelCsatSend } from '../queue';
+import { resolveSurveyForConversation } from '../services/csat-send';
 import { env } from '../env';
 
 export const conversationsRouter = new Hono<{
@@ -484,6 +485,28 @@ conversationsRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
       status: updated.status,
       previousStatus: conv.status,
     });
+
+    // CSAT trigger: RESOLVED enfileira survey com delay. Reabrir cancela job pendente.
+    if (updated.status === 'RESOLVED') {
+      void (async () => {
+        const inbox = await prisma.inbox.findUnique({
+          where: { id: updated.inboxId },
+          select: { type: true },
+        });
+        if (!inbox) return;
+        const survey = await resolveSurveyForConversation(workspaceId, inbox.type);
+        if (!survey) return;
+        const surveyConfig = await prisma.csatSurvey.findUnique({
+          where: { id: survey.id },
+          select: { delayMinutes: true },
+        });
+        const delayMs = (surveyConfig?.delayMinutes ?? 5) * 60_000;
+        await enqueueCsatSend(workspaceId, updated.id, survey.id, delayMs);
+      })().catch((err) => logger.warn({ err, conversationId: updated.id }, 'csat enqueue failed'));
+    } else if (conv.status === 'RESOLVED') {
+      // Saiu de RESOLVED — cancela survey pendente (não enviado ainda).
+      void cancelCsatSend(updated.id);
+    }
   }
   if (assignmentChanged) {
     await publishEvent(workspaceId, 'conversations', 'conversation.assigned', {
