@@ -25,6 +25,8 @@ const listQuery = z.object({
   assignedAgentId: z.string().optional(),
   unassigned: z.coerce.boolean().optional(),
   archived: z.coerce.boolean().optional(),
+  // Filtro "aguardando primeira/próxima resposta" — cliente mandou e ninguém respondeu ainda.
+  awaiting: z.coerce.boolean().optional(),
   labelId: z.string().optional(),
   since: z.string().datetime().optional(),
   until: z.string().datetime().optional(),
@@ -45,6 +47,7 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
     assignedAgentId,
     unassigned,
     archived,
+    awaiting,
     labelId,
     since,
     until,
@@ -56,6 +59,23 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const where: Prisma.ConversationWhereInput = { workspaceId };
   // Por default exclui arquivadas. ?archived=true mostra só as arquivadas.
   where.archivedAt = archived ? { not: null } : null;
+
+  // AND clauses pra agrupar múltiplos OR (awaiting + role=AGENT scope) sem sobrescrever
+  const andClauses: Prisma.ConversationWhereInput[] = [];
+
+  // ?awaiting=true → conversas ativas onde o cliente mandou msg e ninguém respondeu desde.
+  // Critério: lastInboundAt presente E (lastOutboundAt ausente OU lastOutboundAt < lastInboundAt).
+  // status default vira OPEN+PENDING quando não foi explícito.
+  if (awaiting) {
+    andClauses.push({ lastInboundAt: { not: null } });
+    andClauses.push({
+      OR: [
+        { lastOutboundAt: null },
+        { lastOutboundAt: { lt: prisma.conversation.fields.lastInboundAt } },
+      ],
+    });
+    if (!status) where.status = { in: ['OPEN', 'PENDING'] };
+  }
 
   // Multi-status: "OPEN,PENDING" → IN. Valida cada valor.
   const ALLOWED_STATUS = ['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED'] as const;
@@ -88,8 +108,10 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
 
   // Agent: só conversas próprias ou sem agente
   if (role === 'AGENT') {
-    where.OR = [{ assignedAgentId: userId }, { assignedAgentId: null }];
+    andClauses.push({ OR: [{ assignedAgentId: userId }, { assignedAgentId: null }] });
   }
+
+  if (andClauses.length > 0) where.AND = andClauses;
 
   if (search) {
     where.contact = {
@@ -140,6 +162,39 @@ conversationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   }));
 
   return c.json({ items: enriched, total, page, perPage });
+});
+
+// GET /api/conversations/counts — contadores por tab (badge no /inbox)
+// Retorna agora { awaiting } mas estrutura é extensível.
+conversationsRouter.get('/counts', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const role = c.get('role')!;
+  const userId = c.get('userId');
+
+  // Filtros base que se aplicam aos counts (escopo do AGENT)
+  const baseAnd: Prisma.ConversationWhereInput[] = [];
+  if (role === 'AGENT') {
+    baseAnd.push({ OR: [{ assignedAgentId: userId }, { assignedAgentId: null }] });
+  }
+
+  const awaitingWhere: Prisma.ConversationWhereInput = {
+    workspaceId,
+    archivedAt: null,
+    status: { in: ['OPEN', 'PENDING'] },
+    AND: [
+      ...baseAnd,
+      { lastInboundAt: { not: null } },
+      {
+        OR: [
+          { lastOutboundAt: null },
+          { lastOutboundAt: { lt: prisma.conversation.fields.lastInboundAt } },
+        ],
+      },
+    ],
+  };
+
+  const awaiting = await prisma.conversation.count({ where: awaitingWhere });
+  return c.json({ awaiting });
 });
 
 // GET /api/conversations/:id (com mensagens)
@@ -576,6 +631,7 @@ conversationsRouter.post(
           assignedAgentId: userId,
           lastMessageAt: msg.createdAt,
           lastAgentRepliedId: userId,
+          lastOutboundAt: msg.createdAt,
           lastMessagePreview: preview,
         },
       });
@@ -585,6 +641,7 @@ conversationsRouter.post(
         data: {
           lastMessageAt: msg.createdAt,
           lastAgentRepliedId: userId,
+          lastOutboundAt: msg.createdAt,
           lastMessagePreview: preview,
         },
       });

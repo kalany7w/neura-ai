@@ -394,6 +394,7 @@ async function persistInboundMessage(
       data: {
         lastMessageAt: created.createdAt,
         lastMessagePreview: preview,
+        lastInboundAt: created.createdAt,
         unreadCount: { increment: 1 },
         // Auto-desarquivar quando msg nova chega
         archivedAt: null,

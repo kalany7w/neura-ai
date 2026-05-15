@@ -43,10 +43,11 @@ interface ConversationListItem {
   lastAgentRepliedBy: AgentRef | null;
 }
 
-type Tab = 'ALL' | 'OPEN' | 'UNASSIGNED' | 'PENDING' | 'RESOLVED' | 'ARCHIVED';
+type Tab = 'ALL' | 'AWAITING' | 'OPEN' | 'UNASSIGNED' | 'PENDING' | 'RESOLVED' | 'ARCHIVED';
 
 const STATUS_TABS: Array<{ value: Tab; label: string }> = [
   { value: 'ALL', label: 'Todas' },
+  { value: 'AWAITING', label: 'Aguardando' },
   { value: 'OPEN', label: 'Abertas' },
   { value: 'UNASSIGNED', label: 'Sem agente' },
   { value: 'PENDING', label: 'Pendentes' },
@@ -124,6 +125,11 @@ export default function InboxPage() {
     queryKey: ['labels'],
     queryFn: () => api('/api/labels'),
   });
+  const { data: counts } = useQuery<{ awaiting: number }>({
+    queryKey: ['conversations-counts'],
+    queryFn: () => api('/api/conversations/counts'),
+    refetchInterval: 60_000,
+  });
 
   const advActiveCount =
     (advStatuses.size > 0 ? 1 : 0) +
@@ -145,6 +151,7 @@ export default function InboxPage() {
     const p = new URLSearchParams({ page: String(page), perPage: String(perPage) });
     if (tab === 'UNASSIGNED') p.set('unassigned', 'true');
     else if (tab === 'ARCHIVED') p.set('archived', 'true');
+    else if (tab === 'AWAITING') p.set('awaiting', 'true');
     else if (tab !== 'ALL') p.set('status', tab);
     if (search) p.set('search', search);
 
@@ -188,6 +195,7 @@ export default function InboxPage() {
       event.event === 'conversation.assigned'
     ) {
       qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: ['conversations-counts'] });
     }
   });
 
@@ -204,23 +212,39 @@ export default function InboxPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
-          {STATUS_TABS.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              onClick={() => {
-                setTab(t.value);
-                setPage(1);
-              }}
-              className={`rounded px-3 py-1.5 text-sm transition-colors ${
-                tab === t.value
-                  ? 'bg-background shadow-sm font-medium'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+          {STATUS_TABS.map((t) => {
+            const badge =
+              t.value === 'AWAITING' && counts && counts.awaiting > 0 ? counts.awaiting : null;
+            const isAwaiting = t.value === 'AWAITING';
+            return (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => {
+                  setTab(t.value);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors ${
+                  tab === t.value
+                    ? 'bg-background shadow-sm font-medium'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {t.label}
+                {badge != null && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
+                      isAwaiting
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-muted-foreground/20 text-foreground'
+                    }`}
+                  >
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -403,7 +427,9 @@ export default function InboxPage() {
           <p className="p-6 text-sm text-muted-foreground">
             {tab === 'ARCHIVED'
               ? 'Nenhuma conversa arquivada.'
-              : 'Nenhuma conversa nesse filtro.'}
+              : tab === 'AWAITING'
+                ? 'Tudo respondido. Nenhum cliente aguardando agora.'
+                : 'Nenhuma conversa nesse filtro.'}
           </p>
         ) : (
           data.items.map((c) => {

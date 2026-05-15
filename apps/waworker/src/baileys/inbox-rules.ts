@@ -154,7 +154,10 @@ export async function applyInboxRules(params: {
         });
         await prisma.conversation.update({
           where: { id: params.conversationId },
-          data: { lastMessageAt: msg.createdAt },
+          data: {
+            lastMessageAt: msg.createdAt,
+            lastOutboundAt: msg.createdAt,
+          },
         });
         await enqueueOutbound({
           inboxId: params.inboxId,
