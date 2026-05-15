@@ -8,11 +8,17 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Clock,
   Edit3,
   LayoutGrid,
   MessageCircle,
+  MessageSquare,
   MessageSquarePlus,
+  Mail,
   Phone,
+  PlayCircle,
+  Send,
+  Smile,
   StickyNote,
   Tag,
   Trash2,
@@ -138,7 +144,7 @@ interface ContactNoteItem {
   author: NoteAuthor | null;
 }
 
-type Tab = 'overview' | 'conversations' | 'cards' | 'notes';
+type Tab = 'overview' | 'conversations' | 'cards' | 'notes' | 'journey';
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -264,13 +270,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'conversations', 'cards', 'notes'] as const).map((t) => {
+        {(['overview', 'conversations', 'cards', 'notes', 'journey'] as const).map((t) => {
           const notesCount = notesData?.notes.length;
           const labels: Record<Tab, string> = {
             overview: 'Visão geral',
             conversations: `Conversas (${contact.conversations.length})`,
             cards: `Cards (${cards.length})`,
             notes: notesCount === undefined ? 'Notas' : `Notas (${notesCount})`,
+            journey: 'Linha do tempo',
           };
           return (
             <button
@@ -490,6 +497,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           mentionTargets={mentionsData?.targets ?? []}
         />
       )}
+
+      {tab === 'journey' && <JourneyTab contactId={id} />}
 
       <EditContactDialog
         open={editOpen}
@@ -973,4 +982,322 @@ function StartConversationDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+// ============================================================
+// Journey Tab — cross-canal timeline
+// ============================================================
+
+type JourneyEventKind =
+  | 'msg'
+  | 'note'
+  | 'card'
+  | 'csat'
+  | 'conv_started'
+  | 'conv_resolved';
+
+interface JourneyEvent {
+  id: string;
+  kind: JourneyEventKind;
+  at: string;
+  conversationId?: string;
+  inboxName?: string;
+  inboxType?: string;
+  direction?: 'INBOUND' | 'OUTBOUND';
+  preview?: string;
+  cardTitle?: string;
+  cardId?: string;
+  funnelName?: string;
+  csatScore?: number;
+  csatScoreType?: string;
+  csatComment?: string | null;
+  noteAuthor?: string | null;
+}
+
+const EVENT_FILTERS: Array<{ key: JourneyEventKind | 'all'; label: string }> = [
+  { key: 'all', label: 'Tudo' },
+  { key: 'msg', label: 'Mensagens' },
+  { key: 'note', label: 'Notas' },
+  { key: 'card', label: 'Cards' },
+  { key: 'csat', label: 'Satisfação' },
+  { key: 'conv_started', label: 'Conversas' },
+];
+
+const INBOX_TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  WHATSAPP: MessageCircle,
+  TELEGRAM: Send,
+  EMAIL: Mail,
+  WEBCHAT: MessageSquare,
+};
+
+function JourneyTab({ contactId }: { contactId: string }) {
+  const [filter, setFilter] = useState<JourneyEventKind | 'all'>('all');
+  const queryStr =
+    filter !== 'all'
+      ? `?types=${encodeURIComponent(filter === 'conv_started' ? 'conv_started,conv_resolved' : filter)}`
+      : '';
+  const { data, isLoading } = useQuery<{ events: JourneyEvent[]; total: number; truncated: boolean }>({
+    queryKey: ['journey', contactId, filter],
+    queryFn: () => api(`/api/contacts/${contactId}/journey${queryStr}`),
+  });
+
+  const events = data?.events ?? [];
+  const grouped = groupByDay(events);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-card p-2.5">
+        {EVENT_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            type="button"
+            onClick={() => setFilter(f.key)}
+            className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              filter === f.key
+                ? 'border-foreground bg-accent text-foreground'
+                : 'border-transparent text-muted-foreground hover:bg-accent/50'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        {data?.truncated && (
+          <span className="ml-auto rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+            mostrando {events.length} mais recentes
+          </span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground">Carregando histórico…</p>
+      ) : events.length === 0 ? (
+        <div className="rounded-lg border-2 border-dashed py-12 text-center">
+          <Clock className="mx-auto h-10 w-10 text-muted-foreground/40" />
+          <p className="mt-3 font-medium">Nada por enquanto</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Quando esse contato tiver mensagens, notas, cards ou survey, aparecem aqui.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {grouped.map((group) => (
+            <div key={group.day}>
+              <h3 className="sticky top-0 z-10 mb-2 bg-background/95 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground backdrop-blur">
+                {group.label}
+              </h3>
+              <ol className="space-y-2">
+                {group.events.map((e) => (
+                  <li key={e.id}>
+                    <JourneyEventCard event={e} />
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function groupByDay(events: JourneyEvent[]): Array<{
+  day: string;
+  label: string;
+  events: JourneyEvent[];
+}> {
+  const groups = new Map<string, JourneyEvent[]>();
+  for (const e of events) {
+    const d = new Date(e.at);
+    const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (!groups.has(dayKey)) groups.set(dayKey, []);
+    groups.get(dayKey)!.push(e);
+  }
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ymdToday = today.toISOString().slice(0, 10);
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const ymdYesterday = yesterday.toISOString().slice(0, 10);
+  return Array.from(groups.entries()).map(([day, evs]) => {
+    let label = day;
+    if (day === ymdToday) label = 'Hoje';
+    else if (day === ymdYesterday) label = 'Ontem';
+    else {
+      const [y, m, d] = day.split('-');
+      label = `${d}/${m}/${y}`;
+    }
+    return { day, label, events: evs };
+  });
+}
+
+function JourneyEventCard({ event }: { event: JourneyEvent }) {
+  const time = new Date(event.at).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const ChannelIcon = event.inboxType ? INBOX_TYPE_ICON[event.inboxType] : null;
+
+  const { iconBg, icon, content, link } = useEventVisuals(event);
+
+  const inner = (
+    <div className="flex gap-3 rounded-lg border bg-card p-3 transition-colors hover:border-foreground/30">
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${iconBg}`}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">{content.title}</div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {event.inboxName && ChannelIcon && (
+              <span
+                className="inline-flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                title={`${event.inboxName} (${event.inboxType?.toLowerCase()})`}
+              >
+                <ChannelIcon className="h-2.5 w-2.5" />
+                {event.inboxName}
+              </span>
+            )}
+            <span className="text-[10px] tabular-nums text-muted-foreground">{time}</span>
+          </div>
+        </div>
+        {content.body && <div className="mt-1 text-xs text-foreground/80">{content.body}</div>}
+      </div>
+    </div>
+  );
+
+  if (link) {
+    return (
+      <Link href={link} className="block">
+        {inner}
+      </Link>
+    );
+  }
+  return inner;
+}
+
+function useEventVisuals(event: JourneyEvent): {
+  iconBg: string;
+  icon: React.ReactElement;
+  content: { title: React.ReactNode; body?: React.ReactNode };
+  link?: string;
+} {
+  if (event.kind === 'msg') {
+    const isIn = event.direction === 'INBOUND';
+    return {
+      iconBg: isIn
+        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+        : 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
+      icon: isIn ? <MessageCircle className="h-4 w-4" /> : <Send className="h-4 w-4" />,
+      content: {
+        title: (
+          <span className="text-sm font-medium">
+            {isIn ? 'Mensagem do cliente' : 'Resposta enviada'}
+          </span>
+        ),
+        body: (
+          <span className="line-clamp-2 whitespace-pre-wrap break-words text-foreground/80">
+            {event.preview}
+          </span>
+        ),
+      },
+      link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
+    };
+  }
+  if (event.kind === 'note') {
+    return {
+      iconBg: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+      icon: <StickyNote className="h-4 w-4" />,
+      content: {
+        title: (
+          <span className="text-sm font-medium">
+            Nota interna
+            {event.noteAuthor && (
+              <span className="ml-1 font-normal text-muted-foreground">
+                · {event.noteAuthor}
+              </span>
+            )}
+          </span>
+        ),
+        body: (
+          <span className="line-clamp-2 whitespace-pre-wrap break-words text-foreground/80">
+            {event.preview}
+          </span>
+        ),
+      },
+      link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
+    };
+  }
+  if (event.kind === 'card') {
+    return {
+      iconBg: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400',
+      icon: <LayoutGrid className="h-4 w-4" />,
+      content: {
+        title: (
+          <span className="text-sm font-medium">
+            Card criado:{' '}
+            <span className="font-normal">
+              {event.cardTitle}
+              {event.funnelName && (
+                <span className="text-muted-foreground"> · {event.funnelName}</span>
+              )}
+            </span>
+          </span>
+        ),
+      },
+      link: '/kanban',
+    };
+  }
+  if (event.kind === 'csat') {
+    const score = event.csatScore;
+    const type = event.csatScoreType;
+    const isPositive =
+      (type === 'CSAT' && (score ?? 0) >= 4) ||
+      (type === 'NPS' && (score ?? 0) >= 9) ||
+      (type === 'THUMBS' && score === 1);
+    const isNegative =
+      (type === 'CSAT' && (score ?? 0) <= 2) ||
+      (type === 'NPS' && (score ?? 0) <= 6) ||
+      (type === 'THUMBS' && score === 0);
+    return {
+      iconBg: isPositive
+        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+        : isNegative
+          ? 'bg-red-500/15 text-red-600 dark:text-red-400'
+          : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+      icon: <Smile className="h-4 w-4" />,
+      content: {
+        title: (
+          <span className="text-sm font-medium">
+            Resposta de satisfação · {type} {score}
+            {type === 'CSAT' && '/5'}
+            {type === 'NPS' && '/10'}
+          </span>
+        ),
+        body: event.csatComment ? (
+          <span className="italic text-foreground/80">&ldquo;{event.csatComment}&rdquo;</span>
+        ) : undefined,
+      },
+      link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
+    };
+  }
+  if (event.kind === 'conv_started') {
+    return {
+      iconBg: 'bg-slate-500/15 text-slate-600 dark:text-slate-300',
+      icon: <PlayCircle className="h-4 w-4" />,
+      content: {
+        title: <span className="text-sm font-medium">Conversa iniciada</span>,
+      },
+      link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
+    };
+  }
+  // conv_resolved
+  return {
+    iconBg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+    icon: <Check className="h-4 w-4" />,
+    content: {
+      title: <span className="text-sm font-medium">Conversa resolvida</span>,
+    },
+    link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
+  };
 }

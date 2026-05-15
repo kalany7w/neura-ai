@@ -729,3 +729,91 @@ reportsRouter.get('/csat', requireAuth, requireWorkspace, async (c) => {
     surveys,
   });
 });
+
+// GET /api/reports/kb — métricas da Knowledge Base + auto-suggest.
+// - total artigos publicados / drafts / archived
+// - cobertura: % artigos com embedding (sem key OpenAI fica 0)
+// - sugestões: total conversations com suggestion gerada vs aceitas (= 1-click "Inserir resposta")
+// - taxa de aceitação = aceitas/sugeridas (proxy de qualidade da KB)
+// - top artigos por views
+reportsRouter.get('/kb', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const url = new URL(c.req.url);
+  const range = rangeSchema.safeParse({
+    since: url.searchParams.get('since') ?? undefined,
+    until: url.searchParams.get('until') ?? undefined,
+  });
+  if (!range.success) return c.json({ error: 'invalid_range' }, 400);
+  const until = range.data.until ? new Date(range.data.until) : new Date();
+  const since = range.data.since
+    ? new Date(range.data.since)
+    : new Date(until.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [publishedCount, draftCount, archivedCount, withEmbedding] = await Promise.all([
+    prisma.kbArticle.count({ where: { workspaceId, status: 'PUBLISHED' } }),
+    prisma.kbArticle.count({ where: { workspaceId, status: 'DRAFT' } }),
+    prisma.kbArticle.count({ where: { workspaceId, status: 'ARCHIVED' } }),
+    prisma.kbArticle.count({
+      where: { workspaceId, status: 'PUBLISHED', embeddingUpdatedAt: { not: null } },
+    }),
+  ]);
+
+  // Auto-suggest stats: conversations com aiKbSuggestion no range + accepted.
+  // aiKbSuggestionAt é set quando worker compute. accepted via flag boolean.
+  const [suggestedTotal, acceptedTotal] = await Promise.all([
+    prisma.conversation.count({
+      where: {
+        workspaceId,
+        aiKbSuggestionAt: { gte: since, lte: until, not: null },
+      },
+    }),
+    prisma.conversation.count({
+      where: {
+        workspaceId,
+        aiKbSuggestionAt: { gte: since, lte: until, not: null },
+        aiKbSuggestionAccepted: true,
+      },
+    }),
+  ]);
+  const acceptRate =
+    suggestedTotal > 0 ? Math.round((acceptedTotal / suggestedTotal) * 100) : null;
+
+  // Top artigos por viewCount (views agentes via composer + insert). Limita 10.
+  const topArticles = await prisma.kbArticle.findMany({
+    where: { workspaceId, status: 'PUBLISHED', viewCount: { gt: 0 } },
+    orderBy: { viewCount: 'desc' },
+    take: 10,
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      viewCount: true,
+      embeddingUpdatedAt: true,
+      category: { select: { name: true, color: true } },
+    },
+  });
+
+  const coverage = publishedCount > 0 ? Math.round((withEmbedding / publishedCount) * 100) : null;
+
+  return c.json({
+    range: { since: since.toISOString(), until: until.toISOString() },
+    summary: {
+      published: publishedCount,
+      drafts: draftCount,
+      archived: archivedCount,
+      withEmbedding,
+      coverage,
+      suggestedTotal,
+      acceptedTotal,
+      acceptRate,
+    },
+    topArticles: topArticles.map((a) => ({
+      id: a.id,
+      title: a.title,
+      slug: a.slug,
+      viewCount: a.viewCount,
+      category: a.category ? { name: a.category.name, color: a.category.color } : null,
+      indexed: !!a.embeddingUpdatedAt,
+    })),
+  });
+});

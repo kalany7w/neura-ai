@@ -399,3 +399,324 @@ contactsRouter.delete(
     return c.json({ ok: true });
   },
 );
+
+// ============================================
+// GET /api/contacts/:id/journey — cross-canal timeline
+// ============================================
+// Agrega eventos derivados das tabelas existentes (Message, ConversationNote,
+// ContactNote, Card, CsatResponse, Conversation status changes). Sem schema
+// novo — gera tudo on-the-fly por contato. Limite default 200 eventos, ordenados
+// desc por timestamp.
+//
+// Tipos suportados (filtro via ?types=msg,note,card,csat,conv):
+// - msg            — Message (INBOUND/OUTBOUND, qualquer canal)
+// - note           — ConversationNote OR ContactNote
+// - card           — Card.createdAt (criação no kanban)
+// - csat           — CsatResponse
+// - conv_started   — Conversation.createdAt (primeira conv ou nova após RESOLVED)
+// - conv_resolved  — Conversation.resolvedAt
+type JourneyEventKind =
+  | 'msg'
+  | 'note'
+  | 'card'
+  | 'csat'
+  | 'conv_started'
+  | 'conv_resolved';
+
+interface JourneyEvent {
+  id: string;
+  kind: JourneyEventKind;
+  at: Date;
+  conversationId?: string;
+  inboxName?: string;
+  inboxType?: string;
+  // Payload específico por kind, opcional/opcional
+  preview?: string; // texto curto pra renderizar
+  direction?: 'INBOUND' | 'OUTBOUND';
+  agentName?: string | null;
+  cardTitle?: string;
+  cardId?: string;
+  funnelName?: string;
+  csatScore?: number;
+  csatScoreType?: string;
+  csatComment?: string | null;
+  noteAuthor?: string | null;
+}
+
+const journeyQuery = z.object({
+  since: z.string().datetime().optional(),
+  until: z.string().datetime().optional(),
+  types: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+contactsRouter.get('/:id/journey', requireAuth, requireWorkspace, async (c) => {
+  const parsed = journeyQuery.safeParse(
+    Object.fromEntries(new URL(c.req.url).searchParams),
+  );
+  if (!parsed.success) return c.json({ error: 'invalid_query' }, 400);
+
+  const workspaceId = c.get('workspaceId') as string;
+  const role = c.get('role')!;
+  const userId = c.get('userId');
+  const contactId = c.req.param('id');
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, workspaceId },
+    select: { id: true, name: true, email: true, phoneNumber: true },
+  });
+  if (!contact) return c.json({ error: 'not_found' }, 404);
+
+  const allowedTypes = new Set<JourneyEventKind>(
+    parsed.data.types
+      ? (parsed.data.types.split(',').filter(Boolean) as JourneyEventKind[])
+      : ['msg', 'note', 'card', 'csat', 'conv_started', 'conv_resolved'],
+  );
+
+  const since = parsed.data.since ? new Date(parsed.data.since) : null;
+  const until = parsed.data.until ? new Date(parsed.data.until) : null;
+  const limit = parsed.data.limit;
+
+  // Conversas do contato — AGENT só vê próprias atribuídas
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      contactId: contact.id,
+      workspaceId,
+      ...(role === 'AGENT' ? { assignedAgentId: userId } : {}),
+    },
+    select: {
+      id: true,
+      createdAt: true,
+      resolvedAt: true,
+      assignedAgentId: true,
+      inbox: { select: { name: true, type: true } },
+    },
+  });
+  const convIds = conversations.map((c) => c.id);
+  if (convIds.length === 0 && !allowedTypes.has('note') && !allowedTypes.has('card')) {
+    return c.json({ events: [], total: 0 });
+  }
+
+  const convMap = new Map(conversations.map((c) => [c.id, c]));
+  const events: JourneyEvent[] = [];
+
+  // Coleta de Message (todas direções, todas conversas do contato)
+  if (allowedTypes.has('msg') && convIds.length > 0) {
+    const messages = await prisma.message.findMany({
+      where: {
+        conversationId: { in: convIds },
+        deletedAt: null,
+        ...(since ? { createdAt: { gte: since } } : {}),
+        ...(until ? { createdAt: { lte: until } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        conversationId: true,
+        direction: true,
+        type: true,
+        content: true,
+        transcription: true,
+        createdAt: true,
+      },
+    });
+    for (const m of messages) {
+      const conv = convMap.get(m.conversationId);
+      let preview = m.content;
+      if (!preview && m.transcription) preview = m.transcription;
+      if (!preview) preview = `[${m.type.toLowerCase()}]`;
+      events.push({
+        id: `msg:${m.id}`,
+        kind: 'msg',
+        at: m.createdAt,
+        conversationId: m.conversationId,
+        inboxName: conv?.inbox.name,
+        inboxType: conv?.inbox.type,
+        direction: m.direction,
+        preview: preview.slice(0, 200),
+      });
+    }
+  }
+
+  // ConversationNote (com author name)
+  if (allowedTypes.has('note') && convIds.length > 0) {
+    const cNotes = await prisma.conversationNote.findMany({
+      where: {
+        conversationId: { in: convIds },
+        ...(since ? { createdAt: { gte: since } } : {}),
+        ...(until ? { createdAt: { lte: until } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { id: true, body: true, authorId: true, conversationId: true, createdAt: true },
+    });
+    const authorIds = Array.from(new Set(cNotes.map((n) => n.authorId)));
+    const authors = await prisma.user.findMany({
+      where: { id: { in: authorIds } },
+      select: { id: true, name: true, email: true },
+    });
+    const authorMap = new Map(authors.map((u) => [u.id, u]));
+    for (const n of cNotes) {
+      const conv = convMap.get(n.conversationId);
+      const a = authorMap.get(n.authorId);
+      events.push({
+        id: `cnote:${n.id}`,
+        kind: 'note',
+        at: n.createdAt,
+        conversationId: n.conversationId,
+        inboxName: conv?.inbox.name,
+        inboxType: conv?.inbox.type,
+        preview: n.body.slice(0, 200),
+        noteAuthor: a?.name ?? a?.email ?? null,
+      });
+    }
+  }
+
+  // ContactNote
+  if (allowedTypes.has('note')) {
+    const contactNotes = await prisma.contactNote.findMany({
+      where: {
+        contactId: contact.id,
+        ...(since ? { createdAt: { gte: since } } : {}),
+        ...(until ? { createdAt: { lte: until } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { id: true, body: true, authorId: true, createdAt: true },
+    });
+    const authorIds = Array.from(new Set(contactNotes.map((n) => n.authorId)));
+    const authors = await prisma.user.findMany({
+      where: { id: { in: authorIds } },
+      select: { id: true, name: true, email: true },
+    });
+    const authorMap = new Map(authors.map((u) => [u.id, u]));
+    for (const n of contactNotes) {
+      const a = authorMap.get(n.authorId);
+      events.push({
+        id: `cnnote:${n.id}`,
+        kind: 'note',
+        at: n.createdAt,
+        preview: n.body.slice(0, 200),
+        noteAuthor: a?.name ?? a?.email ?? null,
+      });
+    }
+  }
+
+  // Cards (createdAt)
+  if (allowedTypes.has('card')) {
+    const cards = await prisma.card.findMany({
+      where: {
+        workspaceId,
+        conversationId: { in: convIds.length > 0 ? convIds : ['___none___'] },
+        ...(since ? { createdAt: { gte: since } } : {}),
+        ...(until ? { createdAt: { lte: until } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        title: true,
+        conversationId: true,
+        createdAt: true,
+        funnel: { select: { name: true } },
+      },
+    });
+    for (const card of cards) {
+      events.push({
+        id: `card:${card.id}`,
+        kind: 'card',
+        at: card.createdAt,
+        cardId: card.id,
+        cardTitle: card.title,
+        funnelName: card.funnel.name,
+        conversationId: card.conversationId ?? undefined,
+      });
+    }
+  }
+
+  // CsatResponse
+  if (allowedTypes.has('csat')) {
+    const csats = await prisma.csatResponse.findMany({
+      where: {
+        contactId: contact.id,
+        ...(since ? { respondedAt: { gte: since } } : {}),
+        ...(until ? { respondedAt: { lte: until } } : {}),
+      },
+      orderBy: { respondedAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        score: true,
+        scoreType: true,
+        comment: true,
+        conversationId: true,
+        respondedAt: true,
+      },
+    });
+    for (const r of csats) {
+      const conv = convMap.get(r.conversationId);
+      events.push({
+        id: `csat:${r.id}`,
+        kind: 'csat',
+        at: r.respondedAt,
+        conversationId: r.conversationId,
+        inboxName: conv?.inbox.name,
+        inboxType: conv?.inbox.type,
+        csatScore: r.score,
+        csatScoreType: r.scoreType,
+        csatComment: r.comment,
+      });
+    }
+  }
+
+  // Conversation events (started + resolved)
+  for (const conv of conversations) {
+    if (allowedTypes.has('conv_started')) {
+      if (
+        (!since || conv.createdAt >= since) &&
+        (!until || conv.createdAt <= until)
+      ) {
+        events.push({
+          id: `conv-start:${conv.id}`,
+          kind: 'conv_started',
+          at: conv.createdAt,
+          conversationId: conv.id,
+          inboxName: conv.inbox.name,
+          inboxType: conv.inbox.type,
+        });
+      }
+    }
+    if (allowedTypes.has('conv_resolved') && conv.resolvedAt) {
+      if (
+        (!since || conv.resolvedAt >= since) &&
+        (!until || conv.resolvedAt <= until)
+      ) {
+        events.push({
+          id: `conv-resolved:${conv.id}`,
+          kind: 'conv_resolved',
+          at: conv.resolvedAt,
+          conversationId: conv.id,
+          inboxName: conv.inbox.name,
+          inboxType: conv.inbox.type,
+        });
+      }
+    }
+  }
+
+  // Sort desc by date + cap
+  events.sort((a, b) => b.at.getTime() - a.at.getTime());
+  const capped = events.slice(0, limit);
+
+  return c.json({
+    contact: {
+      id: contact.id,
+      name: contact.name,
+      email: contact.email,
+      phoneNumber: contact.phoneNumber,
+    },
+    events: capped,
+    total: events.length,
+    truncated: events.length > limit,
+  });
+});

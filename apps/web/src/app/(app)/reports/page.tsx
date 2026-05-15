@@ -68,7 +68,28 @@ function toInputDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-type Tab = 'overview' | 'agents' | 'inboxes' | 'sla' | 'csat';
+type Tab = 'overview' | 'agents' | 'inboxes' | 'sla' | 'csat' | 'kb';
+
+interface KbReport {
+  summary: {
+    published: number;
+    drafts: number;
+    archived: number;
+    withEmbedding: number;
+    coverage: number | null;
+    suggestedTotal: number;
+    acceptedTotal: number;
+    acceptRate: number | null;
+  };
+  topArticles: Array<{
+    id: string;
+    title: string;
+    slug: string;
+    viewCount: number;
+    category: { name: string; color: string } | null;
+    indexed: boolean;
+  }>;
+}
 
 interface CsatAgentRow {
   userId: string;
@@ -182,6 +203,11 @@ export default function ReportsPage() {
     queryFn: () => api(`/api/reports/csat?${queryStr}`),
     enabled: tab === 'csat',
   });
+  const kbQ = useQuery<KbReport>({
+    queryKey: ['reports-kb', sinceIso, untilIso],
+    queryFn: () => api(`/api/reports/kb?${queryStr}`),
+    enabled: tab === 'kb',
+  });
 
   function downloadCsv(type: 'conversations' | 'messages') {
     const url = `/api/reports/export.csv?type=${type}&${queryStr}`;
@@ -254,7 +280,7 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'agents', 'inboxes', 'sla', 'csat'] as const).map((t) => (
+        {(['overview', 'agents', 'inboxes', 'sla', 'csat', 'kb'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -273,7 +299,9 @@ export default function ReportsPage() {
                   ? 'Por inbox'
                   : t === 'sla'
                     ? 'SLA'
-                    : 'Satisfação'}
+                    : t === 'csat'
+                      ? 'Satisfação'
+                      : 'Base de conhecimento'}
           </button>
         ))}
       </div>
@@ -327,6 +355,121 @@ export default function ReportsPage() {
           ) : null}
         </>
       )}
+
+      {tab === 'kb' && (
+        <>
+          {kbQ.isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : kbQ.data ? (
+            <KbTab data={kbQ.data} />
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function KbTab({ data }: { data: KbReport }) {
+  const { summary, topArticles } = data;
+  const acceptColor =
+    summary.acceptRate == null
+      ? 'text-muted-foreground'
+      : summary.acceptRate >= 50
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : summary.acceptRate >= 25
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-red-600 dark:text-red-400';
+  const coverageColor =
+    summary.coverage == null
+      ? 'text-muted-foreground'
+      : summary.coverage >= 90
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : summary.coverage >= 60
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-red-600 dark:text-red-400';
+
+  return (
+    <div className="space-y-6">
+      {summary.published === 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50/40 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+          Nenhum artigo publicado. Crie o primeiro em{' '}
+          <a href="/settings/kb" className="font-medium underline">
+            /settings/kb
+          </a>{' '}
+          pra começar a alimentar o auto-suggest da IA.
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CsatKpiCard label="Artigos publicados" value={summary.published.toString()} />
+        <CsatKpiCard
+          label="Cobertura IA"
+          value={summary.coverage !== null ? `${summary.coverage}%` : '—'}
+          sub={`${summary.withEmbedding}/${summary.published} indexados`}
+          valueClass={coverageColor}
+        />
+        <CsatKpiCard
+          label="Sugestões geradas"
+          value={summary.suggestedTotal.toString()}
+          sub="no período"
+        />
+        <CsatKpiCard
+          label="Taxa de aceitação"
+          value={summary.acceptRate !== null ? `${summary.acceptRate}%` : '—'}
+          sub={`${summary.acceptedTotal} aceitas pelo agente`}
+          valueClass={acceptColor}
+        />
+      </div>
+
+      {summary.drafts + summary.archived > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <CsatKpiCard label="Rascunhos" value={summary.drafts.toString()} sub="não disparam IA" />
+          <CsatKpiCard label="Arquivados" value={summary.archived.toString()} sub="ocultos da busca" />
+        </div>
+      )}
+
+      <div className="rounded-lg border bg-card p-4">
+        <h3 className="mb-3 font-semibold">Top artigos por uso</h3>
+        {topArticles.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum artigo foi consumido ainda. Use o botão{' '}
+            <strong>Buscar na base</strong> no composer pra começar.
+          </p>
+        ) : (
+          <ol className="space-y-1.5">
+            {topArticles.map((a, idx) => (
+              <li key={a.id} className="flex items-center gap-3 rounded-md border bg-card/60 p-2.5">
+                <span className="w-5 text-right text-xs font-medium tabular-nums text-muted-foreground">
+                  {idx + 1}.
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{a.title}</p>
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    {a.category && (
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{ background: a.category.color }}
+                        />
+                        {a.category.name}
+                      </span>
+                    )}
+                    {!a.indexed && (
+                      <span className="rounded bg-amber-500/15 px-1 text-amber-700 dark:text-amber-300">
+                        sem embedding
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-medium tabular-nums">
+                  {a.viewCount}
+                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">uso</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
     </div>
   );
 }
