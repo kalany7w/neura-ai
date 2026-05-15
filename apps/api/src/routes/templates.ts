@@ -92,3 +92,41 @@ templatesRouter.delete(
     return c.json({ ok: true });
   },
 );
+
+// POST /api/templates/:id/pin — fixa (top 3 mais recentes aparecem como botões)
+templatesRouter.post(
+  '/:id/pin',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('template.manage'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const existing = await prisma.messageTemplate.findFirst({ where: { id, workspaceId } });
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+    const tpl = await prisma.messageTemplate.update({
+      where: { id },
+      data: { pinnedAt: new Date() },
+    });
+    return c.json({ template: tpl });
+  },
+);
+
+// POST /api/templates/:id/unpin
+templatesRouter.post(
+  '/:id/unpin',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('template.manage'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const existing = await prisma.messageTemplate.findFirst({ where: { id, workspaceId } });
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+    const tpl = await prisma.messageTemplate.update({
+      where: { id },
+      data: { pinnedAt: null },
+    });
+    return c.json({ template: tpl });
+  },
+);

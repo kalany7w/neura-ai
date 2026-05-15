@@ -359,13 +359,17 @@ model MessageTemplate {
   shortcut    String?
   // Suporta placeholders {{contact.name}}, {{contact.phoneNumber}}
   body        String   @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  // Quando setado, template aparece como botão direto no composer. Top 3 mais
+  // recentes (pinnedAt desc) ficam visíveis pra agentes sem precisar digitar /shortcut.
+  pinnedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+  @@index([workspaceId, pinnedAt])
   @@map("message_templates")
 }
 
