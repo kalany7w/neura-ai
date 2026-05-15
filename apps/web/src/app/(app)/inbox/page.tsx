@@ -52,6 +52,8 @@ interface ConversationListItem {
   lastOutboundAt: string | null;
   assignedAgentId: string | null;
   archivedAt: string | null;
+  firstResponseAt: string | null;
+  slaBreachNotifiedAt: string | null;
   contact: { id: string; name: string | null; phoneNumber: string; avatarUrl: string | null };
   inbox: { id: string; name: string };
   labels: LabelOnConv[];
@@ -303,7 +305,8 @@ export default function InboxPage() {
       event.event === 'conversation.unarchived' ||
       event.event === 'conversation.status_changed' ||
       event.event === 'conversation.assigned' ||
-      event.event === 'conversation.classified'
+      event.event === 'conversation.classified' ||
+      event.event === 'conversation.sla_breached'
     ) {
       qc.invalidateQueries({ queryKey: ['conversations'] });
       qc.invalidateQueries({ queryKey: ['conversations-counts'] });
@@ -636,6 +639,14 @@ export default function InboxPage() {
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
                         <Archive className="h-2.5 w-2.5" />
                         Arquivada
+                      </span>
+                    )}
+                    {c.slaBreachNotifiedAt && !c.firstResponseAt && (
+                      <span
+                        title="SLA estourado — cliente aguardando primeira resposta acima do alvo"
+                        className="inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white animate-pulse"
+                      >
+                        SLA breach
                       </span>
                     )}
                     <span

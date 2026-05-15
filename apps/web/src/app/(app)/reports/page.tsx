@@ -68,7 +68,44 @@ function toInputDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-type Tab = 'overview' | 'agents' | 'inboxes';
+type Tab = 'overview' | 'agents' | 'inboxes' | 'sla';
+
+interface SlaSummary {
+  totalConversations: number;
+  frtAvg: number;
+  frtP50: number;
+  frtP90: number;
+  frtHitRate: number | null;
+  frtAvgHuman: string;
+  frtP50Human: string;
+  frtP90Human: string;
+  rtAvg: number;
+  rtP50: number;
+  rtP90: number;
+  rtHitRate: number | null;
+  rtAvgHuman: string;
+  rtP90Human: string;
+  currentlyBreached: number;
+}
+
+interface SlaAgentRow {
+  userId: string;
+  name: string | null;
+  email: string;
+  conversations: number;
+  frtAvg: number;
+  frtP50: number;
+  frtP90: number;
+  frtHitRate: number | null;
+  rtAvg: number;
+  rtHitRate: number | null;
+}
+
+interface SlaReport {
+  thresholds: { firstResponseMin: number; resolutionMin: number };
+  summary: SlaSummary;
+  agents: SlaAgentRow[];
+}
 
 export default function ReportsPage() {
   const today = new Date();
@@ -95,6 +132,11 @@ export default function ReportsPage() {
     queryKey: ['reports-inboxes', sinceIso, untilIso],
     queryFn: () => api(`/api/reports/inboxes?${queryStr}`),
     enabled: tab === 'inboxes',
+  });
+  const slaQ = useQuery<SlaReport>({
+    queryKey: ['reports-sla', sinceIso, untilIso],
+    queryFn: () => api(`/api/reports/sla?${queryStr}`),
+    enabled: tab === 'sla',
   });
 
   function downloadCsv(type: 'conversations' | 'messages') {
@@ -168,7 +210,7 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'agents', 'inboxes'] as const).map((t) => (
+        {(['overview', 'agents', 'inboxes', 'sla'] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -179,7 +221,13 @@ export default function ReportsPage() {
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'overview' ? 'Visão geral' : t === 'agents' ? 'Por agente' : 'Por inbox'}
+            {t === 'overview'
+              ? 'Visão geral'
+              : t === 'agents'
+                ? 'Por agente'
+                : t === 'inboxes'
+                  ? 'Por inbox'
+                  : 'SLA'}
           </button>
         ))}
       </div>
@@ -213,8 +261,167 @@ export default function ReportsPage() {
           ) : null}
         </>
       )}
+
+      {tab === 'sla' && (
+        <>
+          {slaQ.isLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando…</p>
+          ) : slaQ.data ? (
+            <SlaTab data={slaQ.data} />
+          ) : null}
+        </>
+      )}
     </div>
   );
+}
+
+function SlaTab({ data }: { data: SlaReport }) {
+  const { summary, agents, thresholds } = data;
+  const hitColor = (rate: number | null) => {
+    if (rate == null) return 'text-muted-foreground';
+    if (rate >= 90) return 'text-emerald-600 dark:text-emerald-400';
+    if (rate >= 70) return 'text-amber-600 dark:text-amber-400';
+    return 'text-red-600 dark:text-red-400';
+  };
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
+        Alvos: FRT <strong>{thresholds.firstResponseMin}min</strong> · RT{' '}
+        <strong>{thresholds.resolutionMin}min</strong>. Configure em{' '}
+        <a href="/settings/sla" className="font-medium underline">
+          Configurações → SLA
+        </a>
+        .
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <SlaKpiCard label="Conversas no período" value={summary.totalConversations.toLocaleString('pt-BR')} />
+        <SlaKpiCard
+          label="FRT médio"
+          value={summary.frtAvgHuman}
+          sub={`P50 ${summary.frtP50Human} · P90 ${summary.frtP90Human}`}
+        />
+        <SlaKpiCard
+          label="FRT hit rate"
+          value={summary.frtHitRate != null ? `${summary.frtHitRate}%` : '—'}
+          valueClass={hitColor(summary.frtHitRate)}
+          sub={`dentro de ${thresholds.firstResponseMin}min`}
+        />
+        <SlaKpiCard
+          label="Em breach agora"
+          value={summary.currentlyBreached.toLocaleString('pt-BR')}
+          valueClass={
+            summary.currentlyBreached > 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'
+          }
+          sub="aguardando primeira resposta"
+        />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <SlaKpiCard
+          label="RT médio"
+          value={summary.rtAvgHuman}
+          sub={`P90 ${summary.rtP90Human}`}
+        />
+        <SlaKpiCard
+          label="RT hit rate"
+          value={summary.rtHitRate != null ? `${summary.rtHitRate}%` : '—'}
+          valueClass={hitColor(summary.rtHitRate)}
+          sub={`dentro de ${thresholds.resolutionMin}min`}
+        />
+        <SlaKpiCard
+          label="P50 resolução"
+          value={summary.rtP50 != null ? formatSeconds(summary.rtP50) : '—'}
+        />
+      </div>
+
+      <div className="rounded-lg border bg-card">
+        <div className="border-b px-4 py-3">
+          <h3 className="text-sm font-semibold">Por agente</h3>
+          <p className="text-xs text-muted-foreground">
+            Quem mais respondeu primeiro nas conversas do período.
+          </p>
+        </div>
+        {agents.length === 0 ? (
+          <p className="p-6 text-sm text-muted-foreground">Sem dados.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 text-left">Agente</th>
+                  <th className="px-4 py-2 text-right">Conversas</th>
+                  <th className="px-4 py-2 text-right">FRT médio</th>
+                  <th className="px-4 py-2 text-right">FRT P90</th>
+                  <th className="px-4 py-2 text-right">FRT hit %</th>
+                  <th className="px-4 py-2 text-right">RT médio</th>
+                  <th className="px-4 py-2 text-right">RT hit %</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {agents.map((a) => (
+                  <tr key={a.userId} className="hover:bg-accent/30">
+                    <td className="px-4 py-2">
+                      <p className="font-medium">{a.name ?? a.email}</p>
+                      {a.name && (
+                        <p className="text-[11px] text-muted-foreground">{a.email}</p>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">{a.conversations}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {formatSeconds(a.frtAvg)}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {formatSeconds(a.frtP90)}
+                    </td>
+                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.frtHitRate)}`}>
+                      {a.frtHitRate != null ? `${a.frtHitRate}%` : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      {a.rtAvg ? formatSeconds(a.rtAvg) : '—'}
+                    </td>
+                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.rtHitRate)}`}>
+                      {a.rtHitRate != null ? `${a.rtHitRate}%` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SlaKpiCard({
+  label,
+  value,
+  sub,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className={`mt-1 text-2xl font-bold ${valueClass ?? ''}`}>{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function formatSeconds(sec: number): string {
+  if (!sec || sec <= 0) return '0s';
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}min`;
+  if (sec < 86400) return `${Math.round(sec / 360) / 10}h`;
+  return `${Math.round(sec / 8640) / 10}d`;
 }
 
 function setShortcut(

@@ -432,3 +432,136 @@ reportsRouter.get('/export.csv', requireAuth, requireWorkspace, async (c) => {
   c.header('Content-Disposition', `attachment; filename="${filename}"`);
   return c.body(csv);
 });
+
+// ============================================================
+// SLA REPORT — FRT/RT formal + hit rate por policy/agente
+// ============================================================
+
+reportsRouter.get('/sla', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const { since, until } = parseRange(c);
+
+  // Pega default policy pra threshold global
+  const defaultPolicy = await prisma.slaPolicy.findFirst({
+    where: { workspaceId, scope: 'default', enabled: true },
+  });
+  const frtThresholdSec = defaultPolicy
+    ? defaultPolicy.firstResponseThresholdMin * 60
+    : 15 * 60;
+  const rtThresholdSec = defaultPolicy
+    ? defaultPolicy.resolutionThresholdMin * 60
+    : 1440 * 60;
+
+  // Conversas no range com FRT registrada
+  const convs = await prisma.conversation.findMany({
+    where: {
+      workspaceId,
+      createdAt: { gte: since, lte: until },
+      firstResponseSeconds: { not: null },
+    },
+    select: {
+      id: true,
+      firstResponseSeconds: true,
+      resolutionSeconds: true,
+      assignedAgentId: true,
+      lastAgentRepliedId: true,
+    },
+  });
+
+  const frtValues = convs.map((c) => c.firstResponseSeconds ?? 0);
+  const rtValues = convs
+    .map((c) => c.resolutionSeconds)
+    .filter((v): v is number => v != null);
+
+  const frtStats = stats(frtValues);
+  const rtStats = stats(rtValues);
+
+  const frtHit = frtValues.filter((v) => v <= frtThresholdSec).length;
+  const rtHit = rtValues.filter((v) => v <= rtThresholdSec).length;
+  const frtHitRate = frtValues.length > 0 ? Math.round((frtHit / frtValues.length) * 100) : null;
+  const rtHitRate = rtValues.length > 0 ? Math.round((rtHit / rtValues.length) * 100) : null;
+
+  // Conversas em breach AGORA (sem resposta + acima do threshold)
+  const breached = await prisma.conversation.count({
+    where: {
+      workspaceId,
+      archivedAt: null,
+      status: { in: ['OPEN', 'PENDING'] },
+      firstResponseAt: null,
+      lastInboundAt: {
+        not: null,
+        lte: new Date(Date.now() - frtThresholdSec * 1000),
+      },
+    },
+  });
+
+  // Stats por agente — agrupa FRT/RT pela pessoa que respondeu primeiro
+  const byAgent = new Map<
+    string,
+    { frt: number[]; rt: number[] }
+  >();
+  for (const conv of convs) {
+    const agentId = conv.lastAgentRepliedId ?? conv.assignedAgentId;
+    if (!agentId) continue;
+    const bucket = byAgent.get(agentId) ?? { frt: [], rt: [] };
+    if (conv.firstResponseSeconds != null) bucket.frt.push(conv.firstResponseSeconds);
+    if (conv.resolutionSeconds != null) bucket.rt.push(conv.resolutionSeconds);
+    byAgent.set(agentId, bucket);
+  }
+  const agentIds = Array.from(byAgent.keys());
+  const agentUsers = agentIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: agentIds } },
+        select: { id: true, name: true, email: true },
+      })
+    : [];
+  const userMap = new Map(agentUsers.map((u) => [u.id, u]));
+
+  const agents = Array.from(byAgent.entries())
+    .map(([userId, b]) => {
+      const u = userMap.get(userId);
+      const fs = stats(b.frt);
+      const rs = stats(b.rt);
+      const fHit = b.frt.filter((v) => v <= frtThresholdSec).length;
+      const rHit = b.rt.filter((v) => v <= rtThresholdSec).length;
+      return {
+        userId,
+        name: u?.name ?? null,
+        email: u?.email ?? '',
+        conversations: b.frt.length,
+        frtAvg: fs.avg,
+        frtP50: fs.p50,
+        frtP90: fs.p90,
+        frtHitRate: b.frt.length > 0 ? Math.round((fHit / b.frt.length) * 100) : null,
+        rtAvg: rs.avg,
+        rtHitRate: b.rt.length > 0 ? Math.round((rHit / b.rt.length) * 100) : null,
+      };
+    })
+    .sort((a, b) => b.conversations - a.conversations);
+
+  return c.json({
+    range: { since: since.toISOString(), until: until.toISOString() },
+    thresholds: {
+      firstResponseMin: frtThresholdSec / 60,
+      resolutionMin: rtThresholdSec / 60,
+    },
+    summary: {
+      totalConversations: convs.length,
+      frtAvg: frtStats.avg,
+      frtP50: frtStats.p50,
+      frtP90: frtStats.p90,
+      frtHitRate,
+      frtAvgHuman: formatHumanDuration(frtStats.avg),
+      frtP50Human: formatHumanDuration(frtStats.p50),
+      frtP90Human: formatHumanDuration(frtStats.p90),
+      rtAvg: rtStats.avg,
+      rtP50: rtStats.p50,
+      rtP90: rtStats.p90,
+      rtHitRate,
+      rtAvgHuman: formatHumanDuration(rtStats.avg),
+      rtP90Human: formatHumanDuration(rtStats.p90),
+      currentlyBreached: breached,
+    },
+    agents,
+  });
+});
