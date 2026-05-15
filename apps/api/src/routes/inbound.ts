@@ -136,6 +136,7 @@ async function handleAction(
         where: { id: conv.id },
         data: {
           lastMessageAt: msg.createdAt,
+          lastOutboundAt: msg.createdAt,
           lastMessagePreview: action.text.slice(0, 80),
         },
       });
@@ -221,6 +222,7 @@ async function handleAction(
           where: { id: conv.id },
           data: {
             lastMessageAt: msg.createdAt,
+            lastOutboundAt: msg.createdAt,
             lastMessagePreview: action.text.slice(0, 80),
           },
         });

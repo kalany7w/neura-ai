@@ -55,7 +55,10 @@ async function processScheduledTick(_job: Job): Promise<void> {
       });
       await prisma.conversation.update({
         where: { id: conv.id },
-        data: { lastMessageAt: msg.createdAt },
+        data: {
+          lastMessageAt: msg.createdAt,
+          lastOutboundAt: msg.createdAt,
+        },
       });
       await outboundQueue.add('send', {
         inboxId: conv.inboxId,

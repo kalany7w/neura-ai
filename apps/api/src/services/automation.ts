@@ -242,7 +242,10 @@ async function enqueueOutbound(
   });
   await prisma.conversation.update({
     where: { id: conversationId },
-    data: { lastMessageAt: msg.createdAt },
+    data: {
+      lastMessageAt: msg.createdAt,
+      lastOutboundAt: msg.createdAt,
+    },
   });
   await outboundQueue.add('send', {
     inboxId: conv.inboxId,

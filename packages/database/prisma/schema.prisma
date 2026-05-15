@@ -310,6 +310,10 @@ model Conversation {
   lastAgentRepliedId String?
   // Preview da última msg (qualquer direção) — cache pra lista
   lastMessagePreview String?         @db.Text
+  // Timestamp da última msg INBOUND (cliente). Usado pra filtro "aguardando resposta".
+  lastInboundAt      DateTime?
+  // Timestamp da última msg OUTBOUND (agente/auto). Se < lastInboundAt → aguardando resposta.
+  lastOutboundAt     DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -322,6 +326,7 @@ model Conversation {
 
   @@index([workspaceId, status, lastMessageAt])
   @@index([workspaceId, archivedAt])
+  @@index([workspaceId, status, lastInboundAt, lastOutboundAt])
   @@index([assignedAgentId])
   @@index([contactId])
   @@index([inboxId])

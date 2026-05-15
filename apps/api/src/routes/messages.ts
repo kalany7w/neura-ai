@@ -306,6 +306,7 @@ async function forwardOneMessage(
     data: {
       lastMessageAt: msg.createdAt,
       lastAgentRepliedId: userId,
+      lastOutboundAt: msg.createdAt,
       lastMessagePreview: source.content
         ? source.content.slice(0, 80)
         : `[${source.type.toLowerCase()}]`,
