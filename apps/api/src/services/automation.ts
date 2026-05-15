@@ -2,7 +2,7 @@ import type { Prisma } from '@neura/database';
 import { renderTemplate } from '@neura/shared/template-render';
 import { prisma } from '../db';
 import { logger } from '../logger';
-import { outboundQueue } from '../queue';
+import { dispatchOutbound } from '../queue';
 import { publishEvent } from '../redis-pub';
 import { patchFirstResponse, patchResolution } from './sla-compute';
 
@@ -282,12 +282,12 @@ async function enqueueOutbound(
       ...slaPatch,
     },
   });
-  await outboundQueue.add('send', {
+  await dispatchOutbound({
     inboxId: conv.inboxId,
     workspaceId,
     conversationId,
     messageId: msg.id,
-    to: conv.contact.phoneNumber,
+    to: conv.contact.phoneNumber ?? '',
     type: 'TEXT',
     text: rendered,
   });

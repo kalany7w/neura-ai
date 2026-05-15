@@ -70,7 +70,7 @@ reactionsRouter.post(
         workspaceId,
         conversationId: msg.conversationId,
         messageId: id,
-        to: msg.conversation.contact.phoneNumber,
+        to: msg.conversation.contact.phoneNumber ?? '',
         type: 'TEXT', // ignored quando kind=reaction
         kind: 'reaction',
         targetWaMessageId: msg.waMessageId,

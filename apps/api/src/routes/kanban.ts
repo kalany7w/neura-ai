@@ -348,7 +348,7 @@ kanbanRouter.get('/cards/:id', requireAuth, requireWorkspace, async (c) => {
   let conversation = null as null | {
     id: string;
     status: string;
-    contact: { id: string; name: string | null; phoneNumber: string };
+    contact: { id: string; name: string | null; phoneNumber: string | null };
   };
   if (card.conversationId) {
     conversation = await prisma.conversation.findFirst({

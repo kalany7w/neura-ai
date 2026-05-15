@@ -4,7 +4,7 @@ import { prisma } from '../db';
 import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
-import { outboundQueue } from '../queue';
+import { outboundQueue, dispatchOutbound } from '../queue';
 import { publishEvent } from '../redis-pub';
 import { patchFirstResponse } from '../services/sla-compute';
 
@@ -129,7 +129,7 @@ async function loadOwnableMessage(
   conversationId: string;
   conversation: {
     inboxId: string;
-    contact: { phoneNumber: string };
+    contact: { phoneNumber: string | null };
     inbox: { status: string };
   };
 } | null> {
@@ -195,7 +195,7 @@ messagesRouter.post(
       workspaceId,
       conversationId: msg.conversationId,
       messageId: msg.id,
-      to: msg.conversation.contact.phoneNumber,
+      to: msg.conversation.contact.phoneNumber ?? '',
       type: 'TEXT',
       text: parsed.data.text,
       kind: 'edit',
@@ -280,7 +280,7 @@ interface ForwardSource {
 interface ForwardTarget {
   id: string;
   inboxId: string;
-  contact: { phoneNumber: string };
+  contact: { phoneNumber: string | null };
   inbox: { status: string };
 }
 
@@ -315,12 +315,12 @@ async function forwardOneMessage(
       ...slaPatch,
     },
   });
-  await outboundQueue.add('send', {
+  await dispatchOutbound({
     inboxId: target.inboxId,
     workspaceId,
     conversationId: target.id,
     messageId: msg.id,
-    to: target.contact.phoneNumber,
+    to: target.contact.phoneNumber ?? '',
     type: source.type as 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT',
     text: source.content ?? undefined,
     mediaUrl: source.mediaUrl ?? undefined,
@@ -498,7 +498,7 @@ messagesRouter.post(
       workspaceId,
       conversationId: msg.conversationId,
       messageId: msg.id,
-      to: msg.conversation.contact.phoneNumber,
+      to: msg.conversation.contact.phoneNumber ?? '',
       type: 'TEXT',
       kind: 'revoke',
       targetWaMessageId: msg.waMessageId,

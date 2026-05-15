@@ -185,6 +185,8 @@ async function forwardTypingToWorker(
     });
     if (!conv) return;
     if (conv.inbox.status !== 'CONNECTED') return;
+    // Presence só faz sentido pra WhatsApp (Baileys). Skip silently quando phoneNumber null (Telegram).
+    if (!conv.contact.phoneNumber) return;
     await redis.publish(
       'worker:commands',
       JSON.stringify({

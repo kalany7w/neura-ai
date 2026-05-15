@@ -28,6 +28,11 @@ const apiEnvSchema = baseEnvSchema.extend({
   // Sugestões de resposta com IA (mesma chave do Whisper). Default: gpt-4o-mini
   // (~$0.15/1M tokens input — sugestão típica custa <$0.0005 por chamada).
   OPENAI_CHAT_MODEL: z.string().default('gpt-4o-mini'),
+  // URL pública da API pra Telegram registrar webhook (ex: https://api.neura-ai.net)
+  // Obrigatório quando se conecta inbox Telegram.
+  PUBLIC_API_URL: z.string().url().optional(),
+  // URL do app (web), usada como fallback se PUBLIC_API_URL não setada.
+  APP_URL: z.string().url().optional(),
 });
 
 export const env = loadEnv(apiEnvSchema);

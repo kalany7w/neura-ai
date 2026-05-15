@@ -1,10 +1,20 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { randomBytes } from 'node:crypto';
 import { prisma } from '../db';
 import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
 import { audit } from '../services/audit';
+import { encrypt } from '../services/crypto';
+import {
+  getMe,
+  setWebhook,
+  deleteWebhook,
+} from '../services/telegram-client';
+import { decrypt } from '../services/crypto';
+import { env } from '../env';
+import { logger } from '../logger';
 
 export const inboxesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -230,6 +240,143 @@ inboxesRouter.delete(
       workspaceId,
       actorId,
       action: 'inbox.deleted',
+      resource: `Inbox:${id}`,
+    });
+    return c.json({ ok: true });
+  },
+);
+
+// ============================================================
+// TELEGRAM — conectar / desconectar
+// ============================================================
+
+const telegramConnectSchema = z.object({
+  name: z.string().min(1).max(80),
+  botToken: z.string().min(20).max(80).regex(/^\d+:[A-Za-z0-9_-]+$/, 'Token inválido (formato: 123456:ABC-xyz)'),
+});
+
+// POST /api/inboxes/telegram/connect — cria inbox tipo TELEGRAM e configura webhook
+inboxesRouter.post(
+  '/telegram/connect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = telegramConnectSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+
+    // Valida bot token via getMe
+    let botInfo;
+    try {
+      botInfo = await getMe(parsed.data.botToken);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Token inválido';
+      return c.json({ error: 'invalid_bot_token', message: msg }, 400);
+    }
+
+    // Slug aleatório pra URL do webhook (anti-enumeração + secret_token extra)
+    const webhookSlug = randomBytes(16).toString('hex');
+    const secretToken = randomBytes(24).toString('hex');
+
+    // Cria inbox antes de configurar webhook (rollback se webhook falhar)
+    const inbox = await prisma.inbox.create({
+      data: {
+        workspaceId,
+        name: parsed.data.name,
+        type: 'TELEGRAM',
+        status: 'CONNECTING',
+        channelConfig: {
+          botTokenEncrypted: encrypt(parsed.data.botToken),
+          botUsername: botInfo.username ?? null,
+          botId: botInfo.id,
+          webhookSlug,
+          secretToken,
+        },
+      },
+    });
+
+    // Configura webhook no Telegram
+    const baseUrl = env.PUBLIC_API_URL || env.APP_URL || '';
+    if (!baseUrl) {
+      await prisma.inbox.delete({ where: { id: inbox.id } });
+      return c.json({ error: 'public_url_not_configured' }, 500);
+    }
+    const webhookUrl = `${baseUrl.replace(/\/$/, '')}/api/telegram/webhook/${webhookSlug}`;
+    try {
+      await setWebhook({
+        botToken: parsed.data.botToken,
+        url: webhookUrl,
+        secretToken,
+      });
+      await prisma.inbox.update({
+        where: { id: inbox.id },
+        data: { status: 'CONNECTED' },
+      });
+    } catch (err) {
+      logger.error({ err, inboxId: inbox.id }, 'Telegram setWebhook failed');
+      await prisma.inbox.update({
+        where: { id: inbox.id },
+        data: { status: 'ERROR' },
+      });
+      const msg = err instanceof Error ? err.message : 'webhook failed';
+      return c.json({ error: 'webhook_setup_failed', message: msg }, 500);
+    }
+
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'inbox.telegram_connected',
+      resource: `Inbox:${inbox.id}`,
+      metadata: { botUsername: botInfo.username },
+    });
+
+    return c.json({
+      inbox: {
+        id: inbox.id,
+        name: inbox.name,
+        type: inbox.type,
+        status: 'CONNECTED',
+        botUsername: botInfo.username,
+        botName: botInfo.first_name,
+      },
+    }, 201);
+  },
+);
+
+// POST /api/inboxes/:id/telegram/disconnect — remove webhook + marca DISCONNECTED
+inboxesRouter.post(
+  '/:id/telegram/disconnect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox || inbox.type !== 'TELEGRAM') return c.json({ error: 'not_found' }, 404);
+
+    const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
+    const tokenEnc = cfg.botTokenEncrypted as string | undefined;
+    if (tokenEnc) {
+      try {
+        const token = decrypt(tokenEnc);
+        await deleteWebhook(token);
+      } catch (err) {
+        logger.warn({ err, inboxId: id }, 'Telegram deleteWebhook failed (continuing)');
+      }
+    }
+    await prisma.inbox.update({
+      where: { id },
+      data: { status: 'DISCONNECTED' },
+    });
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'inbox.telegram_disconnected',
       resource: `Inbox:${id}`,
     });
     return c.json({ ok: true });

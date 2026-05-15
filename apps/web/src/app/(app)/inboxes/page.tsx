@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Wifi, WifiOff } from 'lucide-react';
+import { Plus, Search, Send, Wifi, WifiOff } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useRealtimeStore } from '@/lib/realtime-store';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
@@ -32,6 +33,7 @@ const STATUS_TABS: Array<{ value: StatusFilter; label: string }> = [
 export default function InboxesPage() {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [telegramOpen, setTelegramOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const wsState = useRealtimeStore((s) => s.state);
@@ -90,26 +92,60 @@ export default function InboxesPage() {
             )}
           </h1>
           <p className="text-muted-foreground">
-            Conecte números WhatsApp para receber e enviar mensagens. Cada inbox = 1 número.
+            Conecte canais (WhatsApp via Baileys, Telegram via Bot API) para receber e
+            enviar mensagens. Cada inbox = 1 canal.
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4" />
-              Nova inbox
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nova inbox WhatsApp</DialogTitle>
-              <DialogDescription>
-                Depois de criar, clique em Conectar e escaneie o QR Code com o WhatsApp.
-              </DialogDescription>
-            </DialogHeader>
-            <CreateInboxForm onDone={() => setOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Dialog open={telegramOpen} onOpenChange={setTelegramOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Send className="h-4 w-4" />
+                Conectar Telegram
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Conectar bot do Telegram</DialogTitle>
+                <DialogDescription>
+                  Crie um bot via{' '}
+                  <a
+                    href="https://t.me/BotFather"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium underline"
+                  >
+                    @BotFather
+                  </a>{' '}
+                  e cole o token. O webhook é configurado automaticamente.
+                </DialogDescription>
+              </DialogHeader>
+              <TelegramConnectForm
+                onDone={() => {
+                  setTelegramOpen(false);
+                  qc.invalidateQueries({ queryKey: ['inboxes'] });
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" />
+                Nova inbox WhatsApp
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova inbox WhatsApp</DialogTitle>
+                <DialogDescription>
+                  Depois de criar, clique em Conectar e escaneie o QR Code com o WhatsApp.
+                </DialogDescription>
+              </DialogHeader>
+              <CreateInboxForm onDone={() => setOpen(false)} />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {(data?.inboxes?.length ?? 0) > 0 && (
@@ -184,6 +220,74 @@ export default function InboxesPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function TelegramConnectForm({ onDone }: { onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [botToken, setBotToken] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  async function submit() {
+    if (!name.trim() || !botToken.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await api<{
+        inbox: { id: string; botUsername?: string };
+      }>(`/api/inboxes/telegram/connect`, {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), botToken: botToken.trim() }),
+      });
+      const handle = res.inbox.botUsername ? `@${res.inbox.botUsername}` : 'bot conectado';
+      toast.success(`Inbox Telegram criada · ${handle}`);
+      onDone();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao conectar');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label htmlFor="tg-name" className="text-sm font-medium">
+          Nome
+        </label>
+        <Input
+          id="tg-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Suporte Telegram"
+        />
+      </div>
+      <div className="space-y-2">
+        <label htmlFor="tg-token" className="text-sm font-medium">
+          Bot token
+        </label>
+        <Input
+          id="tg-token"
+          type="password"
+          value={botToken}
+          onChange={(e) => setBotToken(e.target.value)}
+          placeholder="123456789:ABCdefGhIJKlmnoPQRstuVWxyZ"
+          autoComplete="off"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Token nunca aparece de volta — criptografado AES-256-GCM. Pra trocar, desconecte
+          e reconecte.
+        </p>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={onDone} disabled={submitting}>
+          Cancelar
+        </Button>
+        <Button
+          onClick={submit}
+          disabled={submitting || !name.trim() || !botToken.trim()}
+        >
+          {submitting ? 'Conectando…' : 'Conectar bot'}
+        </Button>
+      </div>
     </div>
   );
 }

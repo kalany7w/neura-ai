@@ -5,7 +5,7 @@ import { prisma } from '../db';
 import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
-import { outboundQueue } from '../queue';
+import { outboundQueue, dispatchOutbound } from '../queue';
 import { publishEvent } from '../redis-pub';
 import { outboundLimiter } from '../rate-limit';
 import { logger } from '../logger';
@@ -1030,13 +1030,13 @@ conversationsRouter.post(
       },
     });
 
-    // Enfileira pra waworker enviar via Baileys
-    await outboundQueue.add('send', {
+    // Enfileira na queue certa baseada no canal da inbox (WHATSAPP/TELEGRAM)
+    await dispatchOutbound({
       inboxId: conv.inboxId,
       workspaceId,
       conversationId: conv.id,
       messageId: msg.id,
-      to: conv.contact.phoneNumber,
+      to: conv.contact.phoneNumber ?? '',
       type: parsed.data.type,
       text: parsed.data.text,
       mediaUrl: parsed.data.mediaUrl,

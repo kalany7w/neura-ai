@@ -21,6 +21,7 @@ import { integrationsRouter } from './routes/integrations';
 import { dashboardRouter } from './routes/dashboard';
 import { automationsRouter } from './routes/automations';
 import { slaPoliciesRouter } from './routes/sla-policies';
+import { telegramRouter } from './routes/telegram';
 import { reportsRouter } from './routes/reports';
 import { notificationsRouter } from './routes/notifications';
 import { searchRouter } from './routes/search';
@@ -39,6 +40,7 @@ import { startAutoResolveScheduler } from './auto-resolve';
 import { startAutomationScheduler } from './automation-scheduler';
 import { transcribeWorker } from './transcribe';
 import { aiWorker } from './ai-worker';
+import { telegramOutboundWorker } from './telegram-outbound';
 
 const app = new Hono();
 
@@ -76,6 +78,7 @@ app.route('/api/integrations', integrationsRouter);
 app.route('/api/dashboard', dashboardRouter);
 app.route('/api/automations', automationsRouter);
 app.route('/api/sla-policies', slaPoliciesRouter);
+app.route('/api/telegram', telegramRouter);
 app.route('/api/reports', reportsRouter);
 app.route('/api/notifications', notificationsRouter);
 app.route('/api/search', searchRouter);
@@ -133,5 +136,6 @@ if (env.OPENAI_API_KEY) {
 // Mantém referência viva pra ESM tree-shake não derrubar os workers
 void transcribeWorker;
 void aiWorker;
+void telegramOutboundWorker;
 
 export { app };
