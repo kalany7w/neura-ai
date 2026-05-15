@@ -80,7 +80,10 @@ services:
       - minio
 
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 = Postgres 16 oficial + extensão pgvector pré-instalada.
+    # Compat 100% com volume gerado por postgres:16-alpine (mesmo data layout).
+    # Usado pra Knowledge Base + RAG (busca semântica via embeddings OpenAI).
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-neura}

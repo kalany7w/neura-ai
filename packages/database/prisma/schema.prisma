@@ -44,6 +44,8 @@ model Workspace {
   notifications       Notification[]
   apiKeys             ApiKey[]
   scheduledMessages   ScheduledMessage[]
+  kbCategories        KbCategory[]
+  kbArticles          KbArticle[]
 
   @@map("workspaces")
 }
@@ -974,6 +976,67 @@ model SlaPolicy {
   @@unique([workspaceId, scope, scopeId])
   @@index([workspaceId])
   @@map("sla_policies")
+}
+
+// ============================================
+// KNOWLEDGE BASE + RAG (Fase 34)
+// ============================================
+// Artigos de KB indexados por embedding (pgvector) pra busca semântica.
+// Agente busca via composer no chat ("Buscar na base") — top-N artigos por
+// cosine similarity são exibidos pra inserir conteúdo.
+// A coluna `embedding vector(1536)` é adicionada via migration SQL bruta
+// (Prisma 6 não suporta tipo vector nativamente — acesso via $queryRaw).
+// HNSW index é criado na migration pra performance em volume.
+
+model KbCategory {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  color       String   @default("#6366f1") // indigo-500
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  articles  KbArticle[]
+
+  @@unique([workspaceId, slug])
+  @@unique([workspaceId, name])
+  @@index([workspaceId, position])
+  @@map("kb_categories")
+}
+
+enum KbArticleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model KbArticle {
+  id          String          @id @default(cuid())
+  workspaceId String
+  categoryId  String?
+  title       String
+  slug        String
+  body        String          @db.Text
+  // Primeiras N chars do body — cache pra search results sem ler body completo.
+  excerpt     String?         @db.Text
+  status      KbArticleStatus @default(DRAFT)
+  viewCount   Int             @default(0)
+  // Set quando embedding é re-gerado. Se NULL ou < updatedAt → enfileira re-embed.
+  embeddingUpdatedAt DateTime?
+  createdBy   String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  workspace Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category  KbCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, status])
+  @@index([categoryId])
+  @@map("kb_articles")
 }
 
 // ============================================

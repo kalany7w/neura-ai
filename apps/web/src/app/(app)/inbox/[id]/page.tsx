@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ArrowLeft,
   Ban,
+  BookOpen,
   CalendarClock,
   Check,
   CheckCircle2,
@@ -61,6 +62,7 @@ import {
 import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
 import { ScheduleMessageDialog } from '@/components/inbox/schedule-message-dialog';
 import { ForwardMessageDialog } from '@/components/inbox/forward-message-dialog';
+import { KbSearchDialog } from '@/components/kb-search-dialog';
 import type { MentionTarget } from '@/components/ui/mention-textarea';
 import { renderMentions } from '@/lib/render-mentions';
 import {
@@ -290,6 +292,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [editingBusy, setEditingBusy] = useState(false);
   // Forward (single)
   const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
+  // Knowledge base search
+  const [kbSearchOpen, setKbSearchOpen] = useState(false);
   // Multi-select pra forward batch
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
@@ -2043,17 +2047,28 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             className={mode === 'note' ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30' : ''}
           />
           {mode === 'reply' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={fetchSuggestions}
-              disabled={suggesting || conv.inbox.status !== 'CONNECTED'}
-              title="Sugerir respostas com IA"
-              className={suggesting ? 'animate-pulse' : ''}
-            >
-              <Sparkles className={`h-4 w-4 ${suggesting ? 'text-indigo-500' : ''}`} />
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setKbSearchOpen(true)}
+                title="Buscar na base de conhecimento"
+              >
+                <BookOpen className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={fetchSuggestions}
+                disabled={suggesting || conv.inbox.status !== 'CONNECTED'}
+                title="Sugerir respostas com IA"
+                className={suggesting ? 'animate-pulse' : ''}
+              >
+                <Sparkles className={`h-4 w-4 ${suggesting ? 'text-indigo-500' : ''}`} />
+              </Button>
+            </>
           )}
           <Button
             type="submit"
@@ -2096,6 +2111,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         }}
         messageId={forwardingMessageId}
         excludeConversationId={conv.id}
+      />
+
+      <KbSearchDialog
+        open={kbSearchOpen}
+        onOpenChange={setKbSearchOpen}
+        onInsert={(snippet) => {
+          // Insere body do artigo no composer (substitui se vazio, append senão).
+          setText((prev) => (prev.trim() ? `${prev}\n\n${snippet}` : snippet));
+          requestAnimationFrame(() => inputRef.current?.focus());
+        }}
       />
 
       <ForwardMessageDialog

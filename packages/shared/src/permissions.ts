@@ -57,6 +57,10 @@ export const PERMISSIONS = {
 
   // Audit log
   'audit.read': ['ADMIN'],
+
+  // Knowledge base (Fase 34)
+  'kb.manage': ['ADMIN', 'SUPERVISOR'],
+  'kb.use': ['ADMIN', 'SUPERVISOR', 'AGENT'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
