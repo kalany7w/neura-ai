@@ -38,6 +38,7 @@ import {
   Trash2,
   UserCheck,
   UserX,
+  Wand2,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -301,6 +302,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [suggestingActions, setSuggestingActions] = useState(false);
   const [aiActions, setAiActions] = useState<AiSuggestedAction[] | null>(null);
   const [executingActionIdx, setExecutingActionIdx] = useState<number | null>(null);
+  // Macros
+  const [executingMacroId, setExecutingMacroId] = useState<string | null>(null);
   // Sugestões de resposta com IA
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggesting, setSuggesting] = useState(false);
@@ -513,6 +516,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     queryKey: ['labels'],
     queryFn: () => api('/api/labels'),
     staleTime: 60_000,
+  });
+
+  const { data: macrosData } = useQuery<{
+    macros: Array<{ id: string; name: string; description: string | null }>;
+  }>({
+    queryKey: ['macros'],
+    queryFn: () => api('/api/automations/macros'),
+    staleTime: 30_000,
   });
 
   useEffect(() => {
@@ -834,6 +845,32 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     setAiActions((prev) => (prev ?? []).filter((_, i) => i !== idx));
   }
 
+  async function executeMacroOnConv(macroId: string, macroName: string) {
+    if (executingMacroId) return;
+    setExecutingMacroId(macroId);
+    try {
+      const res = await api<{
+        status: 'MATCHED' | 'PARTIAL' | 'FAILED' | 'NOT_FOUND';
+        errorMessage?: string;
+      }>(`/api/automations/macros/${macroId}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({ conversationId: id }),
+      });
+      if (res.status === 'MATCHED') {
+        toast.success(`Macro "${macroName}" executada`);
+      } else if (res.status === 'PARTIAL') {
+        toast.warning(`Macro "${macroName}" rodou parcialmente`);
+      } else if (res.status === 'FAILED') {
+        toast.error(`Macro "${macroName}" falhou: ${res.errorMessage ?? 'erro'}`);
+      }
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao executar macro');
+    } finally {
+      setExecutingMacroId(null);
+    }
+  }
+
   function startEdit(msg: MessageItem) {
     setEditingMessageId(msg.id);
     setEditingText(msg.content ?? '');
@@ -1012,6 +1049,43 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               })}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Macros: dropdown só aparece se workspace tem macros enabled */}
+          {macrosData && macrosData.macros.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
+                  title="Executar macro nessa conversa"
+                  disabled={executingMacroId !== null}
+                >
+                  <Wand2 className="h-3.5 w-3.5" />
+                  {executingMacroId ? 'Executando…' : 'Macros'}
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 max-h-72 overflow-y-auto">
+                <DropdownMenuLabel>Macros disponíveis</DropdownMenuLabel>
+                {macrosData.macros.map((m) => (
+                  <DropdownMenuItem
+                    key={m.id}
+                    onSelect={() => executeMacroOnConv(m.id, m.name)}
+                  >
+                    <Wand2 className="h-3.5 w-3.5 text-indigo-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium">{m.name}</p>
+                      {m.description && (
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {m.description}
+                        </p>
+                      )}
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {/* More actions: marcar não lida, arquivar, etc */}
           <DropdownMenu>

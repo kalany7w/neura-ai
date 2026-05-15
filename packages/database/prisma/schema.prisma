@@ -864,9 +864,13 @@ model AutomationRule {
   workspaceId String
   name        String
   description String?
-  trigger     String   // 'conversation.created' | 'message.new' | 'card.moved' | ...
+  // 'auto': dispara por evento ou scheduler tempo. 'macro': só roda quando agente clica botão.
+  kind        String   @default("auto")
+  trigger     String   // 'conversation.created' | 'message.new' | 'card.moved' | 'time.no_response' | 'time.after_created' | 'manual' (pra macros)
   conditions  Json     // [{ field: 'message.text', op: 'contains', value: 'preço' }, ...]
   actions     Json     // [{ kind: 'assign_agent', userId: 'xxx' }, ...]
+  // Config extra pra triggers tempo: {hoursThreshold: number}
+  triggerConfig Json?
   enabled     Boolean  @default(true)
   priority    Int      @default(0) // maior = roda primeiro
   runCount    Int      @default(0)
@@ -879,6 +883,7 @@ model AutomationRule {
   runs      AutomationRun[]
 
   @@index([workspaceId, trigger, enabled])
+  @@index([workspaceId, kind])
   @@map("automation_rules")
 }
 
