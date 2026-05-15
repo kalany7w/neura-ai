@@ -5,6 +5,7 @@ import { env } from './env';
 import { logger } from './logger';
 import { outboundQueue } from './queue';
 import { publishEvent } from './redis-pub';
+import { patchFirstResponse } from './services/sla-compute';
 
 const QUEUE_SCHEDULED_MSGS = 'scheduled-messages';
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -53,11 +54,13 @@ async function processScheduledTick(_job: Job): Promise<void> {
           status: 'PENDING',
         },
       });
+      const slaPatch = await patchFirstResponse(conv.id, msg.createdAt);
       await prisma.conversation.update({
         where: { id: conv.id },
         data: {
           lastMessageAt: msg.createdAt,
           lastOutboundAt: msg.createdAt,
+          ...slaPatch,
         },
       });
       await outboundQueue.add('send', {

@@ -12,6 +12,7 @@
  */
 
 import { tickTimeBasedTriggers } from './services/automation';
+import { tickSlaBreachDetection } from './services/sla-breach';
 import { logger } from './logger';
 
 const TICK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
@@ -28,6 +29,7 @@ async function runTick(): Promise<void> {
   const start = Date.now();
   try {
     await tickTimeBasedTriggers();
+    await tickSlaBreachDetection();
     logger.info({ ms: Date.now() - start }, 'automation tick done');
   } catch (err) {
     logger.error({ err }, 'automation tick failed');

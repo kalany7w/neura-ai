@@ -46,10 +46,26 @@ async function runAutoResolve(_job: Job): Promise<void> {
 
     if (stale.length === 0) continue;
     const ids = stale.map((c) => c.id);
+    const resolvedAt = new Date();
     await prisma.conversation.updateMany({
       where: { id: { in: ids } },
       data: { status: 'RESOLVED' },
     });
+    // SLA: registra resolvedAt + segundos (idempotente — só onde null)
+    const pending = await prisma.conversation.findMany({
+      where: { id: { in: ids }, resolvedAt: null },
+      select: { id: true, createdAt: true },
+    });
+    for (const p of pending) {
+      const secs = Math.max(
+        0,
+        Math.round((resolvedAt.getTime() - p.createdAt.getTime()) / 1000),
+      );
+      await prisma.conversation.update({
+        where: { id: p.id },
+        data: { resolvedAt, resolutionSeconds: secs },
+      });
+    }
     for (const id of ids) {
       await publishEvent(inbox.workspaceId, 'conversations', 'conversation.status_changed', {
         conversationId: id,

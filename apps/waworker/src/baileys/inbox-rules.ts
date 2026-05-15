@@ -152,11 +152,27 @@ export async function applyInboxRules(params: {
             status: 'PENDING',
           },
         });
+        // SLA: registra FRT se primeira resposta (auto-greeting conta).
+        // Idempotente: só preenche se firstResponseAt null.
+        const cur = await prisma.conversation.findUnique({
+          where: { id: params.conversationId },
+          select: { firstResponseAt: true, createdAt: true },
+        });
+        const slaPatch: Record<string, unknown> = {};
+        if (cur && !cur.firstResponseAt) {
+          slaPatch.firstResponseAt = msg.createdAt;
+          slaPatch.firstResponseSeconds = Math.max(
+            0,
+            Math.round((msg.createdAt.getTime() - cur.createdAt.getTime()) / 1000),
+          );
+          slaPatch.slaBreachNotifiedAt = null;
+        }
         await prisma.conversation.update({
           where: { id: params.conversationId },
           data: {
             lastMessageAt: msg.createdAt,
             lastOutboundAt: msg.createdAt,
+            ...slaPatch,
           },
         });
         await enqueueOutbound({

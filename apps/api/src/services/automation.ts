@@ -4,6 +4,7 @@ import { prisma } from '../db';
 import { logger } from '../logger';
 import { outboundQueue } from '../queue';
 import { publishEvent } from '../redis-pub';
+import { patchFirstResponse, patchResolution } from './sla-compute';
 
 // ============================================================
 // TIPOS
@@ -147,9 +148,10 @@ async function executeAction(action: Action, ctx: ExecContext): Promise<void> {
     }
     case 'set_status': {
       if (!ctx.conversationId) return;
+      const slaPatch = await patchResolution(ctx.conversationId, action.status);
       await prisma.conversation.update({
         where: { id: ctx.conversationId },
-        data: { status: action.status },
+        data: { status: action.status, ...slaPatch },
       });
       await publishEvent(ctx.workspaceId, 'conversations', 'conversation.status_changed', {
         conversationId: ctx.conversationId,
@@ -271,11 +273,13 @@ async function enqueueOutbound(
       status: 'PENDING',
     },
   });
+  const slaPatch = await patchFirstResponse(conversationId, msg.createdAt);
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
       lastMessageAt: msg.createdAt,
       lastOutboundAt: msg.createdAt,
+      ...slaPatch,
     },
   });
   await outboundQueue.add('send', {

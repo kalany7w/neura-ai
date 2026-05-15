@@ -8,6 +8,7 @@ import { outboundQueue } from '../queue';
 import { publishEvent } from '../redis-pub';
 import { redis } from './../redis';
 import { audit } from '../services/audit';
+import { patchFirstResponse } from '../services/sla-compute';
 
 /**
  * Endpoints PÚBLICOS — sem requireAuth/requireWorkspace. Cada request é
@@ -132,12 +133,14 @@ async function handleAction(
           status: 'PENDING',
         },
       });
+      const slaPatch1 = await patchFirstResponse(conv.id, msg.createdAt);
       await prisma.conversation.update({
         where: { id: conv.id },
         data: {
           lastMessageAt: msg.createdAt,
           lastOutboundAt: msg.createdAt,
           lastMessagePreview: action.text.slice(0, 80),
+          ...slaPatch1,
         },
       });
       await outboundQueue.add('send', {
@@ -218,12 +221,14 @@ async function handleAction(
             status: 'PENDING',
           },
         });
+        const slaPatch2 = await patchFirstResponse(conv.id, msg.createdAt);
         await prisma.conversation.update({
           where: { id: conv.id },
           data: {
             lastMessageAt: msg.createdAt,
             lastOutboundAt: msg.createdAt,
             lastMessagePreview: action.text.slice(0, 80),
+            ...slaPatch2,
           },
         });
         await outboundQueue.add('send', {

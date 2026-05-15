@@ -14,6 +14,7 @@ import { summarizeConversation } from '../services/ai-summarize';
 import { suggestNextActions } from '../services/ai-next-action';
 import { classifyConversation } from '../services/ai-classify';
 import { buildMentionTargets } from '../services/mentions';
+import { patchFirstResponse, patchResolution } from '../services/sla-compute';
 import { audit } from '../services/audit';
 import { aiQueue } from '../queue';
 import { env } from '../env';
@@ -305,6 +306,31 @@ conversationsRouter.post('/bulk', requireAuth, requireWorkspace, async (c) => {
       data: { status: data.status },
     });
     affected = res.count;
+    // SLA: marca resolvedAt em RESOLVED (1× por conversa, idempotente via WHERE)
+    if (data.status === 'RESOLVED') {
+      const now = new Date();
+      // Pega createdAt das que ainda não têm resolvedAt
+      const pending = await prisma.conversation.findMany({
+        where: { id: { in: ids }, resolvedAt: null },
+        select: { id: true, createdAt: true },
+      });
+      for (const p of pending) {
+        const secs = Math.max(
+          0,
+          Math.round((now.getTime() - p.createdAt.getTime()) / 1000),
+        );
+        await prisma.conversation.update({
+          where: { id: p.id },
+          data: { resolvedAt: now, resolutionSeconds: secs },
+        });
+      }
+    } else {
+      // Reabriu: limpa resolvedAt pra permitir nova medição depois
+      await prisma.conversation.updateMany({
+        where: { id: { in: ids }, status: data.status },
+        data: { resolvedAt: null, resolutionSeconds: null },
+      });
+    }
     for (const id of ids) {
       await publishEvent(workspaceId, 'conversations', 'conversation.status_changed', {
         conversationId: id,
@@ -444,6 +470,11 @@ conversationsRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
     parsed.data.assignedAgentId !== undefined && parsed.data.assignedAgentId !== conv.assignedAgentId;
   if (parsed.data.status !== undefined) data.status = parsed.data.status;
   if (parsed.data.assignedAgentId !== undefined) data.assignedAgentId = parsed.data.assignedAgentId;
+
+  // SLA: computa Resolution Time quando status muda
+  if (statusChanged && parsed.data.status) {
+    Object.assign(data, await patchResolution(id, parsed.data.status));
+  }
 
   const updated = await prisma.conversation.update({ where: { id }, data });
 
@@ -961,6 +992,8 @@ conversationsRouter.post(
     const preview = parsed.data.text
       ? parsed.data.text.slice(0, 80)
       : `[${parsed.data.type.toLowerCase()}]`;
+    // SLA: registra FRT se primeira resposta de agente
+    const slaPatch = await patchFirstResponse(conv.id, msg.createdAt);
     // Auto-atribui o agente que enviou (se conversa não atribuída)
     if (!conv.assignedAgentId) {
       await prisma.conversation.update({
@@ -971,6 +1004,7 @@ conversationsRouter.post(
           lastAgentRepliedId: userId,
           lastOutboundAt: msg.createdAt,
           lastMessagePreview: preview,
+          ...slaPatch,
         },
       });
     } else {
@@ -981,6 +1015,7 @@ conversationsRouter.post(
           lastAgentRepliedId: userId,
           lastOutboundAt: msg.createdAt,
           lastMessagePreview: preview,
+          ...slaPatch,
         },
       });
     }

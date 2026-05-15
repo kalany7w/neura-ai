@@ -40,6 +40,7 @@ model Workspace {
   inboundWebhooks     InboundWebhook[]
   automationRules     AutomationRule[]
   automationRuns      AutomationRun[]
+  slaPolicies         SlaPolicy[]
   notifications       Notification[]
   apiKeys             ApiKey[]
   scheduledMessages   ScheduledMessage[]
@@ -314,6 +315,17 @@ model Conversation {
   lastInboundAt      DateTime?
   // Timestamp da última msg OUTBOUND (agente/auto). Se < lastInboundAt → aguardando resposta.
   lastOutboundAt     DateTime?
+  // SLA: timestamp + tempo (segundos) da primeira resposta de agente.
+  // Set ao criar primeira OUTBOUND msg (idempotente — só se null).
+  firstResponseAt    DateTime?
+  firstResponseSeconds Int?
+  // SLA: timestamp + tempo (segundos) até resolução (status → RESOLVED).
+  // Set quando status vira RESOLVED (idempotente).
+  resolvedAt         DateTime?
+  resolutionSeconds  Int?
+  // SLA: marcador anti-duplicação de breach notification. Set quando scheduler
+  // detecta breach FRT e cria notification — evita re-notificar mesma conversa.
+  slaBreachNotifiedAt DateTime?
   // IA Copilot: classificação automática (intent + urgency + sentiment + confidence)
   // Schema: { intent: 'sale'|'support'|'complaint'|'info'|'other', urgency: 'low'|'medium'|'high'|'critical', sentiment: 'positive'|'neutral'|'negative', confidence: 0-1, classifiedAt: ISO }
   aiClassification   Json?
@@ -921,6 +933,32 @@ model AutomationRun {
   @@index([ruleId, createdAt])
   @@index([workspaceId, createdAt])
   @@map("automation_runs")
+}
+
+// ============================================
+// SLA POLICIES (Fase 32)
+// ============================================
+// scope 'default' (workspace-wide) | 'inbox' (override por inbox.id) | 'label' (override por label.id)
+// Thresholds em MINUTOS. FRT = primeira resposta. RT = resolução.
+// Resolução: aplica primeiro label, depois inbox, depois default.
+
+model SlaPolicy {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  scope       String   // 'default' | 'inbox' | 'label'
+  scopeId     String?  // inbox.id ou label.id; null pra default
+  firstResponseThresholdMin Int @default(15) // FRT alvo em minutos
+  resolutionThresholdMin    Int @default(1440) // RT alvo em minutos (24h)
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, scope, scopeId])
+  @@index([workspaceId])
+  @@map("sla_policies")
 }
 
 // ============================================

@@ -6,6 +6,7 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
 import { requirePermission } from '../middlewares/permissions';
 import { outboundQueue } from '../queue';
 import { publishEvent } from '../redis-pub';
+import { patchFirstResponse } from '../services/sla-compute';
 
 export const messagesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -301,6 +302,7 @@ async function forwardOneMessage(
       status: 'PENDING',
     },
   });
+  const slaPatch = await patchFirstResponse(target.id, msg.createdAt);
   await prisma.conversation.update({
     where: { id: target.id },
     data: {
@@ -310,6 +312,7 @@ async function forwardOneMessage(
       lastMessagePreview: source.content
         ? source.content.slice(0, 80)
         : `[${source.type.toLowerCase()}]`,
+      ...slaPatch,
     },
   });
   await outboundQueue.add('send', {
