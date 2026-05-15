@@ -12,7 +12,6 @@
  * 7. Incrementa survey.sentCount
  */
 
-import { Prisma } from '@neura/database';
 import { prisma } from '../db';
 import { logger } from '../logger';
 import { dispatchOutbound } from '../queue';
@@ -168,6 +167,3 @@ export async function resolveSurveyForConversation(
   return fallback;
 }
 
-// Suprime warning de unused-import quando o Prisma helper for usado em futuras
-// extensões dessa service (ex: queries raw pra report).
-void Prisma;

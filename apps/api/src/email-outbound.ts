@@ -16,7 +16,7 @@ import { prisma } from './db';
 import { publishEvent } from './redis-pub';
 import { logger } from './logger';
 import { env } from './env';
-import { sendInboxEmail, htmlToPlainText } from './services/email-client';
+import { sendInboxEmail } from './services/email-client';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
@@ -51,17 +51,11 @@ export const emailOutboundWorker = new Worker<SendMessageJob>(
       throw new Error(`Inbox ${inboxId} has no fromAddress configured`);
     }
 
-    // Resolve to + threading via conversa
+    // Resolve to via contato
     const conv = await prisma.conversation.findUnique({
       where: { id: conversationId },
       select: {
         contact: { select: { email: true, name: true } },
-        // Pega últimas msgs pra deduzir subject (primeira do thread) e In-Reply-To
-        messages: {
-          orderBy: { createdAt: 'asc' },
-          take: 1,
-          select: { content: true, emailMessageId: true },
-        },
       },
     });
     if (!conv?.contact.email) {
@@ -81,11 +75,21 @@ export const emailOutboundWorker = new Worker<SendMessageJob>(
     });
     const inReplyTo = lastInbound?.emailMessageId ?? undefined;
 
-    // Subject: deriva da primeira msg do thread OU usa fallback "Re: <preview>"
+    // Subject: deriva da PRIMEIRA msg INBOUND do thread (cliente abriu conversa
+    // assim — manter o subject original). Se não houver INBOUND, fallback "Sem assunto".
+    // Welcome OUTBOUND não vira subject base — degrada UX no Gmail.
     let subject = 'Sem assunto';
-    const firstMsg = conv.messages[0];
-    if (firstMsg?.content) {
-      const firstLine = firstMsg.content.split('\n')[0]?.trim();
+    const firstInbound = await prisma.message.findFirst({
+      where: {
+        conversationId,
+        direction: 'INBOUND',
+        deletedAt: null,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { content: true },
+    });
+    if (firstInbound?.content) {
+      const firstLine = firstInbound.content.split('\n')[0]?.trim();
       if (firstLine) {
         subject = firstLine.length > 80 ? firstLine.slice(0, 77) + '…' : firstLine;
       }
@@ -131,10 +135,6 @@ export const emailOutboundWorker = new Worker<SendMessageJob>(
     });
 
     logger.info({ messageId: updated.id, to: toAddress }, 'email message sent');
-
-    // Fallback: htmlToPlainText apenas referenciado pra suprimir warning unused-import
-    // quando o helper for usado em outras funções futuras.
-    void htmlToPlainText;
   },
   { connection: bullConnection, concurrency: 3 },
 );

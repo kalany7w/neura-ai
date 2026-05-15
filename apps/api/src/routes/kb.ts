@@ -19,7 +19,6 @@ import { requirePermission } from '../middlewares/permissions';
 import { audit } from '../services/audit';
 import { enqueueKbEmbed } from '../queue';
 import { generateEmbedding, formatVectorLiteral } from '../services/kb-embed';
-import { publishEvent } from '../redis-pub';
 
 export const kbRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -552,7 +551,3 @@ kbRouter.get('/stats', requireAuth, requireWorkspace, async (c) => {
   ]);
   return c.json({ total, published, drafts, archived, withEmbedding });
 });
-
-// Suprime warning de TS sobre publishEvent não usado quando habilitarmos
-// dispatch de eventos KB pra automation/webhooks no futuro.
-void publishEvent;
