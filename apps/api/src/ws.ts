@@ -83,6 +83,9 @@ export function setupWebSocket(app: Hono) {
             `workspace:${workspaceId}:messages`,
             `workspace:${workspaceId}:inboxes`,
             `workspace:${workspaceId}:conversations`,
+            `workspace:${workspaceId}:cards`,
+            `workspace:${workspaceId}:contacts`,
+            `workspace:${workspaceId}:notifications`,
             `workspace:${workspaceId}:presence`,
           ]
         : [];

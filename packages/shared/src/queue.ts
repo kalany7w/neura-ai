@@ -4,12 +4,26 @@
 
 export const QUEUE_OUTBOUND = 'outbound';
 export const QUEUE_TRANSCRIBE = 'transcribe';
+export const QUEUE_AI = 'ai';
 
 export interface TranscribeJob {
   /** Workspace pra publishEvent + audit */
   workspaceId: string;
   /** Message.id (AUDIO) a transcrever */
   messageId: string;
+}
+
+/**
+ * Jobs IA Copilot — processados pelo worker `ai` na API.
+ * Discriminados por `kind`:
+ * - 'classify': re-classifica conversa (intent/urgency/sentiment)
+ * - 'forecast': recalcula probabilidade de fechamento dum card
+ */
+export interface AiJob {
+  workspaceId: string;
+  kind: 'classify' | 'forecast';
+  /** Para 'classify': conversationId. Para 'forecast': cardId. */
+  targetId: string;
 }
 
 export interface SendMessageJob {

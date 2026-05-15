@@ -33,6 +33,15 @@ interface AgentRef {
   email: string;
 }
 
+interface AiClassification {
+  intent: 'sale' | 'support' | 'complaint' | 'info' | 'other';
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  sentiment: 'positive' | 'neutral' | 'negative';
+  confidence: number;
+  topics?: string[];
+  classifiedAt?: string;
+}
+
 interface ConversationListItem {
   id: string;
   status: ConversationStatus;
@@ -47,7 +56,30 @@ interface ConversationListItem {
   inbox: { id: string; name: string };
   labels: LabelOnConv[];
   lastAgentRepliedBy: AgentRef | null;
+  aiClassification?: AiClassification | null;
 }
+
+const INTENT_BADGE: Record<AiClassification['intent'], { label: string; cls: string }> = {
+  sale: { label: 'Venda', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  support: { label: 'Suporte', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
+  complaint: { label: 'Reclamação', cls: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
+  info: { label: 'Info', cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+  other: { label: 'Outro', cls: 'bg-muted text-muted-foreground' },
+};
+
+const URGENCY_DOT: Record<AiClassification['urgency'], string> = {
+  low: '',
+  medium: 'bg-amber-400',
+  high: 'bg-orange-500',
+  critical: 'bg-red-500 animate-pulse',
+};
+
+const URGENCY_LABEL: Record<AiClassification['urgency'], string> = {
+  low: 'Baixa urgência',
+  medium: 'Urgência média',
+  high: 'Alta urgência',
+  critical: 'Urgência crítica',
+};
 
 type SlaStatus = 'ok' | 'soft' | 'hard' | 'critical' | null;
 
@@ -270,7 +302,8 @@ export default function InboxPage() {
       event.event === 'conversation.archived' ||
       event.event === 'conversation.unarchived' ||
       event.event === 'conversation.status_changed' ||
-      event.event === 'conversation.assigned'
+      event.event === 'conversation.assigned' ||
+      event.event === 'conversation.classified'
     ) {
       qc.invalidateQueries({ queryKey: ['conversations'] });
       qc.invalidateQueries({ queryKey: ['conversations-counts'] });
@@ -610,6 +643,22 @@ export default function InboxPage() {
                     >
                       {STATUS_LABEL[c.status]}
                     </span>
+                    {c.aiClassification && (
+                      <>
+                        <span
+                          title={`IA: ${INTENT_BADGE[c.aiClassification.intent].label} (${Math.round(c.aiClassification.confidence * 100)}%)`}
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${INTENT_BADGE[c.aiClassification.intent].cls}`}
+                        >
+                          {INTENT_BADGE[c.aiClassification.intent].label}
+                        </span>
+                        {c.aiClassification.urgency !== 'low' && (
+                          <span
+                            title={URGENCY_LABEL[c.aiClassification.urgency]}
+                            className={`h-2 w-2 rounded-full ${URGENCY_DOT[c.aiClassification.urgency]}`}
+                          />
+                        )}
+                      </>
+                    )}
                   </div>
 
                   {c.lastMessagePreview && (

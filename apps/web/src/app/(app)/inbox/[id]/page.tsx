@@ -150,6 +150,64 @@ interface MessageItem {
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
+interface AiClassification {
+  intent: 'sale' | 'support' | 'complaint' | 'info' | 'other';
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  sentiment: 'positive' | 'neutral' | 'negative';
+  confidence: number;
+  topics?: string[];
+  classifiedAt?: string;
+}
+
+type AiSuggestedAction =
+  | { kind: 'assign_agent'; agentSlug: string; reason: string; confidence: number }
+  | { kind: 'apply_label'; labelName: string; reason: string; confidence: number }
+  | {
+      kind: 'set_status';
+      status: 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED';
+      reason: string;
+      confidence: number;
+    }
+  | { kind: 'send_template'; templateName: string; reason: string; confidence: number }
+  | { kind: 'move_card_stage'; stageName: string; reason: string; confidence: number };
+
+const AI_INTENT_LABEL: Record<AiClassification['intent'], string> = {
+  sale: 'Venda',
+  support: 'Suporte',
+  complaint: 'Reclamação',
+  info: 'Info',
+  other: 'Outro',
+};
+
+const AI_INTENT_CLS: Record<AiClassification['intent'], string> = {
+  sale: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  support: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+  complaint: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+  info: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  other: 'bg-muted text-muted-foreground',
+};
+
+const AI_URGENCY_LABEL: Record<AiClassification['urgency'], string> = {
+  low: 'Baixa',
+  medium: 'Média',
+  high: 'Alta',
+  critical: 'Crítica',
+};
+
+const AI_URGENCY_CLS: Record<AiClassification['urgency'], string> = {
+  low: 'bg-muted text-muted-foreground',
+  medium: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+  high: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300',
+  critical:
+    'bg-red-500 text-white dark:bg-red-600 animate-pulse',
+};
+
+const AI_SENTIMENT_EMOJI: Record<AiClassification['sentiment'], string> = {
+  positive: '😊',
+  neutral: '😐',
+  negative: '😠',
+};
+
 interface NoteItem {
   id: string;
   authorId: string;
@@ -174,6 +232,11 @@ interface ConversationDetail {
   contact: { id: string; name: string | null; phoneNumber: string; avatarUrl: string | null };
   inbox: { id: string; name: string; status: string };
   messages: MessageItem[];
+  aiClassification?: AiClassification | null;
+  aiSummary?: string | null;
+  aiSummaryAt?: string | null;
+  aiSuggestedActions?: AiSuggestedAction[] | null;
+  aiSuggestedAt?: string | null;
 }
 
 const STATUS_ICON: Record<MessageItem['status'], string> = {
@@ -232,6 +295,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [batchForwardOpen, setBatchForwardOpen] = useState(false);
   // Histórico de edições — id da msg cujo histórico mostrar
   const [historyMessageId, setHistoryMessageId] = useState<string | null>(null);
+  // IA Copilot
+  const [summarizing, setSummarizing] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [suggestingActions, setSuggestingActions] = useState(false);
+  const [aiActions, setAiActions] = useState<AiSuggestedAction[] | null>(null);
+  const [executingActionIdx, setExecutingActionIdx] = useState<number | null>(null);
   // Sugestões de resposta com IA
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggesting, setSuggesting] = useState(false);
@@ -438,12 +507,32 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   });
   const members = wsData?.workspace.members ?? [];
 
+  const { data: labelsData } = useQuery<{
+    labels: Array<{ id: string; name: string; color: string }>;
+  }>({
+    queryKey: ['labels'],
+    queryFn: () => api('/api/labels'),
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (!data?.conversation) return;
     if (data.conversation.unreadCount > 0) {
       api(`/api/conversations/${id}/read`, { method: 'POST' }).catch(() => {});
     }
   }, [data?.conversation?.id, data?.conversation?.unreadCount, id]);
+
+  // Sincroniza state local de IA Copilot com snapshot do server
+  useEffect(() => {
+    if (!data?.conversation) return;
+    setSummary(data.conversation.aiSummary ?? null);
+    setAiActions(data.conversation.aiSuggestedActions ?? null);
+  }, [
+    data?.conversation?.id,
+    data?.conversation?.aiSummary,
+    data?.conversation?.aiSummaryAt,
+    data?.conversation?.aiSuggestedAt,
+  ]);
 
   // Auto-scroll quando novos itens chegam
   const timelineLen = (data?.conversation.messages.length ?? 0) + (notesData?.notes.length ?? 0);
@@ -469,6 +558,10 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     }
     if (event.event === 'message.edited' || event.event === 'message.deleted') {
       qc.invalidateQueries({ queryKey: ['conversation', id] });
+    }
+    if (event.event === 'conversation.classified') {
+      qc.invalidateQueries({ queryKey: ['conversation', id] });
+      qc.invalidateQueries({ queryKey: ['conversations'] });
     }
     if (event.event === 'message.pinned' || event.event === 'message.unpinned') {
       qc.invalidateQueries({ queryKey: ['conversation', id] });
@@ -631,6 +724,114 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro ao reagir');
     }
+  }
+
+  // ============================
+  // IA Copilot — handlers
+  // ============================
+  async function summarizeAi() {
+    if (summarizing) return;
+    setSummarizing(true);
+    try {
+      const res = await api<{ summary: string }>(
+        `/api/conversations/${id}/ai/summarize`,
+        { method: 'POST' },
+      );
+      setSummary(res.summary);
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.code === 'ai_disabled'
+          ? 'Configure OPENAI_API_KEY pra ativar IA'
+          : err instanceof Error
+            ? err.message
+            : 'Erro ao gerar resumo';
+      toast.error(msg);
+    } finally {
+      setSummarizing(false);
+    }
+  }
+
+  async function suggestNextAi() {
+    if (suggestingActions) return;
+    setSuggestingActions(true);
+    try {
+      const res = await api<{ actions: AiSuggestedAction[] }>(
+        `/api/conversations/${id}/ai/next-actions`,
+        { method: 'POST' },
+      );
+      setAiActions(res.actions);
+      if (res.actions.length === 0) toast.info('IA não encontrou ações claras pra sugerir agora.');
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.code === 'ai_disabled'
+          ? 'Configure OPENAI_API_KEY pra ativar IA'
+          : err instanceof Error
+            ? err.message
+            : 'Erro ao sugerir ações';
+      toast.error(msg);
+    } finally {
+      setSuggestingActions(false);
+    }
+  }
+
+  async function executeAiAction(action: AiSuggestedAction, idx: number) {
+    setExecutingActionIdx(idx);
+    try {
+      if (action.kind === 'set_status') {
+        await updateConversation({ status: action.status });
+      } else if (action.kind === 'assign_agent') {
+        // Resolve userId a partir do slug via /api/workspaces/me/mention-targets
+        const targets = await api<{ targets: Array<{ userId: string; slug: string }> }>(
+          '/api/workspaces/me/mention-targets',
+        );
+        const found = targets.targets.find((t) => t.slug === action.agentSlug);
+        if (!found) {
+          toast.error('Agente sugerido não encontrado');
+          return;
+        }
+        await updateConversation({ assignedAgentId: found.userId });
+      } else if (action.kind === 'apply_label') {
+        const label = (labelsData?.labels ?? []).find(
+          (l) => l.name.toLowerCase() === action.labelName.toLowerCase(),
+        );
+        if (!label) {
+          toast.error('Etiqueta sugerida não encontrada');
+          return;
+        }
+        await api('/api/labels/apply', {
+          method: 'POST',
+          body: JSON.stringify({
+            labelId: label.id,
+            targetType: 'CONVERSATION',
+            targetId: id,
+          }),
+        });
+        toast.success(`Etiqueta "${label.name}" aplicada`);
+        await qc.invalidateQueries({ queryKey: ['conversation', id] });
+      } else if (action.kind === 'send_template') {
+        const tpl = (templatesData?.templates ?? []).find(
+          (t) => t.name.toLowerCase() === action.templateName.toLowerCase(),
+        );
+        if (!tpl) {
+          toast.error('Template sugerido não encontrado');
+          return;
+        }
+        pickTemplate(tpl);
+        toast.success('Template aplicado no composer — edite e envie');
+      } else if (action.kind === 'move_card_stage') {
+        toast.info('Mover card no kanban — abra o card pra confirmar');
+      }
+      // Remove ação executada da lista
+      setAiActions((prev) => (prev ?? []).filter((_, i) => i !== idx));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao executar ação');
+    } finally {
+      setExecutingActionIdx(null);
+    }
+  }
+
+  function dismissAiAction(idx: number) {
+    setAiActions((prev) => (prev ?? []).filter((_, i) => i !== idx));
   }
 
   function startEdit(msg: MessageItem) {
@@ -984,6 +1185,133 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           </div>
         );
       })()}
+
+      {/* IA Copilot bar — classify + summarize + next-actions */}
+      <div className="mt-3 space-y-2 rounded-lg border border-indigo-200 bg-indigo-50/50 px-3 py-2 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+            <Sparkles className="h-3 w-3" />
+            IA Copilot
+          </div>
+          {conv.aiClassification ? (
+            <>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${AI_INTENT_CLS[conv.aiClassification.intent]}`}
+                title={`Confiança ${Math.round(conv.aiClassification.confidence * 100)}%`}
+              >
+                {AI_INTENT_LABEL[conv.aiClassification.intent]}
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${AI_URGENCY_CLS[conv.aiClassification.urgency]}`}
+              >
+                Urgência: {AI_URGENCY_LABEL[conv.aiClassification.urgency]}
+              </span>
+              <span
+                className="text-base leading-none"
+                title={`Sentimento: ${conv.aiClassification.sentiment}`}
+              >
+                {AI_SENTIMENT_EMOJI[conv.aiClassification.sentiment]}
+              </span>
+              {(conv.aiClassification.topics ?? []).slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="rounded-full bg-card/70 px-2 py-0.5 text-[10px] text-muted-foreground border"
+                >
+                  #{t}
+                </span>
+              ))}
+            </>
+          ) : (
+            <span className="text-[11px] text-muted-foreground italic">
+              Sem análise ainda — classificação automática roda 30s após nova mensagem
+            </span>
+          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={summarizeAi}
+              disabled={summarizing}
+              className="h-7 text-xs"
+              title="Resumir conversa em 1-2 frases"
+            >
+              <Sparkles className={`h-3 w-3 ${summarizing ? 'animate-pulse' : ''}`} />
+              {summarizing ? 'Resumindo…' : summary ? 'Refazer resumo' : 'Resumir'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={suggestNextAi}
+              disabled={suggestingActions}
+              className="h-7 text-xs"
+              title="Sugerir próximas ações com IA"
+            >
+              <Sparkles className={`h-3 w-3 ${suggestingActions ? 'animate-pulse' : ''}`} />
+              {suggestingActions ? 'Pensando…' : 'Sugerir ações'}
+            </Button>
+          </div>
+        </div>
+        {summary && (
+          <p className="rounded-md bg-card/60 p-2 text-xs leading-relaxed text-foreground/90 border">
+            <span className="font-semibold">Resumo: </span>
+            {summary}
+          </p>
+        )}
+        {aiActions && aiActions.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+              Próximas ações sugeridas
+            </p>
+            {aiActions.map((a, idx) => {
+              const isExecuting = executingActionIdx === idx;
+              const label =
+                a.kind === 'assign_agent'
+                  ? `Atribuir pra @${a.agentSlug}`
+                  : a.kind === 'apply_label'
+                    ? `Aplicar etiqueta "${a.labelName}"`
+                    : a.kind === 'set_status'
+                      ? `Mudar status pra ${a.status}`
+                      : a.kind === 'send_template'
+                        ? `Usar template "${a.templateName}"`
+                        : `Mover card pra "${a.stageName}"`;
+              return (
+                <div
+                  key={idx}
+                  className="flex items-start gap-2 rounded-md border bg-card/80 p-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium">{label}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{a.reason}</p>
+                    <p className="mt-0.5 text-[10px] text-indigo-600 dark:text-indigo-400">
+                      Confiança {Math.round(a.confidence * 100)}%
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => executeAiAction(a, idx)}
+                      disabled={isExecuting}
+                      className="h-6 text-[11px]"
+                    >
+                      {isExecuting ? '…' : 'Aceitar'}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => dismissAiAction(idx)}
+                      className="h-6 w-6"
+                      title="Dispensar"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
         {timeline.map((item) =>

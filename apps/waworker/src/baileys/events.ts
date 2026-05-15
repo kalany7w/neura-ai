@@ -13,6 +13,7 @@ import type { MessageDirection, MessageType } from '@neura/database';
 import { downloadAndStoreMedia } from './media';
 import { applyInboxRules } from './inbox-rules';
 import { enqueueTranscribe } from '../queue/transcribe';
+import { enqueueAi } from '../queue/ai';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 
@@ -453,6 +454,17 @@ async function persistInboundMessage(
       contactName: txResult.contactName,
       isNewConversation: txResult.isNewConversation,
     });
+    // IA Copilot: re-classifica conversa após inbound. Delay 30s funciona como
+    // debounce porque jobId determinístico — múltiplos inbounds em sequência
+    // colapsam num único classify pegando a versão mais recente do DB.
+    void enqueueAi(
+      {
+        workspaceId: ctx.workspaceId,
+        kind: 'classify',
+        targetId: txResult.conversationId,
+      },
+      { delayMs: 30_000 },
+    );
   }
 }
 
