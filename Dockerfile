@@ -1,8 +1,7 @@
 # Multi-target monorepo Dockerfile (api / web / waworker)
-# Build context = repo root. Use build ARG APP=api|web|waworker pra escolher.
-# Cada serviço no docker-compose.yml monta o mesmo Dockerfile com ARG diferente.
-
-ARG APP=api
+# Build context = repo root. Compose define `target:` por service.
+# Builder constrói TODOS os apps numa única camada (compartilhada entre targets
+# via cache Docker) — cada target final copia só o que precisa.
 
 # ========== base ==========
 FROM node:22-alpine AS base
@@ -20,13 +19,13 @@ COPY packages/database/package.json ./packages/database/
 COPY packages/shared/package.json ./packages/shared/
 RUN pnpm install --frozen-lockfile
 
-# ========== builder (gera Prisma + builda o app alvo) ==========
+# ========== builder (gera Prisma + builda os 3 apps de uma vez) ==========
 FROM deps AS builder
-ARG APP
 COPY . .
 RUN pnpm db:generate
-# Build do app específico (e suas deps por causa do turbo)
-RUN pnpm --filter "@neura/${APP}..." build
+# Build all (turbo paraleliza entre packages). 3 targets finais (api/web/waworker)
+# reusam a mesma camada via cache do Docker.
+RUN pnpm build
 
 # ========== runner: api ==========
 FROM base AS api-runner
