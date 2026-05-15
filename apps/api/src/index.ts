@@ -63,6 +63,13 @@ app.use(
 
 app.use('*', honoLogger((msg) => logger.info(msg)));
 
+// Raiz da API redireciona pro web app (UX + fallback pra links antigos
+// de verify-email que usavam baseURL como callbackURL).
+app.get('/', (c) => {
+  const appUrl = env.APP_URL ?? env.TRUSTED_ORIGINS[0] ?? '/';
+  return c.redirect(appUrl, 302);
+});
+
 // Better Auth handler (signup, login, verify email, reset password, etc.)
 app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
