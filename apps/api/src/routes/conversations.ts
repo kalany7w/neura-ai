@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Prisma } from '@neura/database';
+import { Prisma } from '@neura/database';
 import { prisma } from '../db';
 import { requireAuth, type AuthVars } from '../middlewares/auth';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace';
@@ -835,6 +835,69 @@ conversationsRouter.post('/:id/ai/classify', requireAuth, requireWorkspace, asyn
     classification,
   });
   return c.json({ classification });
+});
+
+// POST /api/conversations/:id/ai/kb-suggest — força recompute de sugestão KB on-demand.
+conversationsRouter.post('/:id/ai/kb-suggest', requireAuth, requireWorkspace, async (c) => {
+  if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
+    select: { id: true },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  await aiQueue.add(
+    'kb-suggest',
+    { workspaceId, kind: 'kb-suggest', targetId: id },
+    { jobId: `kb-suggest:${id}` },
+  );
+  return c.json({ ok: true, queued: true });
+});
+
+// POST /api/conversations/:id/ai/kb-suggest/accept — marca métrica + remove card.
+// Chamado pelo frontend quando agente clica "Inserir resposta".
+conversationsRouter.post('/:id/ai/kb-suggest/accept', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
+    select: { id: true, aiKbSuggestion: true },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (!conv.aiKbSuggestion) return c.json({ error: 'no_suggestion' }, 409);
+  await prisma.conversation.update({
+    where: { id },
+    data: { aiKbSuggestionAccepted: true },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.kb_suggestion_accepted', {
+    conversationId: id,
+  });
+  return c.json({ ok: true });
+});
+
+// POST /api/conversations/:id/ai/kb-suggest/dismiss — descarta sugestão.
+// Agente decidiu que o artigo não serve — limpa o card.
+conversationsRouter.post('/:id/ai/kb-suggest/dismiss', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const id = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id, workspaceId },
+    select: { id: true },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  await prisma.conversation.update({
+    where: { id },
+    data: {
+      aiKbSuggestion: Prisma.DbNull,
+      aiKbSuggestionAt: null,
+      aiKbSuggestionAccepted: false,
+    },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.kb_suggestion_dismissed', {
+    conversationId: id,
+  });
+  return c.json({ ok: true });
 });
 
 // POST /api/conversations/:id/read — zera unreadCount

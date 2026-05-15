@@ -240,6 +240,14 @@ interface ConversationDetail {
   aiSummaryAt?: string | null;
   aiSuggestedActions?: AiSuggestedAction[] | null;
   aiSuggestedAt?: string | null;
+  aiKbSuggestion?: {
+    articleId: string;
+    articleTitle: string;
+    score: number;
+    suggestedAt: string;
+  } | null;
+  aiKbSuggestionAt?: string | null;
+  aiKbSuggestionAccepted?: boolean;
 }
 
 const STATUS_ICON: Record<MessageItem['status'], string> = {
@@ -294,6 +302,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
   // Knowledge base search
   const [kbSearchOpen, setKbSearchOpen] = useState(false);
+  // KB auto-suggest
+  const [kbSuggestRefreshing, setKbSuggestRefreshing] = useState(false);
+  const [kbSuggestInserting, setKbSuggestInserting] = useState(false);
   // Multi-select pra forward batch
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
@@ -578,6 +589,13 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       qc.invalidateQueries({ queryKey: ['conversation', id] });
       qc.invalidateQueries({ queryKey: ['conversations'] });
     }
+    if (
+      event.event === 'conversation.kb_suggested' ||
+      event.event === 'conversation.kb_suggestion_accepted' ||
+      event.event === 'conversation.kb_suggestion_dismissed'
+    ) {
+      qc.invalidateQueries({ queryKey: ['conversation', id] });
+    }
     if (event.event === 'message.pinned' || event.event === 'message.unpinned') {
       qc.invalidateQueries({ queryKey: ['conversation', id] });
     }
@@ -847,6 +865,58 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
   function dismissAiAction(idx: number) {
     setAiActions((prev) => (prev ?? []).filter((_, i) => i !== idx));
+  }
+
+  async function insertKbSuggestion() {
+    const sug = conv?.aiKbSuggestion;
+    if (!sug || kbSuggestInserting) return;
+    setKbSuggestInserting(true);
+    try {
+      // Carrega body do artigo + cola no composer.
+      const res = await api<{ article: { id: string; title: string; body: string } }>(
+        `/api/kb/articles/${sug.articleId}`,
+      );
+      setText((prev) => (prev.trim() ? `${prev}\n\n${res.article.body}` : res.article.body));
+      // Marca métrica de aceito + invalida pra esconder o card.
+      await api(`/api/conversations/${id}/ai/kb-suggest/accept`, { method: 'POST' });
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+      toast.success(`"${res.article.title}" inserido no composer`);
+      // Incrementa view counter em background.
+      api(`/api/kb/articles/${sug.articleId}/view`, { method: 'POST' }).catch(() => {});
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao inserir artigo');
+    } finally {
+      setKbSuggestInserting(false);
+    }
+  }
+
+  async function dismissKbSuggestion() {
+    try {
+      await api(`/api/conversations/${id}/ai/kb-suggest/dismiss`, { method: 'POST' });
+      await qc.invalidateQueries({ queryKey: ['conversation', id] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function refreshKbSuggestion() {
+    if (kbSuggestRefreshing) return;
+    setKbSuggestRefreshing(true);
+    try {
+      await api(`/api/conversations/${id}/ai/kb-suggest`, { method: 'POST' });
+      toast.success('Busca em fila — atualiza em alguns segundos');
+    } catch (err) {
+      const msg =
+        err instanceof ApiError && err.code === 'ai_disabled'
+          ? 'Configure OPENAI_API_KEY pra ativar IA'
+          : err instanceof Error
+            ? err.message
+            : 'Erro';
+      toast.error(msg);
+    } finally {
+      setKbSuggestRefreshing(false);
+    }
   }
 
   async function executeMacroOnConv(macroId: string, macroName: string) {
@@ -1334,6 +1404,49 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <span className="font-semibold">Resumo: </span>
             {summary}
           </p>
+        )}
+        {conv.aiKbSuggestion && !conv.aiKbSuggestionAccepted && (
+          <div className="flex items-start gap-2 rounded-md border-2 border-indigo-300 bg-indigo-50/60 p-2.5 dark:border-indigo-700 dark:bg-indigo-950/40">
+            <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                Base de conhecimento sugere
+                <span className="rounded bg-indigo-500/15 px-1.5 py-0 normal-case text-[10px]">
+                  {Math.round(conv.aiKbSuggestion.score * 100)}% match
+                </span>
+              </p>
+              <p className="mt-0.5 text-sm font-medium">{conv.aiKbSuggestion.articleTitle}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <Button
+                  size="sm"
+                  onClick={insertKbSuggestion}
+                  disabled={kbSuggestInserting}
+                  className="h-6 text-[11px]"
+                >
+                  {kbSuggestInserting ? '…' : 'Inserir resposta'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={refreshKbSuggestion}
+                  disabled={kbSuggestRefreshing}
+                  className="h-6 text-[11px]"
+                  title="Buscar de novo"
+                >
+                  {kbSuggestRefreshing ? '…' : 'Refazer'}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={dismissKbSuggestion}
+                  className="h-6 w-6"
+                  title="Dispensar sugestão"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
         {aiActions && aiActions.length > 0 && (
           <div className="space-y-1.5">
