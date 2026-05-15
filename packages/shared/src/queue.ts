@@ -23,11 +23,12 @@ export interface TranscribeJob {
  * Discriminados por `kind`:
  * - 'classify': re-classifica conversa (intent/urgency/sentiment)
  * - 'forecast': recalcula probabilidade de fechamento dum card
+ * - 'kb-suggest': busca top-1 artigo da KB pra conversa via embedding
  */
 export interface AiJob {
   workspaceId: string;
-  kind: 'classify' | 'forecast';
-  /** Para 'classify': conversationId. Para 'forecast': cardId. */
+  kind: 'classify' | 'forecast' | 'kb-suggest';
+  /** Para 'classify' e 'kb-suggest': conversationId. Para 'forecast': cardId. */
   targetId: string;
 }
 

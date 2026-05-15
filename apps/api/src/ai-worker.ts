@@ -7,6 +7,7 @@
 
 import { Worker, type Job } from 'bullmq';
 import { Redis } from 'ioredis';
+import { Prisma } from '@neura/database';
 import { QUEUE_AI, type AiJob } from '@neura/shared/queue';
 import { prisma } from './db';
 import { logger } from './logger';
@@ -14,6 +15,8 @@ import { env } from './env';
 import { publishEvent } from './redis-pub';
 import { classifyConversation } from './services/ai-classify';
 import { forecastCard } from './services/ai-forecast';
+import { computeKbSuggestion } from './services/ai-kb-suggest';
+import { aiQueue } from './queue';
 
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
@@ -73,6 +76,50 @@ async function handleClassify(job: Job<AiJob>): Promise<void> {
       sentiment: result.sentiment,
     },
     'conversation classified',
+  );
+
+  // Cascateia kb-suggest: depois de classificar, busca artigo da KB que casa.
+  // JobId determinístico colapsa múltiplos triggers em sequência.
+  try {
+    await aiQueue.add(
+      'kb-suggest',
+      { workspaceId, kind: 'kb-suggest', targetId },
+      { jobId: `kb-suggest:${targetId}` },
+    );
+  } catch (err) {
+    logger.warn({ err, conversationId: targetId }, 'failed to enqueue kb-suggest after classify');
+  }
+}
+
+async function handleKbSuggest(job: Job<AiJob>): Promise<void> {
+  const { workspaceId, targetId } = job.data;
+  const suggestion = await computeKbSuggestion(workspaceId, targetId);
+  if (!suggestion) {
+    // Sem match acima do threshold — limpa sugestão antiga (estado stale).
+    await prisma.conversation
+      .updateMany({
+        where: { id: targetId, workspaceId, aiKbSuggestionAccepted: false },
+        data: { aiKbSuggestion: Prisma.DbNull, aiKbSuggestionAt: null },
+      })
+      .catch(() => {});
+    return;
+  }
+  await prisma.conversation.update({
+    where: { id: targetId },
+    data: {
+      aiKbSuggestion: suggestion as unknown as Prisma.InputJsonValue,
+      aiKbSuggestionAt: new Date(),
+      // Reset accepted: se a sugestão mudou, o agente decide de novo.
+      aiKbSuggestionAccepted: false,
+    },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.kb_suggested', {
+    conversationId: targetId,
+    suggestion,
+  });
+  logger.info(
+    { conversationId: targetId, articleId: suggestion.articleId, score: suggestion.score },
+    'kb suggestion computed',
   );
 }
 
@@ -165,6 +212,7 @@ export const aiWorker = new Worker<AiJob>(
   async (job: Job<AiJob>) => {
     if (job.data.kind === 'classify') return handleClassify(job);
     if (job.data.kind === 'forecast') return handleForecast(job);
+    if (job.data.kind === 'kb-suggest') return handleKbSuggest(job);
   },
   { connection: bullConnection, concurrency: 2 },
 );

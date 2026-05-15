@@ -350,6 +350,12 @@ model Conversation {
   // IA Copilot: próximas ações sugeridas pelo modelo. Schema: [{ kind: 'assign'|'move_card'|'apply_label'|'set_status'|'send_template', ...args, reason, confidence }]
   aiSuggestedActions Json?
   aiSuggestedAt      DateTime?
+  // KB auto-suggest: artigo top-1 da base que melhor casa com a conversa (cosine sim).
+  // Schema: { articleId, articleTitle, score: 0-1, suggestedAt: ISO }
+  aiKbSuggestion         Json?
+  aiKbSuggestionAt       DateTime?
+  // accepted=true quando o agente inseriu o conteúdo e mandou — métrica de eficácia.
+  aiKbSuggestionAccepted Boolean   @default(false)
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -366,6 +372,7 @@ model Conversation {
   @@index([assignedAgentId])
   @@index([contactId])
   @@index([inboxId])
+  @@index([workspaceId, aiKbSuggestionAccepted])
   @@map("conversations")
 }
 
