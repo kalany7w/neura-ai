@@ -20,8 +20,8 @@ Gerar secrets antes:
 openssl rand -hex 32  # pra BETTER_AUTH_SECRET
 openssl rand -hex 32  # pra ENCRYPTION_KEY
 openssl rand -base64 24  # pra POSTGRES_PASSWORD
-openssl rand -base64 24  # pra MINIO_ACCESS_KEY
-openssl rand -base64 32  # pra MINIO_SECRET_KEY
+openssl rand -base64 24  # pra MINIO_ROOT_USER
+openssl rand -base64 32  # pra MINIO_ROOT_PASSWORD
 ```
 
 ENV block completo (copiar pro Coolify):
@@ -56,8 +56,8 @@ RATE_LIMIT_LOGIN_WINDOW_SEC=60
 # MinIO (S3-compatible)
 MINIO_ENDPOINT=minio
 MINIO_PORT=9000
-MINIO_ACCESS_KEY=<gerar>
-MINIO_SECRET_KEY=<gerar>
+MINIO_ROOT_USER=<gerar>
+MINIO_ROOT_PASSWORD=<gerar>
 MINIO_BUCKET=neura-media
 MINIO_USE_SSL=false
 
