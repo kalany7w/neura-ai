@@ -237,7 +237,10 @@ model WaSession {
   // Preenchido após conectar (formato E.164 com prefixo "+")
   phoneNumber String?
   // Texto grande criptografado AES-256-GCM (formato iv:tag:ciphertext em hex)
-  // Contém credentials.json + keys do Baileys serializados
+  // Contém APENAS Baileys creds (noiseKey, signedIdentityKey, registrationId, me.id, etc.).
+  // Signal keys (pre-key, session, sender-key, app-state-sync-key) vão em WaAuthKey —
+  // 1 row por key, write-through sem debounce, igual ao padrão use-multi-file-auth-state
+  // do Baileys. Evita Bad MAC: keys defasadas no disco quando o processo morre.
   encryptedAuthState String? @db.Text
   // QR Code temporário (data URL) — limpo ao conectar
   qrCode             String? @db.Text
@@ -250,6 +253,21 @@ model WaSession {
   inbox Inbox @relation(fields: [inboxId], references: [id], onDelete: Cascade)
 
   @@map("wa_sessions")
+}
+
+// Signal keys do Baileys, 1 row por key. PK composta (inboxId, keyName) garante
+// upsert atômico por key — sem janela de perda como acontecia com o blob debounced.
+// keyName = `${type}-${id}` (ex: "pre-key-1", "session-5511999999999@s.whatsapp.net").
+// keyData = JSON.stringify(value, BufferJSON.replacer), criptografado AES-256-GCM.
+model WaAuthKey {
+  inboxId String
+  keyName String
+  keyData String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@id([inboxId, keyName])
+  @@index([inboxId])
+  @@map("wa_auth_keys")
 }
 
 // ============================================
