@@ -16,12 +16,13 @@ const aiQueue = new Queue<AiJob>(QUEUE_AI, {
 });
 
 /**
- * Enfileira job IA. Para classify, usa jobId determinístico `classify:<convId>`
+ * Enfileira job IA. Para classify, usa jobId determinístico `classify__<convId>`
  * + delay 30s pra debounce: msgs rápidas em sequência viram 1 classify só.
  * BullMQ ignora silenciosamente jobs com id já existente (já em fila ou processando).
+ * Separador `__` em vez de `:` porque BullMQ 5.76+ proíbe `:` em Custom Id.
  */
 export async function enqueueAi(job: AiJob, opts?: { delayMs?: number }): Promise<void> {
-  const jobId = `${job.kind}:${job.targetId}`;
+  const jobId = `${job.kind}__${job.targetId}`;
   await aiQueue.add(job.kind, job, {
     jobId,
     delay: opts?.delayMs ?? 0,

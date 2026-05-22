@@ -883,7 +883,7 @@ kanbanRouter.post(
       await aiQueue.add(
         'forecast',
         { workspaceId, kind: 'forecast', targetId: card.id },
-        { jobId: `forecast:${card.id}` },
+        { jobId: `forecast__${card.id}` },
       );
     }
     return c.json({ enqueued: cards.length });

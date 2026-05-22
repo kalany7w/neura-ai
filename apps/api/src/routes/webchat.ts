@@ -379,7 +379,7 @@ webchatRouter.post('/:widgetSlug/messages', async (c) => {
     .add(
       'classify',
       { workspaceId: inbox.workspaceId, kind: 'classify', targetId: conversation.id },
-      { jobId: `classify:${conversation.id}`, delay: 30_000 },
+      { jobId: `classify__${conversation.id}`, delay: 30_000 },
     )
     .catch(() => {});
 

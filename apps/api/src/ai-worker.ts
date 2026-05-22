@@ -84,7 +84,7 @@ async function handleClassify(job: Job<AiJob>): Promise<void> {
     await aiQueue.add(
       'kb-suggest',
       { workspaceId, kind: 'kb-suggest', targetId },
-      { jobId: `kb-suggest:${targetId}` },
+      { jobId: `kb-suggest__${targetId}` },
     );
   } catch (err) {
     logger.warn({ err, conversationId: targetId }, 'failed to enqueue kb-suggest after classify');
