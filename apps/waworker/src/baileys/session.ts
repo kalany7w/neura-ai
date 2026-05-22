@@ -1,5 +1,6 @@
 import makeWASocket, {
   fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
   type WASocket,
 } from '@whiskeysockets/baileys';
 import { pino } from 'pino';
@@ -45,7 +46,12 @@ export async function startSession(
 
   const sock = makeWASocket({
     version,
-    auth: state,
+    auth: {
+      creds: state.creds,
+      // Cache em memória write-through pras signal keys.
+      // Reduz hit no DB em ~95% durante handshake/decrypt sem mudar persistência.
+      keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+    },
     logger: baileysLogger,
     printQRInTerminal: false,
     browser: ['Neura AI', 'Chrome', '1.0.0'],

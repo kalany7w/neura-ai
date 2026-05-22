@@ -53,7 +53,10 @@ COPY --from=builder /app/packages/database ./packages/database
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY package.json pnpm-workspace.yaml ./
 WORKDIR /app/apps/waworker
-CMD ["node", "dist/index.js"]
+# migrate:deploy é idempotente + protegido por advisory lock no Postgres,
+# então rodar em paralelo com o api é seguro. Evita race se o waworker subir
+# antes do api aplicar uma migration de schema que ele já depende (ex: wa_auth_keys).
+CMD ["sh", "-c", "cd /app && pnpm --filter @neura/database migrate:deploy && cd /app/apps/waworker && node dist/index.js"]
 
 # ========== runner: web (Next.js standalone) ==========
 FROM base AS web-runner
