@@ -140,7 +140,7 @@ export async function enqueueKbEmbed(workspaceId: string, articleId: string): Pr
     await kbEmbedQueue.add(
       'embed',
       { workspaceId, articleId },
-      { jobId: `kb-embed:${articleId}` },
+      { jobId: `kb-embed__${articleId}` },
     );
   } catch (err) {
     logger.warn({ err, articleId }, 'enqueueKbEmbed failed');
@@ -172,7 +172,7 @@ export async function enqueueCsatSend(
     await csatSendQueue.add(
       'send',
       { workspaceId, conversationId, surveyId },
-      { jobId: `csat:${conversationId}`, delay: Math.max(0, delayMs) },
+      { jobId: `csat__${conversationId}`, delay: Math.max(0, delayMs) },
     );
   } catch (err) {
     logger.warn({ err, conversationId }, 'enqueueCsatSend failed');
@@ -184,7 +184,7 @@ export async function enqueueCsatSend(
  */
 export async function cancelCsatSend(conversationId: string): Promise<void> {
   try {
-    const job = await csatSendQueue.getJob(`csat:${conversationId}`);
+    const job = await csatSendQueue.getJob(`csat__${conversationId}`);
     if (job) {
       await job.remove();
       logger.info({ conversationId }, 'CSAT job cancelled');

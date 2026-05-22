@@ -285,7 +285,7 @@ async function processInbound(
     .add(
       'classify',
       { workspaceId, kind: 'classify', targetId: conversationId },
-      { jobId: `classify:${conversationId}`, delay: 30_000 },
+      { jobId: `classify__${conversationId}`, delay: 30_000 },
     )
     .catch(() => {});
 }

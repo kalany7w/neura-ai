@@ -194,7 +194,7 @@ async function processUpdate(
     .add(
       'classify',
       { workspaceId, kind: 'classify', targetId: conversation.id },
-      { jobId: `classify:${conversation.id}`, delay: 30_000 },
+      { jobId: `classify__${conversation.id}`, delay: 30_000 },
     )
     .catch(() => {});
   // SLA breach reset não precisa aqui — patchFirstResponse limpa ao agente responder

@@ -873,7 +873,7 @@ conversationsRouter.post('/:id/ai/kb-suggest', requireAuth, requireWorkspace, as
   await aiQueue.add(
     'kb-suggest',
     { workspaceId, kind: 'kb-suggest', targetId: id },
-    { jobId: `kb-suggest:${id}` },
+    { jobId: `kb-suggest__${id}` },
   );
   return c.json({ ok: true, queued: true });
 });
