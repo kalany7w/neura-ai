@@ -23,6 +23,7 @@ import {
   Timer,
   BookOpen,
   Smile,
+  MessageSquarePlus,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -78,6 +79,7 @@ const groups: NavGroup[] = [
     label: 'Configurações',
     items: [
       { href: '/settings/templates', label: 'Templates', icon: FileText },
+      { href: '/settings/welcome-flows', label: 'Fluxo de boas-vindas', icon: MessageSquarePlus, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/kb', label: 'Base de conhecimento', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/labels', label: 'Etiquetas', icon: Tag, roles: ['ADMIN'] },
       { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },

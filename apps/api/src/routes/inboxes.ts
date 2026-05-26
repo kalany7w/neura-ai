@@ -54,6 +54,8 @@ inboxesRouter.post('/', requireAuth, requireWorkspace, requirePermission('inbox.
 // GET /api/inboxes — lista inboxes do workspace
 inboxesRouter.get('/', requireAuth, requireWorkspace, requirePermission('inbox.list'), async (c) => {
   const workspaceId = c.get('workspaceId') as string;
+  const includeWelcomeFlow = c.req.query('includeWelcomeFlow') === 'true';
+
   const inboxes = await prisma.inbox.findMany({
     where: { workspaceId },
     orderBy: { createdAt: 'asc' },
@@ -66,9 +68,35 @@ inboxesRouter.get('/', requireAuth, requireWorkspace, requirePermission('inbox.l
           lastConnectedAt: true,
         },
       },
+      ...(includeWelcomeFlow
+        ? {
+            welcomeFlow: {
+              select: {
+                id: true,
+                enabled: true,
+                _count: { select: { options: true } },
+              },
+            },
+          }
+        : {}),
     },
   });
-  return c.json({ inboxes });
+
+  if (!includeWelcomeFlow) return c.json({ inboxes });
+
+  // Mapa pra flatten _count → optionsCount, mantendo todos os demais campos.
+  const mapped = inboxes.map((i) => {
+    const wf = (i as typeof i & {
+      welcomeFlow?: { id: string; enabled: boolean; _count: { options: number } } | null;
+    }).welcomeFlow;
+    return {
+      ...i,
+      welcomeFlow: wf
+        ? { id: wf.id, enabled: wf.enabled, optionsCount: wf._count.options }
+        : null,
+    };
+  });
+  return c.json({ inboxes: mapped });
 });
 
 // GET /api/inboxes/:id — detalhe + QR atual

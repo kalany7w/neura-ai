@@ -18,7 +18,39 @@ const labelSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, 'color deve ser hex #RRGGBB')
     .default('#94a3b8'),
   scope: z.enum(['CONTACT', 'CONVERSATION', 'BOTH']).default('BOTH'),
+  routesToFunnelId: z.string().nullable().optional(),
+  routesToStageId: z.string().nullable().optional(),
 });
+
+/**
+ * Valida que se routesToFunnelId está setado:
+ * - routesToStageId também deve estar setado
+ * - O stage deve pertencer a esse funnel (e ao workspace)
+ */
+async function validateRoutingFields(
+  workspaceId: string,
+  routesToFunnelId: string | null | undefined,
+  routesToStageId: string | null | undefined,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!routesToFunnelId && !routesToStageId) return { ok: true };
+  if (routesToFunnelId && !routesToStageId) {
+    return { ok: false, error: 'routing_requires_stage' };
+  }
+  if (!routesToFunnelId && routesToStageId) {
+    return { ok: false, error: 'stage_requires_funnel' };
+  }
+  // Both set — verify stage belongs to funnel + workspace
+  const stage = await prisma.stage.findFirst({
+    where: {
+      id: routesToStageId!,
+      funnelId: routesToFunnelId!,
+      funnel: { workspaceId },
+    },
+    select: { id: true },
+  });
+  if (!stage) return { ok: false, error: 'invalid_stage_for_funnel' };
+  return { ok: true };
+}
 
 labelsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
@@ -39,6 +71,12 @@ labelsRouter.post(
     const parsed = labelSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
+    const routingCheck = await validateRoutingFields(
+      workspaceId,
+      parsed.data.routesToFunnelId,
+      parsed.data.routesToStageId,
+    );
+    if (!routingCheck.ok) return c.json({ error: routingCheck.error }, 400);
     try {
       const label = await prisma.label.create({
         data: { workspaceId, ...parsed.data },
@@ -72,6 +110,12 @@ labelsRouter.patch(
     const id = c.req.param('id');
     const existing = await prisma.label.findFirst({ where: { id, workspaceId } });
     if (!existing) return c.json({ error: 'not_found' }, 404);
+    const routingCheck = await validateRoutingFields(
+      workspaceId,
+      parsed.data.routesToFunnelId ?? existing.routesToFunnelId,
+      parsed.data.routesToStageId ?? existing.routesToStageId,
+    );
+    if (!routingCheck.ok) return c.json({ error: routingCheck.error }, 400);
     const label = await prisma.label.update({ where: { id }, data: parsed.data });
     return c.json({ label });
   },
