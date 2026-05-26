@@ -145,8 +145,6 @@ const INBOUND_ACTIONS = [
   'create_note',
 ] as const;
 
-const slugRegex = /^[a-z0-9-]{4,40}$/;
-
 function generateSlug(name: string): string {
   const base = name
     .toLowerCase()
