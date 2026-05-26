@@ -53,6 +53,7 @@ model Workspace {
   csatSurveys         CsatSurvey[]
   csatResponses       CsatResponse[]
   welcomeFlows        WelcomeFlow[]
+  calendarEvents      CalendarEvent[]
 
   @@map("workspaces")
 }
@@ -139,6 +140,8 @@ model User {
 
   welcomeOptionsTargetingMe WelcomeOption[] @relation("WelcomeOptionTargetUser")
   welcomeFlowsFallbackToMe  WelcomeFlow[]   @relation("WelcomeFlowFallbackUser")
+
+  calendarEventsAssignedToMe CalendarEvent[] @relation("CalendarEventAssignee")
 
   @@map("users")
 }
@@ -309,6 +312,7 @@ model Contact {
   labels        ContactLabel[]
   notes         ContactNote[]
   csatResponses CsatResponse[]
+  calendarEvents CalendarEvent[]
 
   @@unique([workspaceId, phoneNumber])
   @@unique([workspaceId, telegramChatId])
@@ -411,6 +415,7 @@ model Conversation {
   labels    ConversationLabel[]
   notes     ConversationNote[]
   csatResponse CsatResponse?
+  calendarEvents CalendarEvent[]
 
   @@index([workspaceId, status, lastMessageAt])
   @@index([workspaceId, archivedAt])
@@ -640,6 +645,7 @@ model Card {
   products  CardProduct[]
   snoozes   CardSnooze[]
   notes     CardNote[]
+  calendarEvents CalendarEvent[]
 
   @@index([workspaceId])
   @@index([funnelId, stageId, position])
@@ -1279,4 +1285,51 @@ model WelcomeOption {
   @@unique([flowId, position])
   @@index([flowId])
   @@map("welcome_options")
+}
+
+// ============================================
+// CALENDAR EVENTS (agenda — aplicações, manutenções, follow-ups)
+// ============================================
+
+enum CalendarEventType {
+  APPLICATION
+  MAINTENANCE
+  REPAIR
+  SALE_FOLLOWUP
+  OTHER
+}
+
+enum CalendarEventStatus {
+  SCHEDULED
+  DONE
+  CANCELLED
+}
+
+model CalendarEvent {
+  id             String              @id @default(cuid())
+  workspaceId    String
+  title          String
+  description    String?             @db.Text
+  eventDate      DateTime
+  type           CalendarEventType   @default(OTHER)
+  status         CalendarEventStatus @default(SCHEDULED)
+  conversationId String?
+  contactId      String?
+  cardId         String?
+  assignedUserId String?
+  reminderSentAt DateTime?
+  createdBy      String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  contact      Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  card         Card?         @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  assignedUser User?         @relation("CalendarEventAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, eventDate])
+  @@index([workspaceId, status])
+  @@index([assignedUserId])
+  @@map("calendar_events")
 }
