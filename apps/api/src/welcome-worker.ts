@@ -117,12 +117,29 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
     };
   } else if (msg.type === 'AUDIO') {
     // Esperar transcrição (Whisper worker já roda assíncrono). Se ainda não tem,
-    // re-enfileirar com delay de 5s.
+    // re-enfileirar com delay de 5s — com cap pra evitar loop infinito se Whisper
+    // falhar permanentemente. Após MAX_AUDIO_RETRIES (6 = 30s total), cai pro
+    // path texto usando `msg.content` (ou string vazia → fallback humano).
+    const MAX_AUDIO_RETRIES = 6;
+    const jobWithRetries = job as WelcomeProcessJob & { _audioRetries?: number };
+    const currentRetries = jobWithRetries._audioRetries ?? 0;
     if (typeof meta.transcript !== 'string' || !meta.transcript) {
-      await welcomeProcessQueue.add('process', job, { delay: 5_000 });
-      return;
+      if (currentRetries < MAX_AUDIO_RETRIES) {
+        await welcomeProcessQueue.add(
+          'process',
+          { ...job, _audioRetries: currentRetries + 1 } as WelcomeProcessJob,
+          { delay: 5_000 },
+        );
+        return;
+      }
+      logger.warn(
+        { conversationId, messageId, retries: currentRetries },
+        'welcome-worker: audio sem transcript após cap, fallback texto',
+      );
+      replyInput = { kind: 'text' as const, text: msg.content ?? '' };
+    } else {
+      replyInput = { kind: 'audio' as const, transcript: meta.transcript };
     }
-    replyInput = { kind: 'audio' as const, transcript: meta.transcript };
   } else {
     replyInput = { kind: 'text' as const, text: msg.content ?? '' };
   }
