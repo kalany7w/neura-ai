@@ -40,7 +40,15 @@ export const welcomeProcessQueue = new Queue<WelcomeProcessJob>(QUEUE_WELCOME_PR
 });
 
 export async function enqueueWelcomeProcess(job: WelcomeProcessJob): Promise<void> {
-  await welcomeProcessQueue.add('process', job);
+  // jobId determinístico — dedup por (kind, conversationId, messageId?). Garante
+  // que jobs paralelos pra mesmo evento (ex: dois inbounds em ms ambos disparando
+  // parse_reply) sejam colapsados pelo BullMQ enquanto o original ainda está em
+  // queue. removeOnComplete:3600 abre janela curta de re-trigger se necessário.
+  const jobId =
+    job.kind === 'parse_reply' && job.messageId
+      ? `welcome:${job.kind}:${job.messageId}`
+      : `welcome:${job.kind}:${job.conversationId}`;
+  await welcomeProcessQueue.add('process', job, { jobId });
 }
 
 async function handleTrigger(job: WelcomeProcessJob): Promise<void> {
