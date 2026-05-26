@@ -151,6 +151,7 @@ interface MessageItem {
   sentAt: string | null;
   createdAt: string;
   reactions: ReactionItem[];
+  senderType?: 'CUSTOMER' | 'AGENT' | 'AI_AGENT' | 'SYSTEM';
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -1705,6 +1706,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     : 'bg-muted text-foreground order-1'
                 }`}
               >
+                {item.senderType === 'AI_AGENT' && (
+                  <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Agente IA
+                  </div>
+                )}
                 {item.type === 'IMAGE' && item.mediaUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="block">
