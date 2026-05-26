@@ -37,6 +37,7 @@ import { inboundEmailRouter } from './routes/inbound-email.js';
 import { csatSurveysRouter } from './routes/csat-surveys.js';
 import { webchatRouter } from './routes/webchat.js';
 import { welcomeFlowsRouter } from './routes/welcome-flows.js';
+import { welcomePresetsRouter } from './routes/welcome-presets.js';
 import { leadDetailRouter } from './routes/lead-detail.js';
 import { startScheduledMsgsScheduler } from './scheduled-messages.js';
 import { setupWebSocket } from './ws.js';
@@ -114,6 +115,8 @@ app.route('/api/webchat', webchatRouter);
 // Welcome flows — base path '/api' porque endpoints variam entre
 // /api/inboxes/:id/welcome-flow e /api/welcome-flows/:id/...
 app.route('/api', welcomeFlowsRouter);
+// Welcome presets — base path '/api' (GET /welcome-presets + POST /inboxes/:id/welcome-flow/apply-preset)
+app.route('/api', welcomePresetsRouter);
 // Lead detail — endpoint consolidado pro side panel da conversa
 app.route('/api', leadDetailRouter);
 
