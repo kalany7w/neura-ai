@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { realtimeClient } from '@/lib/ws-client';
 import { SlaBadge } from './sla-badge';
 
 export interface LeadDetail {
@@ -65,6 +66,29 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
   });
 
   const qc = useQueryClient();
+
+  useEffect(() => {
+    const eventsToWatch = new Set([
+      'contact.updated',
+      'label.applied',
+      'label.removed',
+      'card.created',
+      'card.moved',
+      'card.updated',
+      'conversation.assigned',
+      'conversation.status_changed',
+      'welcome.completed',
+      'welcome.failed',
+    ]);
+
+    const unsub = realtimeClient.on((evt) => {
+      if (eventsToWatch.has(evt.event)) {
+        qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+      }
+    });
+    return unsub;
+  }, [conversationId, qc]);
+
   const moveStageMut = useMutation({
     mutationFn: (stageId: string) =>
       api(`/api/kanban/cards/${data?.card?.id}/move`, {
