@@ -1,7 +1,8 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { SlaBadge } from './sla-badge';
 
@@ -62,6 +63,20 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
     enabled: !!conversationId,
   });
 
+  const qc = useQueryClient();
+  const moveStageMut = useMutation({
+    mutationFn: (stageId: string) =>
+      api(`/api/kanban/cards/${data?.card?.id}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ stageId, position: 0 }),
+      }),
+    onSuccess: () => {
+      toast.success('Etapa atualizada');
+      qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao mover'),
+  });
+
   if (isLoading) {
     return (
       <aside className="w-80 shrink-0 border-l bg-card/30 p-4">
@@ -112,7 +127,31 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           </div>
         </section>
 
-        {/* Sections T5-T9 a serem preenchidas */}
+        {data.card && (
+          <section className="rounded-md border bg-card p-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Embudo
+            </p>
+            <p className="text-sm font-medium">{data.card.funnel.name}</p>
+            <select
+              className="w-full rounded border bg-background px-2 py-1.5 text-sm"
+              value={data.card.stage.id}
+              onChange={(e) => moveStageMut.mutate(e.target.value)}
+              disabled={moveStageMut.isPending}
+            >
+              {(data.funnels.find((f) => f.id === data.card!.funnel.id)?.stages ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            {data.card.value && (
+              <p className="text-xs text-muted-foreground">
+                Valor: <span className="font-medium text-foreground">{data.card.value}</span>
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* Sections T6-T9 a serem preenchidas */}
       </div>
     </aside>
   );
