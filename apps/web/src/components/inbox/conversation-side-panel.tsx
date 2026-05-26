@@ -166,6 +166,8 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           conversationId={conversationId}
         />
 
+        <ContactInfoSection contact={data.contact} conversationId={conversationId} />
+
         {/* Sections T6-T9 a serem preenchidas */}
       </div>
     </aside>
@@ -325,6 +327,65 @@ function LabelsSection({ applied, available, conversationId }: LabelsSectionProp
           </p>
         )}
       </div>
+    </section>
+  );
+}
+
+function ContactInfoSection({
+  contact,
+  conversationId,
+}: {
+  contact: LeadDetail['contact'];
+  conversationId: string;
+}) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(contact.name ?? '');
+  const [email, setEmail] = useState(contact.email ?? '');
+
+  const saveMut = useMutation({
+    mutationFn: (patch: { name?: string | null; email?: string | null }) =>
+      api(`/api/conversations/${conversationId}/contact`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Contato
+      </p>
+      <div className="space-y-1">
+        <label className="text-xs">Nome</label>
+        <input
+          type="text"
+          className="w-full rounded border bg-background px-2 py-1 text-sm"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            const next = name || null;
+            if (next !== (contact.name ?? null)) saveMut.mutate({ name: next });
+          }}
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs">Email</label>
+        <input
+          type="email"
+          className="w-full rounded border bg-background px-2 py-1 text-sm"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => {
+            const next = email || null;
+            if (next !== (contact.email ?? null)) saveMut.mutate({ email: next });
+          }}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Telefone: {contact.phoneNumber} (não editável)
+      </p>
     </section>
   );
 }
