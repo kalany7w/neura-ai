@@ -1,0 +1,210 @@
+/**
+ * Worker BullMQ que processa jobs do welcome flow.
+ *
+ * 4 kinds discriminados:
+ * - 'trigger': primeira inbound — checa shouldTrigger + envia welcome.
+ * - 'parse_reply': cliente respondeu enquanto awaiting — parse + routing ou retry.
+ * - 'retry_text': scheduler detectou timeout — reenvia prompt em texto plano (1x).
+ * - 'fallback_human': N attempts sem match — aplica fallbackLabel, libera pro humano.
+ *
+ * Producer: api routes/messages (inbound awaiting), waworker events (trigger),
+ * welcome-scheduler (retry_text / fallback_human).
+ */
+
+import { Worker, Queue, type Job } from 'bullmq';
+import { Redis } from 'ioredis';
+import { QUEUE_WELCOME_PROCESS, type WelcomeProcessJob } from '@neura/shared/queue';
+import { env } from './env.js';
+import { logger } from './logger.js';
+import { prisma } from './db.js';
+import {
+  shouldTriggerWelcome,
+  sendWelcome,
+  markCompleted,
+  markFailed,
+  retryAsText,
+} from './services/welcome-flow.js';
+import { parseReply, type WelcomeOptionLite } from './services/welcome-parser.js';
+import { applyTagWithRouting } from './services/auto-routing.js';
+
+const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+
+export const welcomeProcessQueue = new Queue<WelcomeProcessJob>(QUEUE_WELCOME_PROCESS, {
+  connection: bullConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2_000 },
+    removeOnComplete: { age: 3600, count: 1_000 },
+    removeOnFail: { age: 24 * 3600 },
+  },
+});
+
+export async function enqueueWelcomeProcess(job: WelcomeProcessJob): Promise<void> {
+  await welcomeProcessQueue.add('process', job);
+}
+
+async function handleTrigger(job: WelcomeProcessJob): Promise<void> {
+  const { workspaceId, conversationId } = job;
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { contactId: true },
+  });
+  if (!conv) return;
+
+  const ok = await shouldTriggerWelcome({
+    workspaceId,
+    conversationId,
+    contactId: conv.contactId,
+  });
+  if (!ok) {
+    logger.debug({ conversationId }, 'shouldTriggerWelcome=false, skipping');
+    return;
+  }
+
+  await sendWelcome({ workspaceId, conversationId });
+}
+
+async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
+  const { workspaceId, conversationId, messageId } = job;
+  if (!messageId) {
+    logger.warn({ conversationId }, 'parse_reply sem messageId');
+    return;
+  }
+
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: {
+      inboxId: true,
+      contactId: true,
+      welcomeAttempts: true,
+      isAwaitingWelcomeChoice: true,
+    },
+  });
+  if (!conv || !conv.isAwaitingWelcomeChoice) return;
+
+  const msg = await prisma.message.findFirst({
+    where: { id: messageId, conversationId },
+    select: { type: true, content: true, metadata: true },
+  });
+  if (!msg) return;
+
+  const flow = await prisma.welcomeFlow.findUnique({
+    where: { inboxId: conv.inboxId },
+    include: { options: { orderBy: { position: 'asc' } } },
+  });
+  if (!flow || !flow.enabled) return;
+
+  const optionsLite: WelcomeOptionLite[] = flow.options.map((o) => ({
+    id: o.id,
+    position: o.position,
+    label: o.label,
+    matchKeywords: o.matchKeywords,
+  }));
+
+  // Construir ReplyInput baseado no tipo da Message.
+  // metadata pode trazer { interactiveRowId, interactiveDisplayText } se for button reply
+  // (preenchido pelo waworker quando detecta listResponseMessage).
+  const meta = (msg.metadata ?? {}) as Record<string, unknown>;
+  let replyInput;
+  if (typeof meta.interactiveRowId === 'string') {
+    replyInput = {
+      kind: 'button_reply' as const,
+      rowId: meta.interactiveRowId,
+      selectedDisplayText:
+        typeof meta.interactiveDisplayText === 'string'
+          ? meta.interactiveDisplayText
+          : undefined,
+    };
+  } else if (msg.type === 'AUDIO') {
+    // Esperar transcrição (Whisper worker já roda assíncrono). Se ainda não tem,
+    // re-enfileirar com delay de 5s.
+    if (typeof meta.transcript !== 'string' || !meta.transcript) {
+      await welcomeProcessQueue.add('process', job, { delay: 5_000 });
+      return;
+    }
+    replyInput = { kind: 'audio' as const, transcript: meta.transcript };
+  } else {
+    replyInput = { kind: 'text' as const, text: msg.content ?? '' };
+  }
+
+  const match = await parseReply(replyInput, optionsLite);
+
+  if (match) {
+    // Aplicar routing
+    const fullOpt = flow.options.find((o) => o.id === match.id);
+    if (fullOpt) {
+      await applyTagWithRouting({
+        workspaceId,
+        conversationId,
+        labelId: fullOpt.targetLabelId,
+        source: 'welcome_flow',
+      });
+    }
+    await markCompleted({
+      workspaceId,
+      conversationId,
+      contactId: conv.contactId,
+      optionId: match.id,
+    });
+    return;
+  }
+
+  // No match: incrementar attempts
+  const newAttempts = conv.welcomeAttempts + 1;
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { welcomeAttempts: newAttempts },
+  });
+
+  if (newAttempts >= flow.maxAttempts) {
+    // Fallback: aplica fallback label e libera pra humano
+    await markFailed({ workspaceId, conversationId });
+  } else {
+    // Re-enviar prompt com prefixo "Não entendi"
+    await retryAsText({ workspaceId, conversationId });
+  }
+}
+
+async function handleRetryText(job: WelcomeProcessJob): Promise<void> {
+  const { workspaceId, conversationId } = job;
+  await retryAsText({ workspaceId, conversationId });
+}
+
+async function handleFallbackHuman(job: WelcomeProcessJob): Promise<void> {
+  const { workspaceId, conversationId } = job;
+  await markFailed({ workspaceId, conversationId });
+}
+
+export const welcomeWorker = new Worker<WelcomeProcessJob>(
+  QUEUE_WELCOME_PROCESS,
+  async (job: Job<WelcomeProcessJob>) => {
+    const { kind } = job.data;
+    logger.info(
+      { jobId: job.id, kind, conversationId: job.data.conversationId },
+      'welcome-worker processing',
+    );
+    switch (kind) {
+      case 'trigger':
+        return handleTrigger(job.data);
+      case 'parse_reply':
+        return handleParseReply(job.data);
+      case 'retry_text':
+        return handleRetryText(job.data);
+      case 'fallback_human':
+        return handleFallbackHuman(job.data);
+      default:
+        logger.warn({ kind }, 'welcome-worker kind desconhecido');
+    }
+  },
+  {
+    connection: bullConnection,
+    concurrency: 5,
+  },
+);
+
+welcomeWorker.on('failed', (job, err) => {
+  logger.error(
+    { jobId: job?.id, conversationId: job?.data.conversationId, err: err.message },
+    'welcome-worker job failed',
+  );
+});
