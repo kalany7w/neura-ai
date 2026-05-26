@@ -44,6 +44,7 @@ import { startScheduledMsgsScheduler } from './scheduled-messages.js';
 import { setupWebSocket } from './ws.js';
 import { startSlaScheduler } from './sla.js';
 import { startSnoozeScheduler } from './snooze.js';
+import { calendarWorker, startCalendarScheduler } from './calendar-scheduler.js';
 import { startAutoResolveScheduler } from './auto-resolve.js';
 import { startAutomationScheduler } from './automation-scheduler.js';
 import { transcribeWorker } from './transcribe.js';
@@ -145,6 +146,11 @@ injectWebSocket(server);
 startSlaScheduler().catch((err) => logger.error({ err }, 'Failed to start SLA scheduler'));
 // Snooze scheduler — desativa snoozes vencidos a cada 30s
 startSnoozeScheduler().catch((err) => logger.error({ err }, 'Failed to start Snooze scheduler'));
+// Calendar scheduler — alerta in-app no dia do evento (poll 5min)
+startCalendarScheduler().catch((err) =>
+  logger.error({ err }, 'Failed to start Calendar scheduler'),
+);
+void calendarWorker;
 // Auto-resolve scheduler — fecha conversas inativas (config por inbox) a cada 30min
 startAutoResolveScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start AutoResolve scheduler'),
