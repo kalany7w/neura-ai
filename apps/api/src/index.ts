@@ -39,6 +39,7 @@ import { webchatRouter } from './routes/webchat.js';
 import { welcomeFlowsRouter } from './routes/welcome-flows.js';
 import { welcomePresetsRouter } from './routes/welcome-presets.js';
 import { leadDetailRouter } from './routes/lead-detail.js';
+import { calendarRouter } from './routes/calendar.js';
 import { startScheduledMsgsScheduler } from './scheduled-messages.js';
 import { setupWebSocket } from './ws.js';
 import { startSlaScheduler } from './sla.js';
@@ -119,6 +120,8 @@ app.route('/api', welcomeFlowsRouter);
 app.route('/api', welcomePresetsRouter);
 // Lead detail — endpoint consolidado pro side panel da conversa
 app.route('/api', leadDetailRouter);
+// Calendar events — agenda de eventos (aplicação, manutenção, reparo, etc.)
+app.route('/api/calendar', calendarRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
