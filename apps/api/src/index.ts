@@ -36,6 +36,7 @@ import { kbRouter } from './routes/kb.js';
 import { inboundEmailRouter } from './routes/inbound-email.js';
 import { csatSurveysRouter } from './routes/csat-surveys.js';
 import { webchatRouter } from './routes/webchat.js';
+import { welcomeFlowsRouter } from './routes/welcome-flows.js';
 import { startScheduledMsgsScheduler } from './scheduled-messages.js';
 import { setupWebSocket } from './ws.js';
 import { startSlaScheduler } from './sla.js';
@@ -109,6 +110,9 @@ app.route('/api/kb', kbRouter);
 app.route('/api/inbound/email', inboundEmailRouter);
 app.route('/api/csat-surveys', csatSurveysRouter);
 app.route('/api/webchat', webchatRouter);
+// Welcome flows — base path '/api' porque endpoints variam entre
+// /api/inboxes/:id/welcome-flow e /api/welcome-flows/:id/...
+app.route('/api', welcomeFlowsRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
