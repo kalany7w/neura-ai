@@ -155,6 +155,12 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels }: P
         </p>
       )}
 
+      {items.length === 10 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+          Limite máximo de 10 opções atingido (restrição do WhatsApp listMessage).
+        </p>
+      )}
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-3">
