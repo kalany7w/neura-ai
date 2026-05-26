@@ -803,6 +803,10 @@ model Message {
   readAt         DateTime?
   createdAt      DateTime         @default(now())
   senderType MessageSender @default(CUSTOMER)
+  // Metadata flexivel JSON — usada pra interactive replies do Baileys (interactiveRowId,
+  // interactiveDisplayText), transcript pos-Whisper, e outros campos opcionais que nao
+  // merecem coluna dedicada. Schema-less por design.
+  metadata   Json?
 
   conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   reactions    MessageReaction[]
