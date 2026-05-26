@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { WelcomeFlowOptionsEditor } from '@/components/settings/welcome-flow-options-editor';
+import { WelcomeFlowTestDialog } from '@/components/settings/welcome-flow-test-dialog';
 
 interface WelcomeOption {
   id: string;
@@ -311,6 +312,13 @@ export default function WelcomeFlowEditorPage() {
         </div>
 
         <div className="flex justify-end gap-2">
+          {hasFlow && (
+            <WelcomeFlowTestDialog
+              flowId={data.flow.id}
+              flowEnabled={data.flow.enabled}
+              optionsCount={data.flow.options.length}
+            />
+          )}
           <Button type="submit" disabled={submitting}>
             <Save className="mr-2 h-4 w-4" />
             {submitting ? 'Salvando…' : 'Salvar'}
@@ -326,8 +334,6 @@ export default function WelcomeFlowEditorPage() {
           funnels={funnelsData.funnels}
         />
       )}
-
-      {/* Test dialog vai aqui — tarefa 11 */}
     </div>
   );
 }
