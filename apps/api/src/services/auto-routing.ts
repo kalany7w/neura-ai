@@ -63,15 +63,52 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
     });
 
     if (!existing) {
-      const card = await prisma.card.create({
-        data: {
-          workspaceId,
-          funnelId: label.routesToFunnelId,
-          stageId: label.routesToStageId,
-          conversationId,
-          title: `Conversa #${conversationId.slice(-6)}`,
-        },
-      });
+      // Resolve title + position no padrão do default-funnel path (waworker events.ts):
+      // title = contact.name ?? phoneNumber, position = max(position) + 1 no stage.
+      const [conv, maxPos] = await Promise.all([
+        prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { contact: { select: { name: true, phoneNumber: true } } },
+        }),
+        prisma.card.aggregate({
+          where: { stageId: label.routesToStageId },
+          _max: { position: true },
+        }),
+      ]);
+      const cardTitle =
+        conv?.contact?.name ??
+        conv?.contact?.phoneNumber ??
+        `Conversa #${conversationId.slice(-6)}`;
+      const cardPosition = (maxPos._max.position ?? -1) + 1;
+
+      // Tenta criar card. Race: dois calls concurrent podem ambos passar o
+      // findFirst e tentar create — partial unique index
+      // cards_conversationId_funnelId_active_uniq bloqueia o 2º com P2002.
+      // Tratamos como no-op idempotente (algum outro thread já criou).
+      let card: { id: string } | null = null;
+      try {
+        card = await prisma.card.create({
+          data: {
+            workspaceId,
+            funnelId: label.routesToFunnelId,
+            stageId: label.routesToStageId,
+            conversationId,
+            title: cardTitle,
+            position: cardPosition,
+          },
+          select: { id: true },
+        });
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === 'P2002') {
+          logger.debug(
+            { workspaceId, conversationId, funnelId: label.routesToFunnelId },
+            'auto-routing: card already exists (unique constraint race), skip',
+          );
+          return;
+        }
+        throw err;
+      }
 
       // Espelhar label tambem no card
       await prisma.cardLabel.create({ data: { cardId: card.id, labelId } });
