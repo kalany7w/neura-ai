@@ -150,6 +150,82 @@ export const outboundWorker = new Worker<SendMessageJob>(
       return;
     }
 
+    // Path interativo (listMessage do Baileys) — welcome flow e similar.
+    // Em falha (Meta deprecou listMessage em alguns clients), fallback pra texto
+    // numerado preservando o audit trail (DB recebe o texto que foi efetivamente enviado).
+    if (type === 'INTERACTIVE' && job.data.interactivePayload) {
+      const payload = job.data.interactivePayload;
+      const { title, body, footer, buttonText, options } = payload;
+
+      // Baileys listMessage: máximo 10 rows
+      const rows = options.slice(0, 10).map((o) => ({
+        title: o.title,
+        description: o.description ?? '',
+        rowId: o.rowId,
+      }));
+
+      try {
+        const sentMsg = await handle.sock.sendMessage(jid, {
+          text: body,
+          footer,
+          title,
+          buttonText,
+          sections: [{ title: 'Opções', rows }],
+          listType: 1, // SINGLE_SELECT
+        } as never); // Baileys types incompletos pra listMessage
+
+        const sentAt = new Date();
+        await prisma.message.update({
+          where: { id: messageId },
+          data: {
+            status: 'SENT',
+            waMessageId: sentMsg?.key?.id ?? null,
+            sentAt,
+          },
+        });
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: { lastMessageAt: sentAt },
+        });
+        await publishEvent(workspaceId, 'messages', 'message.status', {
+          messageId,
+          status: 'SENT',
+          waMessageId: sentMsg?.key?.id ?? null,
+          sentAt,
+        });
+        return;
+      } catch (err) {
+        logger.error({ err, messageId }, 'Failed to send INTERACTIVE — falling back to text');
+        // Fallback: re-enviar como texto plano numerado
+        const textFallback = `${body}\n\n${options
+          .map((o, i) => `${i + 1}. ${o.title}`)
+          .join('\n')}\n\nResponda com o número da opção.`;
+
+        const fallbackMsg = await handle.sock.sendMessage(jid, { text: textFallback });
+        const sentAt = new Date();
+        await prisma.message.update({
+          where: { id: messageId },
+          data: {
+            status: 'SENT',
+            content: textFallback,
+            waMessageId: fallbackMsg?.key?.id ?? null,
+            sentAt,
+          },
+        });
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: { lastMessageAt: sentAt },
+        });
+        await publishEvent(workspaceId, 'messages', 'message.status', {
+          messageId,
+          status: 'SENT',
+          waMessageId: fallbackMsg?.key?.id ?? null,
+          sentAt,
+        });
+        return;
+      }
+    }
+
     // Monta `quoted` se foi um reply — Baileys exige WAMessage stub mínimo
     const quoted = quotedWaMessageId
       ? ({

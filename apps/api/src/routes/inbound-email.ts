@@ -32,6 +32,7 @@ import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
 import { aiQueue } from '../queue.js';
+import { enqueueWelcomeProcess } from '../welcome-worker.js';
 import {
   parseEmailAddress,
   ensureAngleBrackets,
@@ -288,4 +289,18 @@ async function processInbound(
       { jobId: `classify__${conversationId}`, delay: 30_000 },
     )
     .catch(() => {});
+
+  // Welcome flow hook: se conversa está awaiting choice, rotear msg pro parser.
+  const convCheck = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { isAwaitingWelcomeChoice: true },
+  });
+  if (convCheck?.isAwaitingWelcomeChoice) {
+    await enqueueWelcomeProcess({
+      workspaceId,
+      conversationId,
+      kind: 'parse_reply',
+      messageId: created.id,
+    });
+  }
 }

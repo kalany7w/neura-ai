@@ -14,6 +14,7 @@ import { downloadAndStoreMedia } from './media.js';
 import { applyInboxRules } from './inbox-rules.js';
 import { enqueueTranscribe } from '../queue/transcribe.js';
 import { enqueueAi } from '../queue/ai.js';
+import { enqueueWelcomeTrigger, enqueueWelcomeParseReply } from '../welcome-trigger.js';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 
@@ -271,7 +272,28 @@ async function persistInboundMessage(
   const messageContent = msg.message;
   if (!messageContent) return;
 
+  // Detecta interactive replies do Baileys (listResponseMessage / buttonsResponseMessage)
+  // — usado pelo welcome-parser pra mapear opção escolhida via metadata.
+  // singleSelectReply.selectedRowId / selectedButtonId carregam o id da opção;
+  // title / selectedDisplayText carregam o label legível mostrado ao cliente.
+  const interactiveMeta: { interactiveRowId?: string; interactiveDisplayText?: string } = {};
+  let interactiveText: string | null = null;
+  if (messageContent.listResponseMessage) {
+    const r = messageContent.listResponseMessage;
+    if (r.singleSelectReply?.selectedRowId) {
+      interactiveMeta.interactiveRowId = r.singleSelectReply.selectedRowId;
+    }
+    if (r.title) interactiveMeta.interactiveDisplayText = r.title;
+    interactiveText = r.title ?? '(seleção do menu)';
+  } else if (messageContent.buttonsResponseMessage) {
+    const r = messageContent.buttonsResponseMessage;
+    if (r.selectedButtonId) interactiveMeta.interactiveRowId = r.selectedButtonId;
+    if (r.selectedDisplayText) interactiveMeta.interactiveDisplayText = r.selectedDisplayText;
+    interactiveText = r.selectedDisplayText ?? '(clique de botão)';
+  }
+
   const text =
+    interactiveText ??
     messageContent.conversation ??
     messageContent.extendedTextMessage?.text ??
     messageContent.imageMessage?.caption ??
@@ -384,8 +406,17 @@ async function persistInboundMessage(
         sentAt: msg.messageTimestamp
           ? new Date(Number(msg.messageTimestamp) * 1000)
           : new Date(),
+        metadata: Object.keys(interactiveMeta).length > 0 ? interactiveMeta : undefined,
       },
     });
+
+    // Welcome flow hooks: detectar primeira inbound (trigger) e awaiting (parse_reply).
+    // Count INBOUND nessa conversa: 1 == a recém-criada == primeira inbound.
+    const inboundCount = await tx.message.count({
+      where: { conversationId: conversation.id, direction: 'INBOUND' },
+    });
+    const isFirstInbound = inboundCount === 1;
+    const isAwaitingWelcomeChoice = conversation.isAwaitingWelcomeChoice;
 
     // Sync cards linkados — atualiza preview/badge unread/lastMessageAt
     // (slaStatus deixa pro SLA scheduler recalcular)
@@ -436,6 +467,9 @@ async function persistInboundMessage(
       conversationId: conversation.id,
       contactPhone: phoneNumber,
       contactName: contact.name,
+      isFirstInbound,
+      isAwaitingWelcomeChoice,
+      messageId: created.id,
     };
   });
 
@@ -465,6 +499,28 @@ async function persistInboundMessage(
       },
       { delayMs: 30_000 },
     );
+    // Welcome flow: primeira inbound da conversa → trigger (worker decide se manda welcome).
+    if (txResult.isFirstInbound) {
+      void enqueueWelcomeTrigger({
+        workspaceId: ctx.workspaceId,
+        conversationId: txResult.conversationId,
+      }).catch((err) =>
+        logger.error({ err, conversationId: txResult.conversationId }, 'enqueueWelcomeTrigger failed'),
+      );
+    }
+    // Conversa já recebeu welcome e está aguardando escolha → roteia reply pro parser.
+    if (txResult.isAwaitingWelcomeChoice) {
+      void enqueueWelcomeParseReply({
+        workspaceId: ctx.workspaceId,
+        conversationId: txResult.conversationId,
+        messageId: txResult.messageId,
+      }).catch((err) =>
+        logger.error(
+          { err, conversationId: txResult.conversationId },
+          'enqueueWelcomeParseReply failed',
+        ),
+      );
+    }
   }
 }
 
