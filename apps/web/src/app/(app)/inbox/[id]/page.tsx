@@ -43,6 +43,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { format, isToday, isYesterday } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { renderTemplate } from '@neura/shared/template-render';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
@@ -149,6 +151,7 @@ interface MessageItem {
   sentAt: string | null;
   createdAt: string;
   reactions: ReactionItem[];
+  senderType?: 'CUSTOMER' | 'AGENT' | 'AI_AGENT' | 'SYSTEM';
 }
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -264,6 +267,12 @@ function applyTemplate(body: string, contact: ConversationDetail['contact']): st
   });
 }
 
+function dayLabel(d: Date): string {
+  if (isToday(d)) return 'Hoje';
+  if (isYesterday(d)) return 'Ontem';
+  return format(d, "EEEE, dd 'de' MMMM", { locale: ptBR });
+}
+
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const qc = useQueryClient();
@@ -322,6 +331,24 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   // Sugestões de resposta com IA
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggesting, setSuggesting] = useState(false);
+  // Marker "Novas mensagens": ts da última msg lida ao abrir a conversa
+  const [readUpToTs, setReadUpToTs] = useState<number | null>(null);
+  // Botão scroll-to-bottom: aparece quando estamos > 200px do fim
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  function checkScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollDown(distFromBottom > 200);
+  }
+
+  function scrollToBottom() {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }
 
   async function fetchSuggestions() {
     if (suggesting) return;
@@ -559,6 +586,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     data?.conversation?.aiSummaryAt,
     data?.conversation?.aiSuggestedAt,
   ]);
+
+  // Marca a última msg INBOUND existente como "lido até aqui" no primeiro render desta conversa
+  useEffect(() => {
+    if (!data?.conversation.messages) return;
+    const lastInbound = [...data.conversation.messages]
+      .reverse()
+      .find((m) => m.direction === 'INBOUND');
+    if (lastInbound && readUpToTs === null) {
+      setReadUpToTs(new Date(lastInbound.createdAt).getTime());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.conversation.id]);
 
   // Auto-scroll quando novos itens chegam
   const timelineLen = (data?.conversation.messages.length ?? 0) + (notesData?.notes.length ?? 0);
@@ -1078,7 +1117,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       )}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-3 min-w-0">
           <Button asChild size="icon" variant="ghost">
@@ -1504,10 +1543,38 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
-        {timeline.map((item) =>
-          item.kind === 'note' ? (
-            <div key={`note-${item.id}`} className="flex justify-center">
+      <div ref={scrollRef} onScroll={checkScroll} className="flex-1 overflow-y-auto py-4 space-y-3">
+        {(() => {
+          let lastDay: string | null = null;
+          let markerShown = false;
+          return timeline.map((item) => {
+            const itemDate = new Date(item.createdAt);
+            const dayKey = format(itemDate, 'yyyy-MM-dd');
+            const showSeparator = dayKey !== lastDay;
+            lastDay = dayKey;
+            const showReadMarker =
+              readUpToTs !== null && !markerShown && itemDate.getTime() > readUpToTs;
+            if (showReadMarker) markerShown = true;
+            return (
+              <div key={item.kind === 'note' ? `note-${item.id}` : item.id}>
+                {showSeparator && (
+                  <div className="flex items-center justify-center py-3">
+                    <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {dayLabel(itemDate)}
+                    </span>
+                  </div>
+                )}
+                {showReadMarker && (
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="h-px flex-1 bg-primary" />
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-primary">
+                      Novas mensagens
+                    </span>
+                    <div className="h-px flex-1 bg-primary" />
+                  </div>
+                )}
+                {item.kind === 'note' ? (
+            <div className="flex justify-center">
               <div className="group relative max-w-[80%] rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100 dark:border-amber-700">
                 <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider opacity-70">
                   <StickyNote className="h-3 w-3" />
@@ -1532,7 +1599,6 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             </div>
           ) : (
             <div
-              key={item.id}
               className={`group flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'} ${
                 selectionMode ? 'cursor-pointer' : ''
               } ${
@@ -1683,6 +1749,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     : 'bg-muted text-foreground order-1'
                 }`}
               >
+                {item.senderType === 'AI_AGENT' && (
+                  <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    Agente IA
+                  </div>
+                )}
                 {item.type === 'IMAGE' && item.mediaUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="block">
@@ -1898,9 +1970,23 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 )}
               </div>
             </div>
-          ),
-        )}
+                )}
+              </div>
+            );
+          });
+        })()}
       </div>
+
+      {showScrollDown && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-24 right-6 z-10 rounded-full border bg-card p-2 shadow-lg hover:bg-accent"
+          aria-label="Ir para última mensagem"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      )}
 
       <div className="border-t pt-3 space-y-2">
         {partnerTyping && (
@@ -2200,10 +2286,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
       {/* Side panel: info do contato + conversas anteriores + cards */}
       <div className="hidden lg:block">
-        <ConversationSidePanel
-          contactId={conv.contact.id}
-          currentConversationId={conv.id}
-        />
+        <ConversationSidePanel conversationId={conv.id} />
       </div>
 
       <ScheduleMessageDialog

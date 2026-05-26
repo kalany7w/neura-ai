@@ -1,343 +1,508 @@
 'use client';
 
-import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import {
-  ChevronDown,
-  ChevronRight,
-  ExternalLink,
-  History,
-  LayoutGrid,
-  MessageCircle,
-  Phone,
-  Tag,
-  User,
-} from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Phone, Mail } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { realtimeClient } from '@/lib/ws-client';
+import { SlaBadge } from './sla-badge';
 
-interface Contact {
-  id: string;
-  name: string | null;
-  phoneNumber: string;
-  avatarUrl: string | null;
-  customAttrs: Record<string, unknown> | null;
-  createdAt: string;
-  labels: Array<{ label: { id: string; name: string; color: string } }>;
-  conversations: Array<{
+export interface LeadDetail {
+  conversation: {
     id: string;
     status: string;
-    lastMessageAt: string | null;
-    lastMessagePreview: string | null;
-    unreadCount: number;
+    assignedAgentId: string | null;
+    lastInboundAt: string | null;
+    lastOutboundAt: string | null;
+    aiSummary: string | null;
+    aiSummaryAt: string | null;
+    isAwaitingWelcomeChoice: boolean;
+    welcomeAttempts: number;
+    welcomeFallbackSent: boolean;
     inbox: { id: string; name: string };
+    labels: Array<{ id: string; name: string; color: string }>;
+  };
+  contact: {
+    id: string;
+    name: string | null;
+    phoneNumber: string;
+    email: string | null;
+    avatarUrl: string | null;
+    customAttrs: Record<string, unknown> | null;
+    welcomeRespondedAt: string | null;
+    labels: Array<{ label: { id: string; name: string; color: string } }>;
+  };
+  card: {
+    id: string;
+    title: string;
+    value: string | null;
+    funnel: { id: string; name: string };
+    stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
+    products: Array<{ id: string; name: string; price: string | null; quantity: number }>;
+  } | null;
+  customAttributeDefs: Array<{
+    id: string;
+    key: string;
+    label: string;
+    type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT';
+    options: string[] | null;
   }>;
+  allLabels: Array<{ id: string; name: string; color: string; scope: string }>;
+  funnels: Array<{ id: string; name: string; stages: Array<{ id: string; name: string; order: number }> }>;
+  temperature: 'CALIENTE' | 'TIBIO' | 'FRIO';
 }
-
-interface CardItem {
-  id: string;
-  title: string;
-  value: string | null;
-  funnel: { id: string; name: string };
-  stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
-}
-
-interface ContactDetailResponse {
-  contact: Contact;
-  cards: CardItem[];
-}
-
-const OUTCOME_COLOR: Record<'POSITIVE' | 'NEGATIVE' | 'RISK', string> = {
-  POSITIVE: '#10b981',
-  NEGATIVE: '#ef4444',
-  RISK: '#f59e0b',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Aberta',
-  PENDING: 'Pendente',
-  RESOLVED: 'Resolvida',
-  SNOOZED: 'Adiada',
-};
-
-const STATUS_BADGE_CLASS: Record<string, string> = {
-  OPEN: 'bg-blue-100 text-blue-700',
-  PENDING: 'bg-amber-100 text-amber-800',
-  RESOLVED: 'bg-emerald-100 text-emerald-700',
-  SNOOZED: 'bg-slate-200 text-slate-700',
-};
 
 function initialsFrom(s: string | null | undefined): string {
   if (!s) return '?';
-  return s
-    .split(/[\s.@]/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('');
+  return s.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 }
 
-function formatBRL(n: number): string {
-  return n.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 0,
+export function ConversationSidePanel({ conversationId }: { conversationId: string }) {
+  const { data, isLoading } = useQuery<LeadDetail>({
+    queryKey: ['lead-detail', conversationId],
+    queryFn: () => api(`/api/conversations/${conversationId}/lead-detail`),
+    enabled: !!conversationId,
   });
-}
 
-function formatRelative(iso: string | null): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'agora';
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  return new Date(iso).toLocaleDateString('pt-BR');
-}
+  const qc = useQueryClient();
 
-export function ConversationSidePanel({
-  contactId,
-  currentConversationId,
-}: {
-  contactId: string;
-  currentConversationId: string;
-}) {
-  const { data, isLoading } = useQuery<ContactDetailResponse>({
-    queryKey: ['contact-detail', contactId],
-    queryFn: () => api(`/api/contacts/${contactId}`),
-    enabled: !!contactId,
+  useEffect(() => {
+    const eventsToWatch = new Set([
+      'contact.updated',
+      'label.applied',
+      'label.removed',
+      'card.created',
+      'card.moved',
+      'card.updated',
+      'conversation.assigned',
+      'conversation.status_changed',
+      'welcome.completed',
+      'welcome.failed',
+    ]);
+
+    const unsub = realtimeClient.on((evt) => {
+      if (eventsToWatch.has(evt.event)) {
+        qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+      }
+    });
+    return unsub;
+  }, [conversationId, qc]);
+
+  const moveStageMut = useMutation({
+    mutationFn: (stageId: string) =>
+      api(`/api/kanban/cards/${data?.card?.id}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ stageId, position: 0 }),
+      }),
+    onSuccess: () => {
+      toast.success('Etapa atualizada');
+      qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao mover'),
   });
 
   if (isLoading) {
     return (
       <aside className="w-80 shrink-0 border-l bg-card/30 p-4">
-        <p className="text-xs text-muted-foreground">Carregando…</p>
+        <div className="space-y-3 animate-pulse">
+          <div className="h-12 w-12 rounded-full bg-muted" />
+          <div className="h-4 w-32 rounded bg-muted" />
+          <div className="h-3 w-24 rounded bg-muted" />
+        </div>
       </aside>
     );
   }
   if (!data) return null;
 
-  const { contact, cards } = data;
-  const previousConversations = contact.conversations.filter((c) => c.id !== currentConversationId);
+  const { contact, temperature } = data;
+  const title = contact.name ?? contact.phoneNumber;
 
   return (
     <aside className="w-80 shrink-0 border-l bg-card/30 overflow-y-auto">
-      <div className="space-y-5 p-4">
-        {/* Contato */}
+      <div className="space-y-4 p-4">
+        {/* Header */}
         <section>
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-sm font-semibold text-slate-700 ring-2 ring-card">
-              {initialsFrom(contact.name ?? contact.phoneNumber)}
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-sm font-semibold text-slate-700">
+              {initialsFrom(title)}
             </div>
             <div className="min-w-0 flex-1">
-              <Link
-                href={`/contacts/${contact.id}`}
-                className="block truncate font-semibold hover:underline"
-                title="Ver detalhe do contato"
+              <p className="truncate font-semibold">{title}</p>
+              <a
+                href={`tel:${contact.phoneNumber}`}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               >
-                {contact.name ?? 'Sem nome'}
-              </Link>
-              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
                 <Phone className="h-3 w-3" />
                 {contact.phoneNumber}
-              </p>
-            </div>
-            <Link
-              href={`/contacts/${contact.id}`}
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              title="Abrir detalhe completo"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          {contact.labels.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {contact.labels.map((cl) => (
-                <span
-                  key={cl.label.id}
-                  style={{
-                    backgroundColor: cl.label.color + '22',
-                    color: cl.label.color,
-                    borderColor: cl.label.color + '50',
-                  }}
-                  className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium"
+              </a>
+              {contact.email && (
+                <a
+                  href={`mailto:${contact.email}`}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <Tag className="h-2.5 w-2.5" />
-                  {cl.label.name}
-                </span>
-              ))}
+                  <Mail className="h-3 w-3" />
+                  {contact.email}
+                </a>
+              )}
+              <div className="mt-1.5">
+                <SlaBadge temperature={temperature} />
+              </div>
             </div>
-          )}
+          </div>
         </section>
 
-        {/* Cards kanban vinculados */}
-        {cards.length > 0 && (
-          <Collapsible
-            title="Cards no kanban"
-            count={cards.length}
-            icon={LayoutGrid}
-            defaultOpen
-          >
-            <ul className="space-y-1.5">
-              {cards.map((card) => {
-                const accent = card.stage.outcome
-                  ? OUTCOME_COLOR[card.stage.outcome]
-                  : card.stage.color;
-                return (
-                  <li key={card.id}>
-                    <Link
-                      href={`/kanban?card=${card.id}`}
-                      className="block rounded-md border bg-background p-2 text-xs hover:bg-accent"
-                    >
-                      <p className="truncate font-medium">{card.title}</p>
-                      <div className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent }} />
-                        <span>{card.funnel.name}</span>
-                        <ChevronRight className="h-2.5 w-2.5" />
-                        <span>{card.stage.name}</span>
-                      </div>
-                      {card.value && Number(card.value) > 0 && (
-                        <p className="mt-1 text-[11px] font-semibold text-emerald-600">
-                          {formatBRL(Number(card.value))}
-                        </p>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </Collapsible>
-        )}
-
-        {/* Conversas anteriores */}
-        <Collapsible
-          title="Conversas anteriores"
-          count={previousConversations.length}
-          icon={History}
-          defaultOpen={previousConversations.length > 0}
-        >
-          {previousConversations.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Esta é a primeira conversa com este contato.
+        {data.card && (
+          <section className="rounded-md border bg-card p-3 space-y-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Embudo
             </p>
-          ) : (
-            <ul className="space-y-1.5">
-              {previousConversations.slice(0, 8).map((conv) => (
-                <li key={conv.id}>
-                  <Link
-                    href={`/inbox/${conv.id}`}
-                    className="block rounded-md border bg-background p-2 text-xs hover:bg-accent"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`inline-flex rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
-                          STATUS_BADGE_CLASS[conv.status] ?? 'bg-muted'
-                        }`}
-                      >
-                        {STATUS_LABELS[conv.status] ?? conv.status}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {formatRelative(conv.lastMessageAt)}
-                      </span>
-                    </div>
-                    {conv.lastMessagePreview && (
-                      <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
-                        {conv.lastMessagePreview}
-                      </p>
-                    )}
-                    <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                      {conv.inbox.name}
-                      {conv.unreadCount > 0 && (
-                        <span className="ml-1 rounded-full bg-primary px-1.5 text-[9px] text-primary-foreground">
-                          {conv.unreadCount}
-                        </span>
-                      )}
-                    </p>
-                  </Link>
-                </li>
+            <p className="text-sm font-medium">{data.card.funnel.name}</p>
+            <select
+              className="w-full rounded border bg-background px-2 py-1.5 text-sm"
+              value={data.card.stage.id}
+              onChange={(e) => moveStageMut.mutate(e.target.value)}
+              disabled={moveStageMut.isPending}
+            >
+              {(data.funnels.find((f) => f.id === data.card!.funnel.id)?.stages ?? []).map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
-            </ul>
-          )}
-        </Collapsible>
-
-        {/* Custom attrs */}
-        {contact.customAttrs && Object.keys(contact.customAttrs).length > 0 && (
-          <Collapsible title="Atributos" count={Object.keys(contact.customAttrs).length} icon={User}>
-            <dl className="space-y-1.5 text-xs">
-              {Object.entries(contact.customAttrs).map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-2 border-b py-1 last:border-0">
-                  <dt className="font-medium text-muted-foreground">{k}</dt>
-                  <dd className="truncate">{typeof v === 'string' ? v : JSON.stringify(v)}</dd>
-                </div>
-              ))}
-            </dl>
-          </Collapsible>
+            </select>
+            {data.card.value && (
+              <p className="text-xs text-muted-foreground">
+                Valor: <span className="font-medium text-foreground">{data.card.value}</span>
+              </p>
+            )}
+          </section>
         )}
 
-        <p className="border-t pt-3 text-[10px] text-muted-foreground">
-          Contato adicionado em{' '}
-          {new Date(contact.createdAt).toLocaleDateString('pt-BR')}
-        </p>
+        {data.customAttributeDefs.length > 0 && (
+          <CustomAttrsSection
+            defs={data.customAttributeDefs}
+            values={data.contact.customAttrs ?? {}}
+            conversationId={conversationId}
+          />
+        )}
+
+        <LabelsSection
+          applied={data.conversation.labels}
+          available={data.allLabels.filter((l) => l.scope === 'CONVERSATION' || l.scope === 'BOTH')}
+          conversationId={conversationId}
+        />
+
+        <ContactInfoSection contact={data.contact} conversationId={conversationId} />
+
+        <AiSummarySection conversation={data.conversation} conversationId={conversationId} />
+        <ActionsSection conversation={data.conversation} conversationId={conversationId} />
       </div>
     </aside>
   );
 }
 
-function Collapsible({
-  title,
-  count,
-  icon: Icon,
-  defaultOpen = false,
-  children,
+function AiSummarySection({
+  conversation,
+  conversationId,
 }: {
-  title: string;
-  count?: number;
-  icon: React.ComponentType<{ className?: string }>;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
+  conversation: LeadDetail['conversation'];
+  conversationId: string;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const qc = useQueryClient();
+  const summarizeMut = useMutation({
+    mutationFn: () =>
+      api(`/api/conversations/${conversationId}/ai/summarize`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+      toast.success('Resumo gerado');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro IA'),
+  });
+
   return (
-    <section>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="mb-2 flex w-full items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-      >
-        <Icon className="h-3 w-3" />
-        <span>{title}</span>
-        {count !== undefined && (
-          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium">
-            {count}
-          </span>
-        )}
-        <ChevronDown
-          className={`ml-auto h-3 w-3 transition ${open ? '' : '-rotate-90'}`}
-        />
-      </button>
-      {open && children}
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Resumo IA
+        </p>
+        <button
+          type="button"
+          onClick={() => summarizeMut.mutate()}
+          disabled={summarizeMut.isPending}
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+        >
+          {summarizeMut.isPending ? 'Gerando…' : conversation.aiSummary ? 'Atualizar' : 'Gerar'}
+        </button>
+      </div>
+      {conversation.aiSummary ? (
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{conversation.aiSummary}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground italic">Nenhum resumo ainda.</p>
+      )}
     </section>
   );
 }
 
-interface ConversationStatusSwitcherProps {
+function ActionsSection({
+  conversation,
+  conversationId,
+}: {
+  conversation: LeadDetail['conversation'];
   conversationId: string;
-  currentStatus: string;
-  currentAssigneeId: string | null;
-  members: Array<{ userId: string; user: { name: string | null; email: string } }>;
-  onUpdated?: () => void;
+}) {
+  const qc = useQueryClient();
+  const updateMut = useMutation({
+    mutationFn: (status: 'OPEN' | 'RESOLVED' | 'PENDING') =>
+      api(`/api/conversations/${conversationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+      toast.success('Status atualizado');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Ações
+      </p>
+      {conversation.status !== 'RESOLVED' && (
+        <button
+          type="button"
+          onClick={() => updateMut.mutate('RESOLVED')}
+          disabled={updateMut.isPending}
+          className="w-full rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          Marcar como resolvida
+        </button>
+      )}
+      {conversation.status === 'RESOLVED' && (
+        <button
+          type="button"
+          onClick={() => updateMut.mutate('OPEN')}
+          disabled={updateMut.isPending}
+          className="w-full rounded border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+        >
+          Reabrir
+        </button>
+      )}
+    </section>
+  );
 }
 
-export function ConversationStatusSwitcher({
+interface CustomAttrsSectionProps {
+  defs: LeadDetail['customAttributeDefs'];
+  values: Record<string, unknown>;
+  conversationId: string;
+}
+
+function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSectionProps) {
+  const qc = useQueryClient();
+  const [local, setLocal] = useState<Record<string, unknown>>(values);
+
+  const saveMut = useMutation({
+    mutationFn: (next: Record<string, unknown>) =>
+      api(`/api/conversations/${conversationId}/contact`, {
+        method: 'PATCH',
+        body: JSON.stringify({ customAttrs: next }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao salvar atributo'),
+  });
+
+  function updateField(key: string, value: unknown) {
+    const next = { ...local, [key]: value };
+    setLocal(next);
+    saveMut.mutate(next);
+  }
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Atributos
+      </p>
+      {defs.map((def) => {
+        const current = local[def.key];
+        if (def.type === 'SELECT' && def.options) {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <select
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'string' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value || null)}
+              >
+                <option value="">—</option>
+                {def.options.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </div>
+          );
+        }
+        if (def.type === 'NUMBER') {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <input
+                type="number"
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'number' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value ? Number(e.target.value) : null)}
+              />
+            </div>
+          );
+        }
+        if (def.type === 'DATE') {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <input
+                type="date"
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'string' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value || null)}
+              />
+            </div>
+          );
+        }
+        // STRING (default)
+        return (
+          <div key={def.id} className="space-y-1">
+            <label className="text-xs">{def.label}</label>
+            <input
+              type="text"
+              className="w-full rounded border bg-background px-2 py-1 text-sm"
+              value={typeof current === 'string' ? current : ''}
+              onChange={(e) => setLocal({ ...local, [def.key]: e.target.value || null })}
+              onBlur={(e) => saveMut.mutate({ ...local, [def.key]: e.target.value || null })}
+            />
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+interface LabelsSectionProps {
+  applied: Array<{ id: string; name: string; color: string }>;
+  available: LeadDetail['allLabels'];
+  conversationId: string;
+}
+
+function LabelsSection({ applied, available, conversationId }: LabelsSectionProps) {
+  const qc = useQueryClient();
+  const appliedIds = new Set(applied.map((l) => l.id));
+
+  const toggleMut = useMutation({
+    mutationFn: async ({ labelId, action }: { labelId: string; action: 'add' | 'remove' }) => {
+      const path = action === 'add' ? '/api/labels/apply' : '/api/labels/unapply';
+      return api(path, {
+        method: 'POST',
+        body: JSON.stringify({
+          labelId,
+          targetType: 'CONVERSATION',
+          targetId: conversationId,
+        }),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Etiquetas
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {available.map((l) => {
+          const isApplied = appliedIds.has(l.id);
+          return (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() =>
+                toggleMut.mutate({ labelId: l.id, action: isApplied ? 'remove' : 'add' })
+              }
+              disabled={toggleMut.isPending}
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs transition-colors ${
+                isApplied
+                  ? 'border border-transparent text-white'
+                  : 'border border-dashed text-muted-foreground hover:border-foreground hover:text-foreground'
+              }`}
+              style={isApplied ? { backgroundColor: l.color } : undefined}
+            >
+              {l.name}
+            </button>
+          );
+        })}
+        {available.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma etiqueta. Crie em Configurações → Etiquetas.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ContactInfoSection({
+  contact,
   conversationId,
-  currentStatus,
-  currentAssigneeId,
-  members,
-  onUpdated,
-}: ConversationStatusSwitcherProps) {
-  // Placeholder if needed externally; not used here since logic moved to inline header
-  return null;
+}: {
+  contact: LeadDetail['contact'];
+  conversationId: string;
+}) {
+  const qc = useQueryClient();
+  const [name, setName] = useState(contact.name ?? '');
+  const [email, setEmail] = useState(contact.email ?? '');
+
+  const saveMut = useMutation({
+    mutationFn: (patch: { name?: string | null; email?: string | null }) =>
+      api(`/api/conversations/${conversationId}/contact`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Contato
+      </p>
+      <div className="space-y-1">
+        <label className="text-xs">Nome</label>
+        <input
+          type="text"
+          className="w-full rounded border bg-background px-2 py-1 text-sm"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => {
+            const next = name || null;
+            if (next !== (contact.name ?? null)) saveMut.mutate({ name: next });
+          }}
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs">Email</label>
+        <input
+          type="email"
+          className="w-full rounded border bg-background px-2 py-1 text-sm"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          onBlur={() => {
+            const next = email || null;
+            if (next !== (contact.email ?? null)) saveMut.mutate({ email: next });
+          }}
+        />
+      </div>
+      <p className="text-[10px] text-muted-foreground">
+        Telefone: {contact.phoneNumber} (não editável)
+      </p>
+    </section>
+  );
 }
