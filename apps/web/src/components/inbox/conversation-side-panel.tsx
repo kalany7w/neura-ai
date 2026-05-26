@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Phone, Mail } from 'lucide-react';
+import { Phone, Mail, CalendarPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { realtimeClient } from '@/lib/ws-client';
+import { Button } from '@/components/ui/button';
+import { ScheduleEventDialog } from '@/components/calendar/schedule-event-dialog';
 import { SlaBadge } from './sla-badge';
 
 export interface LeadDetail {
@@ -194,6 +196,16 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
 
         <AiSummarySection conversation={data.conversation} conversationId={conversationId} />
         <ActionsSection conversation={data.conversation} conversationId={conversationId} />
+
+        <ScheduleEventDialog
+          conversationId={conversationId}
+          contactId={data.contact.id}
+          trigger={
+            <Button type="button" variant="outline" className="w-full">
+              <CalendarPlus className="mr-2 h-4 w-4" /> Agendar evento
+            </Button>
+          }
+        />
       </div>
     </aside>
   );
