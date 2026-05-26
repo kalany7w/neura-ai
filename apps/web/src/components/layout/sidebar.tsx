@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   MessageCircle,
   LayoutGrid,
+  CalendarDays,
   Users,
   Inbox,
   FileText,
@@ -65,6 +66,7 @@ const groups: NavGroup[] = [
     items: [
       { href: '/inbox', label: 'Conversas', icon: MessageCircle },
       { href: '/kanban', label: 'Kanban', icon: LayoutGrid },
+      { href: '/calendar', label: 'Calendário', icon: CalendarDays },
     ],
   },
   {

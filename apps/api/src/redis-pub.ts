@@ -3,6 +3,7 @@ import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/w
 import { dispatchAutomationRules } from './services/automation.js';
 import { dispatchNotifications } from './services/notification-hooks.js';
 import { detectCsatResponse } from './services/csat-detect.js';
+import { detectSchedule } from './services/ai-detect-schedule.js';
 
 const KNOWN_EVENTS = new Set<string>(WEBHOOK_EVENTS);
 
@@ -48,6 +49,7 @@ export async function publishEvent(
       conversationId
     ) {
       void detectCsatResponse(workspaceId, conversationId, msg.content);
+      void detectSchedule({ workspaceId, conversationId, text: msg.content });
     }
   }
 }

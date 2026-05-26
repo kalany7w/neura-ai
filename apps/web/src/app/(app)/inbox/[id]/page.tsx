@@ -62,6 +62,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConversationSidePanel } from '@/components/inbox/conversation-side-panel';
+import { ScheduleSuggestionBanner } from '@/components/calendar/schedule-suggestion-banner';
 import { ScheduleMessageDialog } from '@/components/inbox/schedule-message-dialog';
 import { ForwardMessageDialog } from '@/components/inbox/forward-message-dialog';
 import { KbSearchDialog } from '@/components/kb-search-dialog';
@@ -1542,6 +1543,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           </div>
         )}
       </div>
+
+      {conv.contact && (
+        <div className="px-4 pt-2">
+          <ScheduleSuggestionBanner conversationId={conv.id} contactId={conv.contact.id} />
+        </div>
+      )}
 
       <div ref={scrollRef} onScroll={checkScroll} className="flex-1 overflow-y-auto py-4 space-y-3">
         {(() => {

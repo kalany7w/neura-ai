@@ -39,10 +39,12 @@ import { webchatRouter } from './routes/webchat.js';
 import { welcomeFlowsRouter } from './routes/welcome-flows.js';
 import { welcomePresetsRouter } from './routes/welcome-presets.js';
 import { leadDetailRouter } from './routes/lead-detail.js';
+import { calendarRouter } from './routes/calendar.js';
 import { startScheduledMsgsScheduler } from './scheduled-messages.js';
 import { setupWebSocket } from './ws.js';
 import { startSlaScheduler } from './sla.js';
 import { startSnoozeScheduler } from './snooze.js';
+import { calendarWorker, startCalendarScheduler } from './calendar-scheduler.js';
 import { startAutoResolveScheduler } from './auto-resolve.js';
 import { startAutomationScheduler } from './automation-scheduler.js';
 import { transcribeWorker } from './transcribe.js';
@@ -119,6 +121,8 @@ app.route('/api', welcomeFlowsRouter);
 app.route('/api', welcomePresetsRouter);
 // Lead detail — endpoint consolidado pro side panel da conversa
 app.route('/api', leadDetailRouter);
+// Calendar events — agenda de eventos (aplicação, manutenção, reparo, etc.)
+app.route('/api/calendar', calendarRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
@@ -142,6 +146,11 @@ injectWebSocket(server);
 startSlaScheduler().catch((err) => logger.error({ err }, 'Failed to start SLA scheduler'));
 // Snooze scheduler — desativa snoozes vencidos a cada 30s
 startSnoozeScheduler().catch((err) => logger.error({ err }, 'Failed to start Snooze scheduler'));
+// Calendar scheduler — alerta in-app no dia do evento (poll 5min)
+startCalendarScheduler().catch((err) =>
+  logger.error({ err }, 'Failed to start Calendar scheduler'),
+);
+void calendarWorker;
 // Auto-resolve scheduler — fecha conversas inativas (config por inbox) a cada 30min
 startAutoResolveScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start AutoResolve scheduler'),
