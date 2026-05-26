@@ -643,6 +643,10 @@ model Card {
   @@index([conversationId])
   @@index([assignedAgentId])
   @@index([slaStatus])
+  // NOTA: partial unique index "cards_conversationId_funnelId_active_uniq" existe
+  // via raw SQL (migration add_cards_active_unique). Bloqueia 2 cards ativos
+  // pra mesma conversa no mesmo funnel — fecha race em applyTagWithRouting.
+  // Prisma não suporta partial uniques com predicate via @@unique.
   @@map("cards")
 }
 
