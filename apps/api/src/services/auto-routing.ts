@@ -63,6 +63,24 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
     });
 
     if (!existing) {
+      // Resolve title + position no padrão do default-funnel path (waworker events.ts):
+      // title = contact.name ?? phoneNumber, position = max(position) + 1 no stage.
+      const [conv, maxPos] = await Promise.all([
+        prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { contact: { select: { name: true, phoneNumber: true } } },
+        }),
+        prisma.card.aggregate({
+          where: { stageId: label.routesToStageId },
+          _max: { position: true },
+        }),
+      ]);
+      const cardTitle =
+        conv?.contact?.name ??
+        conv?.contact?.phoneNumber ??
+        `Conversa #${conversationId.slice(-6)}`;
+      const cardPosition = (maxPos._max.position ?? -1) + 1;
+
       // Tenta criar card. Race: dois calls concurrent podem ambos passar o
       // findFirst e tentar create — partial unique index
       // cards_conversationId_funnelId_active_uniq bloqueia o 2º com P2002.
@@ -75,7 +93,8 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
             funnelId: label.routesToFunnelId,
             stageId: label.routesToStageId,
             conversationId,
-            title: `Conversa #${conversationId.slice(-6)}`,
+            title: cardTitle,
+            position: cardPosition,
           },
           select: { id: true },
         });
