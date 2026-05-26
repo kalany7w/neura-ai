@@ -23,6 +23,7 @@ beforeAll(async () => {
   await prisma.inbox.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.workspace.deleteMany();
+  await prisma.user.deleteMany({ where: { email: { endsWith: '-fe@test.com' } } });
 
   const ws = await prisma.workspace.create({
     data: { name: 'Auto-routing Test WS', slug: 'auto-routing-test' },
@@ -155,5 +156,77 @@ describe('applyTagWithRouting', () => {
 
     const links = await prisma.conversationLabel.findMany({ where: { conversationId } });
     expect(links).toHaveLength(1);
+  });
+
+  it('atribui conversa ao assignAgentId quando passado', async () => {
+    const user = await prisma.user.create({
+      data: { email: 'ariel-fe@test.com', name: 'Ariel FE' },
+    });
+    await prisma.membership.create({
+      data: { userId: user.id, workspaceId, role: 'AGENT' },
+    });
+
+    await applyTagWithRouting({
+      workspaceId,
+      conversationId,
+      labelId,
+      source: 'welcome_flow',
+      assignAgentId: user.id,
+    });
+
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedAgentId: true },
+    });
+    expect(conv?.assignedAgentId).toBe(user.id);
+
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { assignedAgentId: null },
+    });
+    await prisma.membership.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
+  });
+
+  it('não modifica assignedAgentId quando assignAgentId é null/undefined', async () => {
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { assignedAgentId: null },
+    });
+
+    await applyTagWithRouting({
+      workspaceId,
+      conversationId,
+      labelId,
+      source: 'welcome_flow',
+    });
+
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedAgentId: true },
+    });
+    expect(conv?.assignedAgentId).toBeNull();
+  });
+
+  it('ignora assignAgentId se user não é membro do workspace', async () => {
+    const outsider = await prisma.user.create({
+      data: { email: 'outsider-fe@test.com', name: 'Outsider' },
+    });
+
+    await applyTagWithRouting({
+      workspaceId,
+      conversationId,
+      labelId,
+      source: 'welcome_flow',
+      assignAgentId: outsider.id,
+    });
+
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedAgentId: true },
+    });
+    expect(conv?.assignedAgentId).toBeNull();
+
+    await prisma.user.delete({ where: { id: outsider.id } });
   });
 });

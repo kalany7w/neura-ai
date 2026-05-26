@@ -17,6 +17,7 @@ const flowUpsertSchema = z.object({
   fallbackLabelId: z.string().nullable().optional(),
   fallbackFunnelId: z.string().nullable().optional(),
   fallbackStageId: z.string().nullable().optional(),
+  fallbackUserId: z.string().nullable().optional(),
   fallbackTimeoutMinutes: z.number().int().min(0).max(60).default(2),
   maxAttempts: z.number().int().min(1).max(10).default(2),
   enabled: z.boolean().default(true),
@@ -68,6 +69,10 @@ welcomeFlowsRouter.post(
     const parsed = flowUpsertSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
+    if (parsed.data.fallbackUserId && !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))) {
+      return c.json({ error: 'fallback_user_not_in_workspace' }, 400);
+    }
+
     try {
       const flow = await prisma.welcomeFlow.create({
         data: { workspaceId, inboxId, ...parsed.data },
@@ -111,6 +116,10 @@ welcomeFlowsRouter.put(
     const body = await c.req.json().catch(() => null);
     const parsed = flowUpsertSchema.partial().safeParse(body);
     if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    if (parsed.data.fallbackUserId && !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))) {
+      return c.json({ error: 'fallback_user_not_in_workspace' }, 400);
+    }
 
     const flow = await prisma.welcomeFlow.findFirst({
       where: { inboxId, workspaceId },
@@ -189,6 +198,7 @@ const optionUpsertSchema = z.object({
   targetLabelId: z.string().min(1),
   targetFunnelId: z.string().nullable().optional(),
   targetStageId: z.string().nullable().optional(),
+  targetUserId: z.string().nullable().optional(),
 });
 
 async function assertFlowInWorkspace(
@@ -199,6 +209,18 @@ async function assertFlowInWorkspace(
     where: { id: flowId, workspaceId },
     select: { id: true },
   });
+}
+
+async function assertUserInWorkspace(
+  userId: string | null | undefined,
+  workspaceId: string,
+): Promise<boolean> {
+  if (!userId) return true; // null OK
+  const member = await prisma.membership.findFirst({
+    where: { userId, workspaceId },
+    select: { id: true },
+  });
+  return !!member;
 }
 
 /**
@@ -219,6 +241,10 @@ welcomeFlowsRouter.post(
     const body = await c.req.json().catch(() => null);
     const parsed = optionUpsertSchema.safeParse(body);
     if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    if (parsed.data.targetUserId && !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))) {
+      return c.json({ error: 'target_user_not_in_workspace' }, 400);
+    }
 
     try {
       const option = await prisma.welcomeOption.create({
@@ -260,6 +286,10 @@ welcomeFlowsRouter.put(
     const body = await c.req.json().catch(() => null);
     const parsed = optionUpsertSchema.partial().safeParse(body);
     if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    if (parsed.data.targetUserId && !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))) {
+      return c.json({ error: 'target_user_not_in_workspace' }, 400);
+    }
 
     const existing = await prisma.welcomeOption.findFirst({
       where: { id: optionId, flowId },
