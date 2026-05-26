@@ -8,6 +8,7 @@ import {
   Circle,
   CircleCheck,
   CircleAlert,
+  Plus,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -43,14 +44,20 @@ export default function WelcomeFlowsListPage() {
       {isLoading && <p className="text-muted-foreground">Carregando…</p>}
 
       {data?.inboxes && data.inboxes.length === 0 && (
-        <div className="rounded-lg border bg-card p-8 text-center">
-          <p className="text-muted-foreground">
-            Nenhuma inbox configurada ainda. Crie uma em{' '}
-            <Link className="underline" href="/inboxes">
-              Inboxes
-            </Link>{' '}
-            antes de configurar fluxo.
+        <div className="rounded-lg border-2 border-dashed bg-card p-12 text-center">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-4">
+            <MessageSquarePlus className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h3 className="text-lg font-semibold mb-1">Nenhuma inbox configurada</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Crie uma inbox primeiro pra configurar o fluxo de boas-vindas.
           </p>
+          <Link href="/inboxes">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Criar inbox
+            </Button>
+          </Link>
         </div>
       )}
 
