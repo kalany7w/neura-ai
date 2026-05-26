@@ -206,7 +206,7 @@ export default function WelcomeFlowEditorPage() {
             />
             <p className="text-xs text-muted-foreground">
               Suporta placeholder <code>{'{{contact.name}}'}</code>. Quando o nome do contato for
-              vazio, substitui por "cliente".
+              vazio, substitui por &quot;cliente&quot;.
             </p>
             {errors.prompt && <p className="text-xs text-destructive">{errors.prompt.message}</p>}
           </div>
