@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -151,8 +152,110 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           </section>
         )}
 
+        {data.customAttributeDefs.length > 0 && (
+          <CustomAttrsSection
+            defs={data.customAttributeDefs}
+            values={data.contact.customAttrs ?? {}}
+            conversationId={conversationId}
+          />
+        )}
+
         {/* Sections T6-T9 a serem preenchidas */}
       </div>
     </aside>
+  );
+}
+
+interface CustomAttrsSectionProps {
+  defs: LeadDetail['customAttributeDefs'];
+  values: Record<string, unknown>;
+  conversationId: string;
+}
+
+function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSectionProps) {
+  const qc = useQueryClient();
+  const [local, setLocal] = useState<Record<string, unknown>>(values);
+
+  const saveMut = useMutation({
+    mutationFn: (next: Record<string, unknown>) =>
+      api(`/api/conversations/${conversationId}/contact`, {
+        method: 'PATCH',
+        body: JSON.stringify({ customAttrs: next }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao salvar atributo'),
+  });
+
+  function updateField(key: string, value: unknown) {
+    const next = { ...local, [key]: value };
+    setLocal(next);
+    saveMut.mutate(next);
+  }
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Atributos
+      </p>
+      {defs.map((def) => {
+        const current = local[def.key];
+        if (def.type === 'SELECT' && def.options) {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <select
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'string' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value || null)}
+              >
+                <option value="">—</option>
+                {def.options.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </div>
+          );
+        }
+        if (def.type === 'NUMBER') {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <input
+                type="number"
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'number' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value ? Number(e.target.value) : null)}
+              />
+            </div>
+          );
+        }
+        if (def.type === 'DATE') {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <input
+                type="date"
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'string' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value || null)}
+              />
+            </div>
+          );
+        }
+        // STRING (default)
+        return (
+          <div key={def.id} className="space-y-1">
+            <label className="text-xs">{def.label}</label>
+            <input
+              type="text"
+              className="w-full rounded border bg-background px-2 py-1 text-sm"
+              value={typeof current === 'string' ? current : ''}
+              onChange={(e) => setLocal({ ...local, [def.key]: e.target.value || null })}
+              onBlur={(e) => saveMut.mutate({ ...local, [def.key]: e.target.value || null })}
+            />
+          </div>
+        );
+      })}
+    </section>
   );
 }
