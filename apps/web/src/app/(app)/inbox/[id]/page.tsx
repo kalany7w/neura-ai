@@ -2200,10 +2200,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
 
       {/* Side panel: info do contato + conversas anteriores + cards */}
       <div className="hidden lg:block">
-        <ConversationSidePanel
-          contactId={conv.contact.id}
-          currentConversationId={conv.id}
-        />
+        <ConversationSidePanel conversationId={conv.id} />
       </div>
 
       <ScheduleMessageDialog
