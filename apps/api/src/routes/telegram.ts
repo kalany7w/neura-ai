@@ -12,6 +12,7 @@ import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
 import { aiQueue } from '../queue.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
+import { enqueueWelcomeProcess } from '../welcome-worker.js';
 import type { TgUpdate, TgMessage } from '../services/telegram-client.js';
 
 export const telegramRouter = new Hono();
@@ -199,6 +200,20 @@ async function processUpdate(
     .catch(() => {});
   // SLA breach reset não precisa aqui — patchFirstResponse limpa ao agente responder
   void patchFirstResponse; // no-op import keeper
+
+  // Welcome flow hook: se conversa está awaiting choice, rotear msg pro parser.
+  const convCheck = await prisma.conversation.findFirst({
+    where: { id: conversation.id, workspaceId },
+    select: { isAwaitingWelcomeChoice: true },
+  });
+  if (convCheck?.isAwaitingWelcomeChoice) {
+    await enqueueWelcomeProcess({
+      workspaceId,
+      conversationId: conversation.id,
+      kind: 'parse_reply',
+      messageId: created.id,
+    });
+  }
 }
 
 function inferContent(msg: TgMessage): {

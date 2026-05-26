@@ -20,6 +20,7 @@ import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { prisma } from '../db.js';
 import { publishEvent } from '../redis-pub.js';
 import { aiQueue } from '../queue.js';
+import { enqueueWelcomeProcess } from '../welcome-worker.js';
 
 export const webchatRouter = new Hono();
 
@@ -382,6 +383,20 @@ webchatRouter.post('/:widgetSlug/messages', async (c) => {
       { jobId: `classify__${conversation.id}`, delay: 30_000 },
     )
     .catch(() => {});
+
+  // Welcome flow hook: se conversa está awaiting choice, rotear msg pro parser.
+  const convCheck = await prisma.conversation.findFirst({
+    where: { id: conversation.id, workspaceId: inbox.workspaceId },
+    select: { isAwaitingWelcomeChoice: true },
+  });
+  if (convCheck?.isAwaitingWelcomeChoice) {
+    await enqueueWelcomeProcess({
+      workspaceId: inbox.workspaceId,
+      conversationId: conversation.id,
+      kind: 'parse_reply',
+      messageId: created.id,
+    });
+  }
 
   return c.json({ messageId: created.id, createdAt: created.createdAt });
 });

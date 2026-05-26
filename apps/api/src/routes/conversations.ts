@@ -5,7 +5,7 @@ import { prisma } from '../db.js';
 import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
-import { outboundQueue, dispatchOutbound } from '../queue.js';
+import { dispatchOutbound } from '../queue.js';
 import { publishEvent } from '../redis-pub.js';
 import { outboundLimiter } from '../rate-limit.js';
 import { logger } from '../logger.js';

@@ -22,6 +22,8 @@ model Workspace {
   slug      String   @unique
   // Settings flexíveis do workspace: automationsPaused, defaultGreeting, etc.
   settings  Json?
+  aiAgentName       String  @default("Agente IA")
+  aiAgentAvatarUrl  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -48,6 +50,7 @@ model Workspace {
   kbArticles          KbArticle[]
   csatSurveys         CsatSurvey[]
   csatResponses       CsatResponse[]
+  welcomeFlows        WelcomeFlow[]
 
   @@map("workspaces")
 }
@@ -225,6 +228,7 @@ model Inbox {
   workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   waSession     WaSession?
   conversations Conversation[]
+  welcomeFlow   WelcomeFlow?
 
   @@index([workspaceId])
   @@index([status])
@@ -291,6 +295,7 @@ model Contact {
   avatarUrl   String?
   // Custom attributes — populado na Fase 5 com defs por workspace
   customAttrs Json?
+  welcomeRespondedAt DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -387,6 +392,10 @@ model Conversation {
   csatSentAt                DateTime?
   // Quando set + agora < deadline → próximo inbound conta como possível resposta.
   csatAwaitingResponseUntil DateTime?
+  isAwaitingWelcomeChoice Boolean   @default(false)
+  welcomeAttempts         Int       @default(0)
+  welcomeFallbackSent     Boolean   @default(false)
+  welcomeSentAt           DateTime?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -465,6 +474,8 @@ model Label {
   name        String
   color       String     @default("#94a3b8") // slate-400
   scope       LabelScope @default(BOTH)
+  routesToFunnelId String?
+  routesToStageId  String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -472,6 +483,10 @@ model Label {
   contactLabels      ContactLabel[]
   conversationLabels ConversationLabel[]
   cardLabels         CardLabel[]
+  routesToFunnel Funnel? @relation("LabelRoutesToFunnel", fields: [routesToFunnelId], references: [id], onDelete: SetNull)
+  routesToStage  Stage?  @relation("LabelRoutesToStage", fields: [routesToStageId], references: [id], onDelete: SetNull)
+  welcomeOptionsAsTarget WelcomeOption[] @relation("WelcomeOptionLabel")
+  welcomeFlowFallback    WelcomeFlow[]   @relation("WelcomeFlowFallbackLabel")
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -548,6 +563,9 @@ model Funnel {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   stages    Stage[]
   cards     Card[]
+  routedFromLabels Label[] @relation("LabelRoutesToFunnel")
+  welcomeOptionsAsTarget WelcomeOption[] @relation("WelcomeOptionFunnel")
+  welcomeFlowFallback    WelcomeFlow[]   @relation("WelcomeFlowFallbackFunnel")
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
@@ -572,6 +590,9 @@ model Stage {
 
   funnel Funnel @relation(fields: [funnelId], references: [id], onDelete: Cascade)
   cards  Card[]
+  routedFromLabels Label[] @relation("LabelRoutesToStage")
+  welcomeOptionsAsTarget WelcomeOption[] @relation("WelcomeOptionStage")
+  welcomeFlowFallback    WelcomeFlow[]   @relation("WelcomeFlowFallbackStage")
 
   @@index([funnelId])
   @@map("stages")
@@ -697,6 +718,13 @@ model SavedFilter {
   @@map("saved_filters")
 }
 
+enum MessageSender {
+  CUSTOMER
+  AGENT
+  AI_AGENT
+  SYSTEM
+}
+
 enum MessageDirection {
   INBOUND
   OUTBOUND
@@ -774,6 +802,11 @@ model Message {
   deliveredAt    DateTime?
   readAt         DateTime?
   createdAt      DateTime         @default(now())
+  senderType MessageSender @default(CUSTOMER)
+  // Metadata flexivel JSON — usada pra interactive replies do Baileys (interactiveRowId,
+  // interactiveDisplayText), transcript pos-Whisper, e outros campos opcionais que nao
+  // merecem coluna dedicada. Schema-less por design.
+  metadata   Json?
 
   conversation Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   reactions    MessageReaction[]
@@ -1174,4 +1207,55 @@ model Notification {
   @@index([userId, readAt, createdAt])
   @@index([workspaceId])
   @@map("notifications")
+}
+
+// ============================================
+// WELCOME FLOW (Fase A — saudação interativa + auto-routing)
+// ============================================
+
+model WelcomeFlow {
+  id                     String   @id @default(cuid())
+  workspaceId            String
+  inboxId                String   @unique
+  prompt                 String   @db.Text
+  fallbackLabelId        String?
+  fallbackFunnelId       String?
+  fallbackStageId        String?
+  fallbackTimeoutMinutes Int      @default(2)
+  maxAttempts            Int      @default(2)
+  enabled                Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inbox          Inbox           @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  fallbackLabel  Label?          @relation("WelcomeFlowFallbackLabel", fields: [fallbackLabelId], references: [id], onDelete: SetNull)
+  fallbackFunnel Funnel?         @relation("WelcomeFlowFallbackFunnel", fields: [fallbackFunnelId], references: [id], onDelete: SetNull)
+  fallbackStage  Stage?          @relation("WelcomeFlowFallbackStage", fields: [fallbackStageId], references: [id], onDelete: SetNull)
+  options        WelcomeOption[]
+
+  @@index([workspaceId])
+  @@map("welcome_flows")
+}
+
+model WelcomeOption {
+  id              String   @id @default(cuid())
+  flowId          String
+  position        Int
+  label           String
+  description     String?
+  matchKeywords   String[]
+  targetLabelId   String
+  targetFunnelId  String?
+  targetStageId   String?
+  createdAt       DateTime @default(now())
+
+  flow         WelcomeFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  targetLabel  Label       @relation("WelcomeOptionLabel", fields: [targetLabelId], references: [id], onDelete: Restrict)
+  targetFunnel Funnel?     @relation("WelcomeOptionFunnel", fields: [targetFunnelId], references: [id], onDelete: SetNull)
+  targetStage  Stage?      @relation("WelcomeOptionStage", fields: [targetStageId], references: [id], onDelete: SetNull)
+
+  @@unique([flowId, position])
+  @@index([flowId])
+  @@map("welcome_options")
 }

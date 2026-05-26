@@ -15,6 +15,9 @@ export const QUEUE_AI = 'ai';
 export const QUEUE_KB_EMBED = 'kb-embed';
 // Queue de envio de surveys CSAT/NPS pós-RESOLVED. Delayed jobs (delay = survey.delayMinutes).
 export const QUEUE_CSAT_SEND = 'csat-send';
+// Queue de processamento do welcome flow. Producer: waworker (trigger) + api (retry).
+// Consumer: welcome-worker no api side.
+export const QUEUE_WELCOME_PROCESS = 'welcome-process';
 
 export interface TranscribeJob {
   /** Workspace pra publishEvent + audit */
@@ -71,9 +74,21 @@ export interface SendMessageJob {
   /** Destinatário em E.164 com '+' (ex: +5511999999999) ou JID Baileys */
   to: string;
   /** Tipo da mensagem */
-  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT';
+  type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT' | 'INTERACTIVE';
   /** Texto (TEXT ou caption de mídia) */
   text?: string;
+  /** Para type === 'INTERACTIVE': estrutura do listMessage do Baileys */
+  interactivePayload?: {
+    title: string;          // header do listMessage
+    body: string;           // texto principal (o prompt)
+    footer?: string;        // footer opcional
+    buttonText: string;     // label do botão que abre a lista (ex: "Ver opções")
+    options: Array<{
+      rowId: string;        // = WelcomeOption.id
+      title: string;        // = WelcomeOption.label
+      description?: string; // = WelcomeOption.description
+    }>;
+  };
   /** Mídia: URL acessível pelo worker (MinIO presigned na Fase 3) */
   mediaUrl?: string;
   mimeType?: string;
@@ -94,4 +109,19 @@ export interface SendMessageJob {
   reactionEmoji?: string;
   /** User.id que disparou o edit/revoke — usado pra gravar autor no histórico de edições */
   editedBy?: string;
+}
+
+/**
+ * Job de processamento do welcome flow. Discriminado por `kind`:
+ * - 'trigger': primeira mensagem inbound detectada — checar se deve enviar welcome.
+ * - 'parse_reply': cliente respondeu enquanto conversa estava awaiting — parsear opção.
+ * - 'retry_text': timeout passou sem reply — reenviar prompt em texto plano.
+ * - 'fallback_human': N attempts sem match — aplicar fallback label, liberar pra humano.
+ */
+export interface WelcomeProcessJob {
+  workspaceId: string;
+  conversationId: string;
+  kind: 'trigger' | 'parse_reply' | 'retry_text' | 'fallback_human';
+  /** Para 'parse_reply': Message.id do reply do cliente. */
+  messageId?: string;
 }

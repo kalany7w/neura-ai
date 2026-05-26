@@ -3,7 +3,7 @@ import { Redis } from 'ioredis';
 import { prisma } from './db.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
-import { outboundQueue, dispatchOutbound } from './queue.js';
+import { dispatchOutbound } from './queue.js';
 import { publishEvent } from './redis-pub.js';
 import { patchFirstResponse } from './services/sla-compute.js';
 

@@ -48,6 +48,8 @@ import { kbEmbedWorker } from './kb-worker.js';
 import { telegramOutboundWorker } from './telegram-outbound.js';
 import { emailOutboundWorker } from './email-outbound.js';
 import { csatWorker } from './csat-worker.js';
+import { welcomeWorker } from './welcome-worker.js';
+import { startWelcomeScheduler } from './welcome-scheduler.js';
 
 const app = new Hono();
 
@@ -136,6 +138,9 @@ startAutoResolveScheduler().catch((err) =>
 );
 // Automation scheduler — varre triggers tempo-based a cada 5min
 startAutomationScheduler();
+// Welcome scheduler — enfileira jobs de welcome (BullMQ)
+await startWelcomeScheduler();
+logger.info({ worker: 'welcome' }, 'Welcome worker iniciado');
 // Scheduled messages scheduler — verifica msgs agendadas a cada 30s
 startScheduledMsgsScheduler().catch((err) =>
   logger.error({ err }, 'Failed to start ScheduledMessages scheduler'),
@@ -158,5 +163,6 @@ void kbEmbedWorker;
 void telegramOutboundWorker;
 void emailOutboundWorker;
 void csatWorker;
+void welcomeWorker;
 
 export { app };
