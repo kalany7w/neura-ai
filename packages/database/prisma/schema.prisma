@@ -3,13 +3,15 @@
 // "Workspace" é nossa entidade tenant (NÃO confundir com Better Auth "Account" de OAuth).
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/client"
+  provider        = "prisma-client-js"
+  output          = "../generated/client"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 // ============================================
@@ -641,6 +643,10 @@ model Card {
   @@index([conversationId])
   @@index([assignedAgentId])
   @@index([slaStatus])
+  // NOTA: partial unique index "cards_conversationId_funnelId_active_uniq" existe
+  // via raw SQL (migration add_cards_active_unique). Bloqueia 2 cards ativos
+  // pra mesma conversa no mesmo funnel — fecha race em applyTagWithRouting.
+  // Prisma não suporta partial uniques com predicate via @@unique.
   @@map("cards")
 }
 
@@ -813,6 +819,7 @@ model Message {
   edits        MessageEdit[]
 
   @@index([conversationId, createdAt])
+  @@index([conversationId, pinnedAt], map: "messages_conversationId_pinnedAt_idx")
   @@index([waMessageId])
   @@index([emailMessageId])
   @@map("messages")
@@ -1103,6 +1110,10 @@ model KbArticle {
   viewCount   Int             @default(0)
   // Set quando embedding é re-gerado. Se NULL ou < updatedAt → enfileira re-embed.
   embeddingUpdatedAt DateTime?
+  // pgvector embedding (1536 dims, OpenAI text-embedding-3-small). Unsupported
+  // pois Prisma 6 não tem tipo nativo vector. Declarado pra Prisma reconhecer
+  // a coluna + índice HNSW e parar de propor DROP em cada migrate dev.
+  embedding Unsupported("vector(1536)")?
   createdBy   String
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
@@ -1113,6 +1124,9 @@ model KbArticle {
   @@unique([workspaceId, slug])
   @@index([workspaceId, status])
   @@index([categoryId])
+  // NOTA: HNSW index kb_articles_embedding_hnsw_idx existe via raw SQL (phase34).
+  // Prisma 6.19 ainda não suporta `type: Hnsw` no @@index — sempre vai propor
+  // DROP em migrate dev. Strip a linha DROP do migration.sql gerado.
   @@map("kb_articles")
 }
 
