@@ -32,6 +32,10 @@
     "./template-render": {
       "types": "./dist/template-render.d.ts",
       "default": "./dist/template-render.js"
+    },
+    "./welcome-presets": {
+      "types": "./dist/welcome-presets.d.ts",
+      "default": "./dist/welcome-presets.js"
     }
   },
   "scripts": {
