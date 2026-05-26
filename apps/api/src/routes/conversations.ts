@@ -518,6 +518,50 @@ conversationsRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
   return c.json({ conversation: updated });
 });
 
+// PATCH /api/conversations/:id/contact — edição inline do contato a partir do side panel
+const contactPatchSchema = z.object({
+  name: z.string().min(1).max(120).nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  customAttrs: z.record(z.string(), z.unknown()).nullable().optional(),
+});
+
+/**
+ * PATCH /api/conversations/:id/contact
+ * Update inline do contato a partir do side panel — basic fields + customAttrs.
+ * Mantém phoneNumber imutável (chave de identificação no WhatsApp).
+ */
+conversationsRouter.patch('/:id/contact', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const conversationId = c.req.param('id');
+  const body = await c.req.json().catch(() => null);
+  const parsed = contactPatchSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { contactId: true },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+
+  const updated = await prisma.contact.update({
+    where: { id: conv.contactId },
+    data: {
+      ...(parsed.data.name !== undefined && { name: parsed.data.name }),
+      ...(parsed.data.email !== undefined && { email: parsed.data.email }),
+      ...(parsed.data.customAttrs !== undefined && {
+        customAttrs: (parsed.data.customAttrs ?? undefined) as Prisma.InputJsonValue,
+      }),
+    },
+  });
+
+  await publishEvent(workspaceId, 'contacts', 'contact.updated', {
+    contactId: updated.id,
+    changes: parsed.data,
+  });
+
+  return c.json({ contact: updated });
+});
+
 // POST /api/conversations — cria conversa (idempotente: retorna existente se houver pra contact+inbox)
 const createBody = z.object({
   contactId: z.string().min(1),
