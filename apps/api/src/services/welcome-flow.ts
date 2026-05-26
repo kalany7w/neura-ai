@@ -113,13 +113,13 @@ export async function sendWelcome(
     },
   });
 
-  // Marcar conversa awaiting
+  // Marcar conversa awaiting. NOTE: welcomeAttempts é "tentativas do CLIENTE" (replies),
+  // não tentativas de envio. parse_reply incrementa esse contador, send não.
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
       isAwaitingWelcomeChoice: true,
       welcomeSentAt: new Date(),
-      welcomeAttempts: { increment: 1 },
     },
   });
 

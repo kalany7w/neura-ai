@@ -125,10 +125,12 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
     const currentRetries = jobWithRetries._audioRetries ?? 0;
     if (typeof meta.transcript !== 'string' || !meta.transcript) {
       if (currentRetries < MAX_AUDIO_RETRIES) {
+        // attempts:1 no re-enqueue — não queremos backoff exponencial em cima do delay 5s.
+        // O cap MAX_AUDIO_RETRIES já governa o retry budget total.
         await welcomeProcessQueue.add(
           'process',
           { ...job, _audioRetries: currentRetries + 1 } as WelcomeProcessJob,
-          { delay: 5_000 },
+          { delay: 5_000, attempts: 1 },
         );
         return;
       }
