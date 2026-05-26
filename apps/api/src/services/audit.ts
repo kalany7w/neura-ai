@@ -33,3 +33,12 @@ export async function audit(params: AuditParams): Promise<void> {
     logger.error({ err, action: params.action }, 'Failed to write audit log');
   }
 }
+
+// Welcome flow + auto-routing actions
+export const AUDIT_ACTIONS = {
+  WELCOME_TRIGGERED: 'welcome.triggered',
+  WELCOME_COMPLETED: 'welcome.completed',
+  WELCOME_FAILED: 'welcome.failed',
+  WELCOME_FALLBACK_SENT: 'welcome.fallback_sent',
+  CARD_AUTO_ROUTED: 'card.auto_routed',
+} as const;
