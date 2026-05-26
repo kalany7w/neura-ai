@@ -40,7 +40,15 @@ export const welcomeProcessQueue = new Queue<WelcomeProcessJob>(QUEUE_WELCOME_PR
 });
 
 export async function enqueueWelcomeProcess(job: WelcomeProcessJob): Promise<void> {
-  await welcomeProcessQueue.add('process', job);
+  // jobId determinístico — dedup por (kind, conversationId, messageId?). Garante
+  // que jobs paralelos pra mesmo evento (ex: dois inbounds em ms ambos disparando
+  // parse_reply) sejam colapsados pelo BullMQ enquanto o original ainda está em
+  // queue. removeOnComplete:3600 abre janela curta de re-trigger se necessário.
+  const jobId =
+    job.kind === 'parse_reply' && job.messageId
+      ? `welcome:${job.kind}:${job.messageId}`
+      : `welcome:${job.kind}:${job.conversationId}`;
+  await welcomeProcessQueue.add('process', job, { jobId });
 }
 
 async function handleTrigger(job: WelcomeProcessJob): Promise<void> {
@@ -84,7 +92,7 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
 
   const msg = await prisma.message.findFirst({
     where: { id: messageId, conversationId },
-    select: { type: true, content: true, metadata: true },
+    select: { type: true, content: true, metadata: true, transcription: true, transcriptionStatus: true },
   });
   if (!msg) return;
 
@@ -116,31 +124,38 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
           : undefined,
     };
   } else if (msg.type === 'AUDIO') {
-    // Esperar transcrição (Whisper worker já roda assíncrono). Se ainda não tem,
-    // re-enfileirar com delay de 5s — com cap pra evitar loop infinito se Whisper
-    // falhar permanentemente. Após MAX_AUDIO_RETRIES (6 = 30s total), cai pro
-    // path texto usando `msg.content` (ou string vazia → fallback humano).
+    // Esperar transcrição (Whisper worker grava em Message.transcription quando
+    // transcriptionStatus = COMPLETED). Se ainda PENDING ou null, re-enfileira
+    // com delay de 5s, capeado em MAX_AUDIO_RETRIES pra evitar loop infinito.
+    // Se transcriptionStatus = FAILED ou cap excedido, cai pro path texto.
     const MAX_AUDIO_RETRIES = 6;
     const jobWithRetries = job as WelcomeProcessJob & { _audioRetries?: number };
     const currentRetries = jobWithRetries._audioRetries ?? 0;
-    if (typeof meta.transcript !== 'string' || !meta.transcript) {
-      if (currentRetries < MAX_AUDIO_RETRIES) {
-        // attempts:1 no re-enqueue — não queremos backoff exponencial em cima do delay 5s.
-        // O cap MAX_AUDIO_RETRIES já governa o retry budget total.
-        await welcomeProcessQueue.add(
-          'process',
-          { ...job, _audioRetries: currentRetries + 1 } as WelcomeProcessJob,
-          { delay: 5_000, attempts: 1 },
-        );
-        return;
-      }
+    const transcript = msg.transcription;
+    const status = msg.transcriptionStatus;
+
+    if (status === 'COMPLETED' && transcript) {
+      replyInput = { kind: 'audio' as const, transcript };
+    } else if (status === 'FAILED') {
       logger.warn(
-        { conversationId, messageId, retries: currentRetries },
+        { conversationId, messageId },
+        'welcome-worker: transcription failed, fallback texto',
+      );
+      replyInput = { kind: 'text' as const, text: msg.content ?? '' };
+    } else if (currentRetries < MAX_AUDIO_RETRIES) {
+      // PENDING ou null — re-enfileira com delay 5s, attempts:1 (sem backoff exponencial).
+      await welcomeProcessQueue.add(
+        'process',
+        { ...job, _audioRetries: currentRetries + 1 } as WelcomeProcessJob,
+        { delay: 5_000, attempts: 1 },
+      );
+      return;
+    } else {
+      logger.warn(
+        { conversationId, messageId, retries: currentRetries, status },
         'welcome-worker: audio sem transcript após cap, fallback texto',
       );
       replyInput = { kind: 'text' as const, text: msg.content ?? '' };
-    } else {
-      replyInput = { kind: 'audio' as const, transcript: meta.transcript };
     }
   } else {
     replyInput = { kind: 'text' as const, text: msg.content ?? '' };
