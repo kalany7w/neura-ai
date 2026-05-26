@@ -331,6 +331,24 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
   // Sugestões de resposta com IA
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggesting, setSuggesting] = useState(false);
+  // Marker "Novas mensagens": ts da última msg lida ao abrir a conversa
+  const [readUpToTs, setReadUpToTs] = useState<number | null>(null);
+  // Botão scroll-to-bottom: aparece quando estamos > 200px do fim
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  function checkScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollDown(distFromBottom > 200);
+  }
+
+  function scrollToBottom() {
+    scrollRef.current?.scrollTo({
+      top: scrollRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
+  }
 
   async function fetchSuggestions() {
     if (suggesting) return;
@@ -568,6 +586,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     data?.conversation?.aiSummaryAt,
     data?.conversation?.aiSuggestedAt,
   ]);
+
+  // Marca a última msg INBOUND existente como "lido até aqui" no primeiro render desta conversa
+  useEffect(() => {
+    if (!data?.conversation.messages) return;
+    const lastInbound = [...data.conversation.messages]
+      .reverse()
+      .find((m) => m.direction === 'INBOUND');
+    if (lastInbound && readUpToTs === null) {
+      setReadUpToTs(new Date(lastInbound.createdAt).getTime());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.conversation.id]);
 
   // Auto-scroll quando novos itens chegam
   const timelineLen = (data?.conversation.messages.length ?? 0) + (notesData?.notes.length ?? 0);
@@ -1087,7 +1117,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
       )}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-3 min-w-0">
           <Button asChild size="icon" variant="ghost">
@@ -1513,14 +1543,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
+      <div ref={scrollRef} onScroll={checkScroll} className="flex-1 overflow-y-auto py-4 space-y-3">
         {(() => {
           let lastDay: string | null = null;
+          let markerShown = false;
           return timeline.map((item) => {
             const itemDate = new Date(item.createdAt);
             const dayKey = format(itemDate, 'yyyy-MM-dd');
             const showSeparator = dayKey !== lastDay;
             lastDay = dayKey;
+            const showReadMarker =
+              readUpToTs !== null && !markerShown && itemDate.getTime() > readUpToTs;
+            if (showReadMarker) markerShown = true;
             return (
               <div key={item.kind === 'note' ? `note-${item.id}` : item.id}>
                 {showSeparator && (
@@ -1528,6 +1562,15 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                       {dayLabel(itemDate)}
                     </span>
+                  </div>
+                )}
+                {showReadMarker && (
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="h-px flex-1 bg-primary" />
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-primary">
+                      Novas mensagens
+                    </span>
+                    <div className="h-px flex-1 bg-primary" />
                   </div>
                 )}
                 {item.kind === 'note' ? (
@@ -1933,6 +1976,17 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           });
         })()}
       </div>
+
+      {showScrollDown && (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-24 right-6 z-10 rounded-full border bg-card p-2 shadow-lg hover:bg-accent"
+          aria-label="Ir para última mensagem"
+        >
+          <ChevronDown className="h-4 w-4" />
+        </button>
+      )}
 
       <div className="border-t pt-3 space-y-2">
         {partnerTyping && (
