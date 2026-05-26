@@ -137,6 +137,9 @@ model User {
   accounts      Account[]
   notifications Notification[]
 
+  welcomeOptionsTargetingMe WelcomeOption[] @relation("WelcomeOptionTargetUser")
+  welcomeFlowsFallbackToMe  WelcomeFlow[]   @relation("WelcomeFlowFallbackUser")
+
   @@map("users")
 }
 
@@ -1235,6 +1238,7 @@ model WelcomeFlow {
   fallbackLabelId        String?
   fallbackFunnelId       String?
   fallbackStageId        String?
+  fallbackUserId         String?
   fallbackTimeoutMinutes Int      @default(2)
   maxAttempts            Int      @default(2)
   enabled                Boolean  @default(true)
@@ -1246,6 +1250,7 @@ model WelcomeFlow {
   fallbackLabel  Label?          @relation("WelcomeFlowFallbackLabel", fields: [fallbackLabelId], references: [id], onDelete: SetNull)
   fallbackFunnel Funnel?         @relation("WelcomeFlowFallbackFunnel", fields: [fallbackFunnelId], references: [id], onDelete: SetNull)
   fallbackStage  Stage?          @relation("WelcomeFlowFallbackStage", fields: [fallbackStageId], references: [id], onDelete: SetNull)
+  fallbackUser   User?           @relation("WelcomeFlowFallbackUser", fields: [fallbackUserId], references: [id], onDelete: SetNull)
   options        WelcomeOption[]
 
   @@index([workspaceId])
@@ -1262,12 +1267,14 @@ model WelcomeOption {
   targetLabelId   String
   targetFunnelId  String?
   targetStageId   String?
+  targetUserId    String?
   createdAt       DateTime @default(now())
 
   flow         WelcomeFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
   targetLabel  Label       @relation("WelcomeOptionLabel", fields: [targetLabelId], references: [id], onDelete: Restrict)
   targetFunnel Funnel?     @relation("WelcomeOptionFunnel", fields: [targetFunnelId], references: [id], onDelete: SetNull)
   targetStage  Stage?      @relation("WelcomeOptionStage", fields: [targetStageId], references: [id], onDelete: SetNull)
+  targetUser   User?       @relation("WelcomeOptionTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
 
   @@unique([flowId, position])
   @@index([flowId])

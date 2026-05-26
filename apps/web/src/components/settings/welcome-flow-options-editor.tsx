@@ -42,6 +42,7 @@ interface WelcomeOption {
   targetLabelId: string;
   targetFunnelId: string | null;
   targetStageId: string | null;
+  targetUserId: string | null;
 }
 
 interface LabelOpt {
@@ -56,14 +57,21 @@ interface FunnelOpt {
   stages: { id: string; name: string }[];
 }
 
+interface MemberOpt {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
 interface Props {
   flowId: string;
   options: WelcomeOption[];
   labels: LabelOpt[];
   funnels: FunnelOpt[];
+  members: MemberOpt[];
 }
 
-export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels }: Props) {
+export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, members }: Props) {
   const qc = useQueryClient();
   const [items, setItems] = useState(options);
 
@@ -170,6 +178,7 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels }: P
                 option={opt}
                 labels={labels}
                 funnels={funnels}
+                members={members}
                 onUpdate={(patch) => updateField(opt.id, patch)}
                 onRemove={() => removeMut.mutate(opt.id)}
               />
@@ -185,11 +194,12 @@ interface RowProps {
   option: WelcomeOption;
   labels: LabelOpt[];
   funnels: FunnelOpt[];
+  members: MemberOpt[];
   onUpdate: (patch: Partial<WelcomeOption>) => void;
   onRemove: () => void;
 }
 
-function SortableOptionRow({ option, labels, funnels, onUpdate, onRemove }: RowProps) {
+function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemove }: RowProps) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: option.id,
   });
@@ -227,7 +237,7 @@ function SortableOptionRow({ option, labels, funnels, onUpdate, onRemove }: RowP
         placeholder="Descrição (opcional, aparece abaixo do título no menu)"
       />
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <div className="space-y-1">
           <Label className="text-xs">Etiqueta aplicada</Label>
           <Select
@@ -282,6 +292,25 @@ function SortableOptionRow({ option, labels, funnels, onUpdate, onRemove }: RowP
               {stages.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Atribuir a</Label>
+          <Select
+            value={option.targetUserId ?? 'none'}
+            onValueChange={(v) => onUpdate({ targetUserId: v === 'none' ? null : v })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Ninguém</SelectItem>
+              {members.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.name ?? m.email}
                 </SelectItem>
               ))}
             </SelectContent>

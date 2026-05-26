@@ -227,7 +227,7 @@ export async function markFailed(params: MarkFailedParams): Promise<void> {
 
   const flow = await prisma.welcomeFlow.findUnique({
     where: { inboxId: conv.inboxId },
-    select: { fallbackLabelId: true },
+    select: { fallbackLabelId: true, fallbackUserId: true },
   });
 
   if (flow?.fallbackLabelId) {
@@ -236,6 +236,7 @@ export async function markFailed(params: MarkFailedParams): Promise<void> {
       conversationId,
       labelId: flow.fallbackLabelId,
       source: 'welcome_flow',
+      assignAgentId: flow.fallbackUserId,
     });
   }
 

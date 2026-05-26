@@ -29,6 +29,7 @@ beforeAll(async () => {
   await prisma.label.deleteMany();
   await prisma.inbox.deleteMany();
   await prisma.membership.deleteMany();
+  await prisma.user.deleteMany({ where: { email: { endsWith: '-fe@test.com' } } });
   await prisma.workspace.deleteMany();
 
   const ws = await prisma.workspace.create({
@@ -190,5 +191,43 @@ describe('markFailed', () => {
 
     // Restore
     await prisma.welcomeFlow.update({ where: { id: flowId }, data: { fallbackLabelId: null } });
+  });
+
+  it('atribui conversa ao fallbackUserId se configurado', async () => {
+    const user = await prisma.user.create({
+      data: { email: 'ariel-fallback-fe@test.com', name: 'Ariel Fallback FE' },
+    });
+    await prisma.membership.create({
+      data: { userId: user.id, workspaceId, role: 'AGENT' },
+    });
+
+    await prisma.welcomeFlow.update({
+      where: { id: flowId },
+      data: { fallbackLabelId: labelId, fallbackUserId: user.id },
+    });
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { isAwaitingWelcomeChoice: true, welcomeAttempts: 2 },
+    });
+
+    await markFailed({ workspaceId, conversationId });
+
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedAgentId: true },
+    });
+    expect(conv?.assignedAgentId).toBe(user.id);
+
+    // Restore + cleanup pra próximos tests
+    await prisma.welcomeFlow.update({
+      where: { id: flowId },
+      data: { fallbackLabelId: null, fallbackUserId: null },
+    });
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { assignedAgentId: null },
+    });
+    await prisma.membership.deleteMany({ where: { userId: user.id } });
+    await prisma.user.delete({ where: { id: user.id } });
   });
 });
