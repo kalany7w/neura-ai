@@ -179,3 +179,203 @@ welcomeFlowsRouter.delete(
     return c.json({ ok: true });
   },
 );
+
+const optionUpsertSchema = z.object({
+  position: z.number().int().min(1).max(10),
+  label: z.string().min(1).max(60),
+  description: z.string().max(120).nullable().optional(),
+  matchKeywords: z.array(z.string().min(1).max(40)).max(10).default([]),
+  targetLabelId: z.string().min(1),
+  targetFunnelId: z.string().nullable().optional(),
+  targetStageId: z.string().nullable().optional(),
+});
+
+async function assertFlowInWorkspace(
+  flowId: string,
+  workspaceId: string,
+): Promise<{ id: string } | null> {
+  return prisma.welcomeFlow.findFirst({
+    where: { id: flowId, workspaceId },
+    select: { id: true },
+  });
+}
+
+/**
+ * POST /api/welcome-flows/:flowId/options
+ */
+welcomeFlowsRouter.post(
+  '/welcome-flows/:flowId/options',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { flowId } = c.req.param();
+
+    const flow = await assertFlowInWorkspace(flowId, workspaceId);
+    if (!flow) return c.json({ error: 'flow_not_found' }, 404);
+
+    const body = await c.req.json().catch(() => null);
+    const parsed = optionUpsertSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    try {
+      const option = await prisma.welcomeOption.create({
+        data: { flowId, ...parsed.data, description: parsed.data.description ?? null },
+      });
+
+      await audit({
+        workspaceId,
+        actorId: c.get('userId'),
+        action: 'welcome_flow.option_created',
+        resource: `WelcomeOption:${option.id}`,
+        metadata: { flowId },
+      });
+
+      return c.json({ option }, 201);
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'P2002') return c.json({ error: 'position_taken' }, 409);
+      throw err;
+    }
+  },
+);
+
+/**
+ * PUT /api/welcome-flows/:flowId/options/:optionId
+ */
+welcomeFlowsRouter.put(
+  '/welcome-flows/:flowId/options/:optionId',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { flowId, optionId } = c.req.param();
+
+    const flow = await assertFlowInWorkspace(flowId, workspaceId);
+    if (!flow) return c.json({ error: 'flow_not_found' }, 404);
+
+    const body = await c.req.json().catch(() => null);
+    const parsed = optionUpsertSchema.partial().safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const existing = await prisma.welcomeOption.findFirst({
+      where: { id: optionId, flowId },
+      select: { id: true },
+    });
+    if (!existing) return c.json({ error: 'option_not_found' }, 404);
+
+    try {
+      const option = await prisma.welcomeOption.update({
+        where: { id: optionId },
+        data: parsed.data,
+      });
+
+      await audit({
+        workspaceId,
+        actorId: c.get('userId'),
+        action: 'welcome_flow.option_updated',
+        resource: `WelcomeOption:${optionId}`,
+        metadata: { flowId, changes: parsed.data },
+      });
+
+      return c.json({ option });
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'P2002') return c.json({ error: 'position_taken' }, 409);
+      throw err;
+    }
+  },
+);
+
+/**
+ * DELETE /api/welcome-flows/:flowId/options/:optionId
+ */
+welcomeFlowsRouter.delete(
+  '/welcome-flows/:flowId/options/:optionId',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { flowId, optionId } = c.req.param();
+
+    const flow = await assertFlowInWorkspace(flowId, workspaceId);
+    if (!flow) return c.json({ error: 'flow_not_found' }, 404);
+
+    const existing = await prisma.welcomeOption.findFirst({
+      where: { id: optionId, flowId },
+      select: { id: true },
+    });
+    if (!existing) return c.json({ error: 'option_not_found' }, 404);
+
+    await prisma.welcomeOption.delete({ where: { id: optionId } });
+
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'welcome_flow.option_deleted',
+      resource: `WelcomeOption:${optionId}`,
+      metadata: { flowId },
+    });
+
+    return c.json({ ok: true });
+  },
+);
+
+/**
+ * POST /api/welcome-flows/:flowId/options/reorder
+ * Body: { orderedIds: string[] }
+ */
+welcomeFlowsRouter.post(
+  '/welcome-flows/:flowId/options/reorder',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { flowId } = c.req.param();
+
+    const flow = await assertFlowInWorkspace(flowId, workspaceId);
+    if (!flow) return c.json({ error: 'flow_not_found' }, 404);
+
+    const body = await c.req.json().catch(() => null);
+    const schema = z.object({ orderedIds: z.array(z.string()).min(1).max(10) });
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    await prisma.$transaction(async (tx) => {
+      // 1. mover todas pra position negativa (preserva ordem original)
+      for (const id of parsed.data.orderedIds) {
+        const opt = await tx.welcomeOption.findFirst({
+          where: { id, flowId },
+          select: { id: true, position: true },
+        });
+        if (opt) {
+          await tx.welcomeOption.update({
+            where: { id },
+            data: { position: -opt.position },
+          });
+        }
+      }
+      // 2. aplicar nova ordem
+      for (let i = 0; i < parsed.data.orderedIds.length; i++) {
+        const id = parsed.data.orderedIds[i]!;
+        await tx.welcomeOption.update({
+          where: { id },
+          data: { position: i + 1 },
+        });
+      }
+    });
+
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'welcome_flow.options_reordered',
+      resource: `WelcomeFlow:${flowId}`,
+    });
+
+    return c.json({ ok: true });
+  },
+);
