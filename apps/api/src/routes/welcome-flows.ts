@@ -5,6 +5,7 @@ import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
+import { sendWelcome } from '../services/welcome-flow.js';
 import { publishEvent } from '../redis-pub.js';
 
 export const welcomeFlowsRouter = new Hono<{
@@ -377,5 +378,71 @@ welcomeFlowsRouter.post(
     });
 
     return c.json({ ok: true });
+  },
+);
+
+/**
+ * POST /api/welcome-flows/:flowId/test
+ * Envia mensagem de teste pra um número arbitrário. Cria conversa temporária
+ * + enfileira outbound INTERACTIVE via sendWelcome.
+ */
+welcomeFlowsRouter.post(
+  '/welcome-flows/:flowId/test',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { flowId } = c.req.param();
+
+    const flow = await prisma.welcomeFlow.findFirst({
+      where: { id: flowId, workspaceId },
+      include: { options: { orderBy: { position: 'asc' } } },
+    });
+    if (!flow) return c.json({ error: 'flow_not_found' }, 404);
+    if (!flow.enabled) return c.json({ error: 'flow_disabled' }, 400);
+    if (flow.options.length === 0) return c.json({ error: 'no_options' }, 400);
+
+    const body = await c.req.json().catch(() => null);
+    const schema = z.object({
+      phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'phoneNumber inválido (use E.164)'),
+    });
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    // Upsert contato de teste
+    const contact = await prisma.contact.upsert({
+      where: {
+        workspaceId_phoneNumber: { workspaceId, phoneNumber: parsed.data.phoneNumber },
+      },
+      create: {
+        workspaceId,
+        phoneNumber: parsed.data.phoneNumber,
+        name: 'Teste Welcome',
+      },
+      update: {},
+    });
+
+    // Conversa nova de teste (não afeta conversas reais)
+    const conv = await prisma.conversation.create({
+      data: {
+        workspaceId,
+        inboxId: flow.inboxId,
+        contactId: contact.id,
+        status: 'OPEN',
+      },
+    });
+
+    await sendWelcome({ workspaceId, conversationId: conv.id });
+
+    await audit({
+      workspaceId,
+      actorId: c.get('userId'),
+      action: 'welcome_flow.tested',
+      resource: `WelcomeFlow:${flowId}`,
+      metadata: { phoneNumber: parsed.data.phoneNumber, conversationId: conv.id },
+    });
+
+    return c.json({ ok: true, conversationId: conv.id });
   },
 );
