@@ -160,6 +160,12 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           />
         )}
 
+        <LabelsSection
+          applied={data.conversation.labels}
+          available={data.allLabels.filter((l) => l.scope === 'CONVERSATION' || l.scope === 'BOTH')}
+          conversationId={conversationId}
+        />
+
         {/* Sections T6-T9 a serem preenchidas */}
       </div>
     </aside>
@@ -256,6 +262,69 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
           </div>
         );
       })}
+    </section>
+  );
+}
+
+interface LabelsSectionProps {
+  applied: Array<{ id: string; name: string; color: string }>;
+  available: LeadDetail['allLabels'];
+  conversationId: string;
+}
+
+function LabelsSection({ applied, available, conversationId }: LabelsSectionProps) {
+  const qc = useQueryClient();
+  const appliedIds = new Set(applied.map((l) => l.id));
+
+  const toggleMut = useMutation({
+    mutationFn: async ({ labelId, action }: { labelId: string; action: 'add' | 'remove' }) => {
+      const path = action === 'add' ? '/api/labels/apply' : '/api/labels/unapply';
+      return api(path, {
+        method: 'POST',
+        body: JSON.stringify({
+          labelId,
+          targetType: 'CONVERSATION',
+          targetId: conversationId,
+        }),
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Etiquetas
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {available.map((l) => {
+          const isApplied = appliedIds.has(l.id);
+          return (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() =>
+                toggleMut.mutate({ labelId: l.id, action: isApplied ? 'remove' : 'add' })
+              }
+              disabled={toggleMut.isPending}
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs transition-colors ${
+                isApplied
+                  ? 'border border-transparent text-white'
+                  : 'border border-dashed text-muted-foreground hover:border-foreground hover:text-foreground'
+              }`}
+              style={isApplied ? { backgroundColor: l.color } : undefined}
+            >
+              {l.name}
+            </button>
+          );
+        })}
+        {available.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            Nenhuma etiqueta. Crie em Configurações → Etiquetas.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
