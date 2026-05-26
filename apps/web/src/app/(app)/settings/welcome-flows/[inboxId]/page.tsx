@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { WelcomeFlowOptionsEditor } from '@/components/settings/welcome-flow-options-editor';
 
 interface WelcomeOption {
   id: string;
@@ -317,7 +318,16 @@ export default function WelcomeFlowEditorPage() {
         </div>
       </form>
 
-      {/* Options editor + test dialog vão aqui — tarefas 10 e 11 */}
+      {hasFlow && labelsData && funnelsData && (
+        <WelcomeFlowOptionsEditor
+          flowId={data.flow.id}
+          options={data.flow.options}
+          labels={labelsData.labels}
+          funnels={funnelsData.funnels}
+        />
+      )}
+
+      {/* Test dialog vai aqui — tarefa 11 */}
     </div>
   );
 }
