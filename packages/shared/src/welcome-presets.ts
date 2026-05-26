@@ -17,6 +17,7 @@ export interface WelcomePresetOption {
   targetLabelName: string;
   targetFunnelName?: string;
   targetStageName?: string;
+  targetUserName?: string;
 }
 
 export interface WelcomePreset {
@@ -26,6 +27,7 @@ export interface WelcomePreset {
   prompt: string;
   fallbackLabelName?: string;
   fallbackFunnelName?: string;
+  fallbackUserName?: string;
   options: WelcomePresetOption[];
 }
 
@@ -178,6 +180,56 @@ export const WELCOME_PRESETS: WelcomePreset[] = [
         description: 'Outro tipo de projeto',
         matchKeywords: [],
         targetLabelName: 'Geral',
+      },
+    ],
+  },
+  {
+    id: 'drones-agro',
+    name: 'Drones agrícolas',
+    description: 'Venda + manutenção de drones para pulverização, siembra e monitoreo',
+    prompt: 'Olá {{contact.name}}! Bem-vindo. Como podemos te ajudar?',
+    fallbackLabelName: 'Lead',
+    fallbackUserName: 'Ariel',
+    options: [
+      {
+        position: 1,
+        label: 'Comprar drone',
+        description: 'Quero adquirir um equipamento',
+        matchKeywords: ['comprar', 'orçamento', 'preço', 'cotação'],
+        targetLabelName: 'Vendas',
+        targetFunnelName: 'Vendas',
+        targetStageName: 'Novo lead',
+        targetUserName: 'Ariel',
+      },
+      {
+        position: 2,
+        label: 'Conhecer / saber mais',
+        description: 'Quero entender como funciona',
+        matchKeywords: ['informação', 'saber', 'conhecer', 'detalhes'],
+        targetLabelName: 'Lead',
+        targetFunnelName: 'Lead',
+        targetStageName: 'Triagem',
+        targetUserName: 'Ariel',
+      },
+      {
+        position: 3,
+        label: 'Manutenção preventiva',
+        description: 'Revisão do meu equipamento',
+        matchKeywords: ['manutenção', 'revisão', 'check'],
+        targetLabelName: 'Manutenção',
+        targetFunnelName: 'Manutenção',
+        targetStageName: 'Solicitação',
+        targetUserName: 'Marcos',
+      },
+      {
+        position: 4,
+        label: 'Reparação / falha',
+        description: 'Meu drone parou de funcionar',
+        matchKeywords: ['quebrou', 'falha', 'reparo', 'conserto', 'problema'],
+        targetLabelName: 'Reparação',
+        targetFunnelName: 'Reparação',
+        targetStageName: 'Diagnóstico',
+        targetUserName: 'Diego',
       },
     ],
   },

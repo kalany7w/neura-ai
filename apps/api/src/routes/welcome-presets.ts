@@ -113,6 +113,22 @@ welcomePresetsRouter.post(
       }
     }
 
+    // Resolve targetUserName por nome — busca via Membership + User.name
+    const userNamesNeeded = new Set<string>();
+    for (const opt of preset.options) {
+      if (opt.targetUserName) userNamesNeeded.add(opt.targetUserName);
+    }
+    if (preset.fallbackUserName) userNamesNeeded.add(preset.fallbackUserName);
+
+    const memberships = await prisma.membership.findMany({
+      where: { workspaceId },
+      include: { user: { select: { id: true, name: true } } },
+    });
+    const userByName = new Map<string, string>();
+    for (const m of memberships) {
+      if (m.user.name) userByName.set(m.user.name.toLowerCase(), m.user.id);
+    }
+
     // Cria o flow + options
     const flow = await prisma.welcomeFlow.create({
       data: {
@@ -124,6 +140,9 @@ welcomePresetsRouter.post(
         fallbackTimeoutMinutes: 2,
         fallbackLabelId: preset.fallbackLabelName
           ? labelByName.get(preset.fallbackLabelName.toLowerCase())?.id ?? null
+          : null,
+        fallbackUserId: preset.fallbackUserName
+          ? userByName.get(preset.fallbackUserName.toLowerCase()) ?? null
           : null,
         options: {
           create: preset.options.map((opt) => {
@@ -151,6 +170,9 @@ welcomePresetsRouter.post(
               targetLabelId: label.id,
               targetFunnelId: funnelId ?? null,
               targetStageId: stageId ?? null,
+              targetUserId: opt.targetUserName
+                ? userByName.get(opt.targetUserName.toLowerCase()) ?? null
+                : null,
             };
           }),
         },

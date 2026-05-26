@@ -172,6 +172,7 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
         conversationId,
         labelId: fullOpt.targetLabelId,
         source: 'welcome_flow',
+        assignAgentId: fullOpt.targetUserId,
       });
     }
     await markCompleted({

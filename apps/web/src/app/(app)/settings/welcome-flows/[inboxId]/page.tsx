@@ -34,6 +34,7 @@ interface WelcomeOption {
   targetLabelId: string;
   targetFunnelId: string | null;
   targetStageId: string | null;
+  targetUserId: string | null;
 }
 
 interface FlowResponse {
@@ -43,6 +44,7 @@ interface FlowResponse {
     fallbackLabelId: string | null;
     fallbackFunnelId: string | null;
     fallbackStageId: string | null;
+    fallbackUserId: string | null;
     fallbackTimeoutMinutes: number;
     maxAttempts: number;
     enabled: boolean;
@@ -61,6 +63,25 @@ interface FunnelOpt {
   name: string;
   stages: { id: string; name: string }[];
 }
+interface MemberOpt {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+interface WorkspaceMeResponse {
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    members: Array<{
+      id: string;
+      userId: string;
+      role: string;
+      user: { id: string; name: string | null; email: string; image: string | null };
+    }>;
+  };
+}
 
 const flowSchema = z.object({
   prompt: z.string().min(1).max(2_000),
@@ -68,6 +89,7 @@ const flowSchema = z.object({
   fallbackLabelId: z.string().nullable(),
   fallbackFunnelId: z.string().nullable(),
   fallbackStageId: z.string().nullable(),
+  fallbackUserId: z.string().nullable(),
   fallbackTimeoutMinutes: z.number().int().min(0).max(60),
   maxAttempts: z.number().int().min(1).max(10),
 });
@@ -104,6 +126,17 @@ export default function WelcomeFlowEditorPage() {
     queryFn: () => api('/api/kanban/funnels?includeStages=true'),
   });
 
+  const { data: workspaceData } = useQuery<WorkspaceMeResponse>({
+    queryKey: ['workspace-me'],
+    queryFn: () => api('/api/workspaces/me'),
+  });
+
+  const members: MemberOpt[] = (workspaceData?.workspace.members ?? []).map((m) => ({
+    id: m.user.id,
+    name: m.user.name,
+    email: m.user.email,
+  }));
+
   const hasFlow = !!data && 'flow' in data;
   const inbox = data?.inbox;
 
@@ -121,6 +154,7 @@ export default function WelcomeFlowEditorPage() {
       fallbackLabelId: null,
       fallbackFunnelId: null,
       fallbackStageId: null,
+      fallbackUserId: null,
       fallbackTimeoutMinutes: 2,
       maxAttempts: 2,
     },
@@ -131,6 +165,7 @@ export default function WelcomeFlowEditorPage() {
           fallbackLabelId: data.flow.fallbackLabelId,
           fallbackFunnelId: data.flow.fallbackFunnelId,
           fallbackStageId: data.flow.fallbackStageId,
+          fallbackUserId: data.flow.fallbackUserId,
           fallbackTimeoutMinutes: data.flow.fallbackTimeoutMinutes,
           maxAttempts: data.flow.maxAttempts,
         }
@@ -309,6 +344,29 @@ export default function WelcomeFlowEditorPage() {
               </Select>
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label>Atribuir fallback a</Label>
+            <Select
+              value={watch('fallbackUserId') ?? 'none'}
+              onValueChange={(v) => setValue('fallbackUserId', v === 'none' ? null : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Ninguém" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Ninguém</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.name ?? m.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Se nenhuma opção matchear após N attempts, atribui a este usuário.
+            </p>
+          </div>
         </div>
 
         {watch('enabled') && hasFlow && data.flow.options.length === 0 && (
@@ -339,6 +397,7 @@ export default function WelcomeFlowEditorPage() {
           options={data.flow.options}
           labels={labelsData.labels}
           funnels={funnelsData.funnels}
+          members={members}
         />
       )}
     </div>

@@ -11,6 +11,7 @@ interface ApplyTagParams {
   labelId: string;
   source: RoutingSource;
   actorId?: string | null;
+  assignAgentId?: string | null;
 }
 
 /**
@@ -21,7 +22,7 @@ interface ApplyTagParams {
  * Source identifica quem disparou — usado em audit log + WS payload.
  */
 export async function applyTagWithRouting(params: ApplyTagParams): Promise<void> {
-  const { workspaceId, conversationId, labelId, source, actorId = null } = params;
+  const { workspaceId, conversationId, labelId, source, actorId = null, assignAgentId } = params;
 
   // 1. Validar que label pertence ao workspace
   const label = await prisma.label.findFirst({
@@ -46,6 +47,30 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
     labelName: label.name,
     source,
   });
+
+  // Atribuir agente se especificado + validar membership
+  if (assignAgentId) {
+    const member = await prisma.membership.findFirst({
+      where: { userId: assignAgentId, workspaceId },
+      select: { id: true },
+    });
+    if (member) {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { assignedAgentId: assignAgentId },
+      });
+      await publishEvent(workspaceId, 'conversations', 'conversation.assigned', {
+        conversationId,
+        assignedAgentId: assignAgentId,
+        reason: source,
+      });
+    } else {
+      logger.warn(
+        { workspaceId, conversationId, assignAgentId },
+        'applyTagWithRouting: assignAgentId not member of workspace, skipping assignment',
+      );
+    }
+  }
 
   // 3. Se label rotear, criar card (idempotente: skip se já existe card ativo)
   if (label.routesToFunnelId && label.routesToStageId) {
