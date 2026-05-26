@@ -43,6 +43,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { format, isToday, isYesterday } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { renderTemplate } from '@neura/shared/template-render';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
@@ -262,6 +264,12 @@ function applyTemplate(body: string, contact: ConversationDetail['contact']): st
   return renderTemplate(body, {
     contact: { name: contact.name, phoneNumber: contact.phoneNumber },
   });
+}
+
+function dayLabel(d: Date): string {
+  if (isToday(d)) return 'Hoje';
+  if (isYesterday(d)) return 'Ontem';
+  return format(d, "EEEE, dd 'de' MMMM", { locale: ptBR });
 }
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
@@ -1505,9 +1513,24 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-4 space-y-3">
-        {timeline.map((item) =>
-          item.kind === 'note' ? (
-            <div key={`note-${item.id}`} className="flex justify-center">
+        {(() => {
+          let lastDay: string | null = null;
+          return timeline.map((item) => {
+            const itemDate = new Date(item.createdAt);
+            const dayKey = format(itemDate, 'yyyy-MM-dd');
+            const showSeparator = dayKey !== lastDay;
+            lastDay = dayKey;
+            return (
+              <div key={item.kind === 'note' ? `note-${item.id}` : item.id}>
+                {showSeparator && (
+                  <div className="flex items-center justify-center py-3">
+                    <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      {dayLabel(itemDate)}
+                    </span>
+                  </div>
+                )}
+                {item.kind === 'note' ? (
+            <div className="flex justify-center">
               <div className="group relative max-w-[80%] rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100 dark:border-amber-700">
                 <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider opacity-70">
                   <StickyNote className="h-3 w-3" />
@@ -1532,7 +1555,6 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             </div>
           ) : (
             <div
-              key={item.id}
               className={`group flex ${item.direction === 'OUTBOUND' ? 'justify-end' : 'justify-start'} ${
                 selectionMode ? 'cursor-pointer' : ''
               } ${
@@ -1898,8 +1920,11 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 )}
               </div>
             </div>
-          ),
-        )}
+                )}
+              </div>
+            );
+          });
+        })()}
       </div>
 
       <div className="border-t pt-3 space-y-2">
