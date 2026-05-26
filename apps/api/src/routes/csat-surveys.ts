@@ -8,7 +8,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { Prisma } from '@neura/database';
+import type { Prisma } from '@neura/database';
 import { prisma } from '../db.js';
 import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
