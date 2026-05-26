@@ -85,7 +85,7 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
         source,
       });
 
-      audit({
+      void audit({
         workspaceId,
         actorId,
         action: AUDIT_ACTIONS.CARD_AUTO_ROUTED,
