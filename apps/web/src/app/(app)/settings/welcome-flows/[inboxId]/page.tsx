@@ -311,6 +311,13 @@ export default function WelcomeFlowEditorPage() {
           </div>
         </div>
 
+        {watch('enabled') && hasFlow && data.flow.options.length === 0 && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+            <strong>Atenção:</strong> O fluxo está marcado como ativo mas não tem opções configuradas.
+            Adicione pelo menos uma opção abaixo antes de salvar, ou desative o toggle.
+          </div>
+        )}
+
         <div className="flex justify-end gap-2">
           {hasFlow && (
             <WelcomeFlowTestDialog
