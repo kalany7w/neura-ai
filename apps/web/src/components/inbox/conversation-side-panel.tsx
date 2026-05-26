@@ -168,9 +168,102 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
 
         <ContactInfoSection contact={data.contact} conversationId={conversationId} />
 
-        {/* Sections T6-T9 a serem preenchidas */}
+        <AiSummarySection conversation={data.conversation} conversationId={conversationId} />
+        <ActionsSection conversation={data.conversation} conversationId={conversationId} />
       </div>
     </aside>
+  );
+}
+
+function AiSummarySection({
+  conversation,
+  conversationId,
+}: {
+  conversation: LeadDetail['conversation'];
+  conversationId: string;
+}) {
+  const qc = useQueryClient();
+  const summarizeMut = useMutation({
+    mutationFn: () =>
+      api(`/api/conversations/${conversationId}/ai/summarize`, { method: 'POST' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+      toast.success('Resumo gerado');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro IA'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Resumo IA
+        </p>
+        <button
+          type="button"
+          onClick={() => summarizeMut.mutate()}
+          disabled={summarizeMut.isPending}
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+        >
+          {summarizeMut.isPending ? 'Gerando…' : conversation.aiSummary ? 'Atualizar' : 'Gerar'}
+        </button>
+      </div>
+      {conversation.aiSummary ? (
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{conversation.aiSummary}</p>
+      ) : (
+        <p className="text-xs text-muted-foreground italic">Nenhum resumo ainda.</p>
+      )}
+    </section>
+  );
+}
+
+function ActionsSection({
+  conversation,
+  conversationId,
+}: {
+  conversation: LeadDetail['conversation'];
+  conversationId: string;
+}) {
+  const qc = useQueryClient();
+  const updateMut = useMutation({
+    mutationFn: (status: 'OPEN' | 'RESOLVED' | 'PENDING') =>
+      api(`/api/conversations/${conversationId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
+      toast.success('Status atualizado');
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+  });
+
+  return (
+    <section className="rounded-md border bg-card p-3 space-y-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Ações
+      </p>
+      {conversation.status !== 'RESOLVED' && (
+        <button
+          type="button"
+          onClick={() => updateMut.mutate('RESOLVED')}
+          disabled={updateMut.isPending}
+          className="w-full rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          Marcar como resolvida
+        </button>
+      )}
+      {conversation.status === 'RESOLVED' && (
+        <button
+          type="button"
+          onClick={() => updateMut.mutate('OPEN')}
+          disabled={updateMut.isPending}
+          className="w-full rounded border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
+        >
+          Reabrir
+        </button>
+      )}
+    </section>
   );
 }
 
