@@ -198,6 +198,63 @@ export async function markCompleted(params: MarkCompletedParams): Promise<void> 
   });
 }
 
+interface SendHandoffParams {
+  workspaceId: string;
+  conversationId: string;
+  optionId: string;
+}
+
+/**
+ * 2º mensagem do agente IA: confirma pro cliente que ele será encaminhado pro
+ * responsável da área escolhida. Texto dinâmico (área = label da opção + nome do
+ * targetUser, se houver). Enviado depois do routing/markCompleted.
+ */
+export async function sendHandoffMessage(
+  params: SendHandoffParams,
+  deps: SendWelcomeDeps = {},
+): Promise<void> {
+  const { workspaceId, conversationId, optionId } = params;
+  const enqueue = deps.enqueueOutbound ?? dispatchOutbound;
+
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { inboxId: true, contact: { select: { phoneNumber: true } } },
+  });
+  if (!conv?.contact?.phoneNumber) return;
+
+  const option = await prisma.welcomeOption.findUnique({
+    where: { id: optionId },
+    select: { label: true, targetUser: { select: { name: true } } },
+  });
+  if (!option) return;
+
+  const agentName = option.targetUser?.name?.trim();
+  const text = agentName
+    ? `Perfecto. Te derivamos con ${agentName}, del área de ${option.label}. En breve se pondrá en contacto contigo.`
+    : `Perfecto. Te derivamos al área de ${option.label}. En breve te atenderemos.`;
+
+  const msg = await prisma.message.create({
+    data: {
+      conversationId,
+      direction: 'OUTBOUND',
+      type: 'TEXT',
+      senderType: 'AI_AGENT',
+      content: text,
+      status: 'PENDING',
+    },
+  });
+
+  await enqueue({
+    inboxId: conv.inboxId,
+    workspaceId,
+    conversationId,
+    messageId: msg.id,
+    to: conv.contact.phoneNumber,
+    type: 'TEXT',
+    text,
+  });
+}
+
 interface MarkFailedParams {
   workspaceId: string;
   conversationId: string;

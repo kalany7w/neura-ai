@@ -23,6 +23,7 @@ import {
   markCompleted,
   markFailed,
   retryAsText,
+  sendHandoffMessage,
 } from './services/welcome-flow.js';
 import { parseReply, type WelcomeOptionLite } from './services/welcome-parser.js';
 import { applyTagWithRouting } from './services/auto-routing.js';
@@ -181,6 +182,11 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
       contactId: conv.contactId,
       optionId: match.id,
     });
+    // 2º mensagem: confirma a derivação pro responsável. Não falha o job se der erro
+    // (markCompleted já limpou awaiting → retry cairia no early-return, sem duplicar).
+    await sendHandoffMessage({ workspaceId, conversationId, optionId: match.id }).catch((err) =>
+      logger.warn({ err, conversationId }, 'sendHandoffMessage falhou (ignorado)'),
+    );
     return;
   }
 
