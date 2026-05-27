@@ -12,6 +12,19 @@ interface SendWelcomeDeps {
   enqueueOutbound?: EnqueueOutboundFn;
 }
 
+/**
+ * Capitaliza a 1ª letra de cada palavra do nome. O pushName do WhatsApp costuma vir
+ * minúsculo ("marcos") ou tudo maiúsculo ("MARCOS") — normaliza pra "Marcos",
+ * "maylen jimenez" → "Maylen Jimenez". Usado só na saudação do welcome.
+ */
+function capitalizeName(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(' ');
+}
+
 interface ShouldTriggerParams {
   workspaceId: string;
   conversationId: string;
@@ -98,7 +111,7 @@ export async function sendWelcome(
   // Substituir placeholders no prompt
   const prompt = flow.prompt.replace(
     /\{\{contact\.name\}\}/g,
-    conv.contact.name || 'cliente',
+    conv.contact.name ? capitalizeName(conv.contact.name) : 'cliente',
   );
 
   // Opções numeradas embutidas no corpo. WhatsApp via Baileys NÃO renderiza listMessage/
@@ -343,7 +356,10 @@ export async function retryAsText(
   if (!flow) return;
 
   const lines = [
-    flow.prompt.replace(/\{\{contact\.name\}\}/g, conv.contact.name || 'cliente'),
+    flow.prompt.replace(
+      /\{\{contact\.name\}\}/g,
+      conv.contact.name ? capitalizeName(conv.contact.name) : 'cliente',
+    ),
     '',
     ...flow.options.map((o) => `${o.position}. ${o.label}`),
     '',
