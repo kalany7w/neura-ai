@@ -263,8 +263,13 @@ async function persistInboundMessage(
       }
     }
   }
-  // Extrai número (formato 5511999999999@s.whatsapp.net)
-  const phoneRaw = remoteJid.split('@')[0];
+  // Extrai número. WhatsApp pode mascarar o contato com um LID (remoteJid = <lid>@lid,
+  // privacidade). Nesse caso o número REAL vem em msg.key.senderPn. Usar o LID faria o
+  // outbound reconstruir <lid>@s.whatsapp.net — que o WhatsApp ACEITA mas NÃO entrega
+  // (fica em 1 tick). Baileys 6.7.21 só decodifica senderPn (sem store de mapeo), então
+  // gravamos o PN real e respondemos por <pn>@s.whatsapp.net (caminho padrão, suportado).
+  const idJid = remoteJid.endsWith('@lid') && msg.key.senderPn ? msg.key.senderPn : remoteJid;
+  const phoneRaw = idJid.split('@')[0];
   if (!phoneRaw) return;
   const phoneNumber = `+${phoneRaw}`;
 
