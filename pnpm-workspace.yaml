@@ -15,3 +15,10 @@ allowBuilds:
 
 # Baileys traz libsignal via git repo (subdep) — pnpm 11 bloqueia por default
 blockExoticSubdeps: false
+
+# Runtime (Docker): as imagens api/waworker têm o workspace PODADO (só os apps que
+# precisam). O default do pnpm 11 (verifyDepsBeforeRun=install) detecta o workspace
+# incompleto como "deps desatualizadas" e dispara `pnpm install` ANTES de rodar
+# qualquer script (migrate:deploy) — que falha em runtime → CMD sai 1 → crash-loop.
+# `false` desliga esse check (não há o que instalar em runtime; deps já vêm do builder).
+verifyDepsBeforeRun: false
