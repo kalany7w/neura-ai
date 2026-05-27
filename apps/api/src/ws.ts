@@ -7,6 +7,7 @@ import { prisma } from './db.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { redis } from './redis.js';
+import { detectSchedule } from './services/ai-detect-schedule.js';
 
 /**
  * Cada cliente WS está inscrito em 3 canais do workspace ativo:
@@ -28,7 +29,40 @@ export function setupWebSocket(app: Hono) {
     else logger.info('WS: subscribed to workspace:* channels');
   });
 
+  // Hooks de inbound rodam aqui — é o ÚNICO ponto que vê message.new de TODOS os canais
+  // (api E waworker publicam no Redis; o publishEvent do api só roda hooks pros eventos
+  // que ele mesmo emite, então WhatsApp do waworker era ignorado). Fire-and-forget,
+  // antes do relay e independente de ter cliente conectado.
+  function runMessageHooks(channel: string, raw: string) {
+    try {
+      const workspaceId = channel.split(':')[1];
+      if (!workspaceId) return;
+      const parsed = JSON.parse(raw) as {
+        event?: string;
+        payload?: {
+          conversationId?: string;
+          message?: { direction?: string; content?: string | null };
+        };
+      };
+      if (parsed.event !== 'message.new') return;
+      const msg = parsed.payload?.message;
+      const conversationId = parsed.payload?.conversationId;
+      if (
+        msg?.direction === 'INBOUND' &&
+        typeof msg.content === 'string' &&
+        msg.content.trim() &&
+        conversationId
+      ) {
+        void detectSchedule({ workspaceId, conversationId, text: msg.content });
+      }
+    } catch {
+      // ignore malformed
+    }
+  }
+
   subscriber.on('pmessage', (_pattern, channel, message) => {
+    if (channel.endsWith(':messages')) runMessageHooks(channel, message);
+
     const clients = channelClients.get(channel);
     if (!clients || clients.size === 0) return;
     for (const ws of clients) {
@@ -87,6 +121,7 @@ export function setupWebSocket(app: Hono) {
             `workspace:${workspaceId}:contacts`,
             `workspace:${workspaceId}:notifications`,
             `workspace:${workspaceId}:presence`,
+            `workspace:${workspaceId}:calendar`,
           ]
         : [];
 
