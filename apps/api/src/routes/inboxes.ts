@@ -201,28 +201,6 @@ inboxesRouter.post(
   },
 );
 
-// POST /api/inboxes/:id/connect — pede pra waworker iniciar sessão (publish em Redis pra worker pegar)
-inboxesRouter.post(
-  '/:id/connect',
-  requireAuth,
-  requireWorkspace,
-  requirePermission('inbox.connect'),
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const id = c.req.param('id');
-    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
-    if (!inbox) return c.json({ error: 'not_found' }, 404);
-
-    // Publica comando pro worker iniciar sessão
-    const { redis } = await import('../redis.js');
-    await redis.publish(
-      'worker:commands',
-      JSON.stringify({ cmd: 'session.start', inboxId: id }),
-    );
-    return c.json({ ok: true, status: 'requested' });
-  },
-);
-
 // POST /api/inboxes/:id/disconnect — para sessão
 inboxesRouter.post(
   '/:id/disconnect',
@@ -729,5 +707,30 @@ inboxesRouter.post(
       resource: `Inbox:${id}`,
     });
     return c.json({ ok: true });
+  },
+);
+
+// POST /api/inboxes/:id/connect — pede pra waworker iniciar sessão (publish em Redis).
+// IMPORTANTE: registrada DEPOIS das rotas estáticas /{canal}/connect (telegram/email/
+// webchat). No Hono a 1ª rota registrada que casa vence; '/:id/connect' casaria com
+// '/email/connect' (id="email") e shadowava as estáticas → 404 not_found. Manter por último.
+inboxesRouter.post(
+  '/:id/connect',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.connect'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const inbox = await prisma.inbox.findFirst({ where: { id, workspaceId } });
+    if (!inbox) return c.json({ error: 'not_found' }, 404);
+
+    // Publica comando pro worker iniciar sessão
+    const { redis } = await import('../redis.js');
+    await redis.publish(
+      'worker:commands',
+      JSON.stringify({ cmd: 'session.start', inboxId: id }),
+    );
+    return c.json({ ok: true, status: 'requested' });
   },
 );

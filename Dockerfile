@@ -39,15 +39,8 @@ COPY --from=builder /app/packages/shared ./packages/shared
 COPY package.json pnpm-workspace.yaml ./
 EXPOSE 7301
 WORKDIR /app/apps/api
-# Recovery shim (one-time): o deploy anterior falhou ao aplicar
-# 20260526170000_add_cards_active_unique (UNIQUE index sobre dados com duplicatas),
-# deixando-a FAILED no _prisma_migrations → P3009 bloqueia qualquer migrate deploy.
-# `migrate resolve --applied` marca ela como concluída (pula o SQL quebrado); a
-# migration seguinte (20260527120000) recria o índice como NÃO-único. `|| true`
-# torna o shim no-op onde ela já está aplicada/inexistente — seguro de manter.
-# REMOVÍVEL após o primeiro deploy bem-sucedido.
-# Depois aplica migrations então sobe servidor.
-CMD ["sh", "-c", "cd /app && (pnpm --filter @neura/database exec prisma migrate resolve --applied 20260526170000_add_cards_active_unique || true) && pnpm --filter @neura/database migrate:deploy && cd /app/apps/api && node dist/index.js"]
+# Aplica migrations então sobe servidor
+CMD ["sh", "-c", "cd /app && pnpm --filter @neura/database migrate:deploy && cd /app/apps/api && node dist/index.js"]
 
 # ========== runner: waworker ==========
 FROM base AS waworker-runner
@@ -63,9 +56,7 @@ WORKDIR /app/apps/waworker
 # migrate:deploy é idempotente + protegido por advisory lock no Postgres,
 # então rodar em paralelo com o api é seguro. Evita race se o waworker subir
 # antes do api aplicar uma migration de schema que ele já depende (ex: wa_auth_keys).
-# Mesmo recovery shim do api-runner (resolve a migration FAILED antes do deploy) —
-# necessário aqui também caso o waworker vença o boot race com o api.
-CMD ["sh", "-c", "cd /app && (pnpm --filter @neura/database exec prisma migrate resolve --applied 20260526170000_add_cards_active_unique || true) && pnpm --filter @neura/database migrate:deploy && cd /app/apps/waworker && node dist/index.js"]
+CMD ["sh", "-c", "cd /app && pnpm --filter @neura/database migrate:deploy && cd /app/apps/waworker && node dist/index.js"]
 
 # ========== runner: web (Next.js standalone) ==========
 FROM base AS web-runner
