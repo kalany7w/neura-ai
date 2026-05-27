@@ -12,6 +12,15 @@ interface ApplyTagParams {
   source: RoutingSource;
   actorId?: string | null;
   assignAgentId?: string | null;
+  // Se já existe card ativo nesse funil, MOVE pro stage destino (em vez de skip).
+  // Usado pelo welcome flow: conversa entra em New Lead no envio e é movida pra
+  // coluna da opção quando o cliente responde.
+  moveIfExists?: boolean;
+  // Override explícito do funil/stage destino. Tem precedência sobre as rotas da label.
+  // O welcome flow passa o fallback do flow (New Lead) — assim não depende de a label
+  // "Lead" ter routesToFunnel/Stage configurados em Etiquetas.
+  funnelId?: string | null;
+  stageId?: string | null;
 }
 
 /**
@@ -22,7 +31,17 @@ interface ApplyTagParams {
  * Source identifica quem disparou — usado em audit log + WS payload.
  */
 export async function applyTagWithRouting(params: ApplyTagParams): Promise<void> {
-  const { workspaceId, conversationId, labelId, source, actorId = null, assignAgentId } = params;
+  const {
+    workspaceId,
+    conversationId,
+    labelId,
+    source,
+    actorId = null,
+    assignAgentId,
+    moveIfExists = false,
+    funnelId,
+    stageId,
+  } = params;
 
   // 1. Validar que label pertence ao workspace
   const label = await prisma.label.findFirst({
@@ -72,88 +91,128 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
     }
   }
 
-  // 3. Se label rotear, criar card (idempotente: skip se já existe card ativo)
-  if (label.routesToFunnelId && label.routesToStageId) {
+  // 3. Funil/stage destino: override explícito (welcome flow passa o fallback do flow)
+  //    tem precedência sobre as rotas da label. Move um card ativo já existente nesse
+  //    funil pro stage destino (quando moveIfExists), ou cria um novo. Sem moveIfExists
+  //    é idempotente (skip).
+  const routeFunnelId = funnelId ?? label.routesToFunnelId;
+  const routeStageId = stageId ?? label.routesToStageId;
+  if (routeFunnelId && routeStageId) {
     const existing = await prisma.card.findFirst({
       where: {
         conversationId,
-        funnelId: label.routesToFunnelId,
+        funnelId: routeFunnelId,
         // Apenas cards ativos contam (POSITIVE/NEGATIVE = fechado e não bloqueia novo card).
         // RISK e outcome=null continuam ativos. SQL notIn exclui nulls, daí o OR explícito.
         stage: {
           OR: [{ outcome: null }, { outcome: 'RISK' }],
         },
       },
-      select: { id: true },
+      select: { id: true, stageId: true },
     });
 
-    if (!existing) {
-      // Resolve title + position no padrão do default-funnel path (waworker events.ts):
-      // title = contact.name ?? phoneNumber, position = max(position) + 1 no stage.
-      const [conv, maxPos] = await Promise.all([
-        prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { contact: { select: { name: true, phoneNumber: true } } },
-        }),
-        prisma.card.aggregate({
-          where: { stageId: label.routesToStageId },
+    if (existing) {
+      // Card já existe nesse funil. Move pro stage destino se pedido e ainda não estiver lá.
+      if (moveIfExists && existing.stageId !== routeStageId) {
+        const maxPos = await prisma.card.aggregate({
+          where: { stageId: routeStageId },
           _max: { position: true },
-        }),
-      ]);
-      const cardTitle =
-        conv?.contact?.name ??
-        conv?.contact?.phoneNumber ??
-        `Conversa #${conversationId.slice(-6)}`;
-      const cardPosition = (maxPos._max.position ?? -1) + 1;
-
-      // Tenta criar card. Race: dois calls concurrent podem ambos passar o
-      // findFirst e tentar create — partial unique index
-      // cards_conversationId_funnelId_active_uniq bloqueia o 2º com P2002.
-      // Tratamos como no-op idempotente (algum outro thread já criou).
-      let card: { id: string } | null = null;
-      try {
-        card = await prisma.card.create({
-          data: {
-            workspaceId,
-            funnelId: label.routesToFunnelId,
-            stageId: label.routesToStageId,
-            conversationId,
-            title: cardTitle,
-            position: cardPosition,
-          },
-          select: { id: true },
         });
-      } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === 'P2002') {
-          logger.debug(
-            { workspaceId, conversationId, funnelId: label.routesToFunnelId },
-            'auto-routing: card already exists (unique constraint race), skip',
-          );
-          return;
-        }
-        throw err;
+        await prisma.card.update({
+          where: { id: existing.id },
+          data: {
+            stageId: routeStageId,
+            position: (maxPos._max.position ?? -1) + 1,
+          },
+        });
+        // Espelha a nova label no card (skipDuplicates: pode já ter)
+        await prisma.cardLabel.createMany({
+          data: [{ cardId: existing.id, labelId }],
+          skipDuplicates: true,
+        });
+        await publishEvent(workspaceId, 'cards', 'card.moved', {
+          cardId: existing.id,
+          funnelId: routeFunnelId,
+          stageId: routeStageId,
+          conversationId,
+          autoRouted: true,
+          source,
+        });
+        void audit({
+          workspaceId,
+          actorId,
+          action: AUDIT_ACTIONS.CARD_AUTO_ROUTED,
+          resource: `card:${existing.id}`,
+          metadata: { source, labelId, conversationId, funnelId: routeFunnelId, moved: true },
+        });
       }
-
-      // Espelhar label tambem no card
-      await prisma.cardLabel.create({ data: { cardId: card.id, labelId } });
-
-      await publishEvent(workspaceId, 'kanban', 'card.created', {
-        cardId: card.id,
-        funnelId: label.routesToFunnelId,
-        stageId: label.routesToStageId,
-        conversationId,
-        autoRouted: true,
-        source,
-      });
-
-      void audit({
-        workspaceId,
-        actorId,
-        action: AUDIT_ACTIONS.CARD_AUTO_ROUTED,
-        resource: `card:${card.id}`,
-        metadata: { source, labelId, conversationId, funnelId: label.routesToFunnelId },
-      });
+      return;
     }
+
+    // Não existe card ativo nesse funil — cria.
+    // Resolve title + position no padrão do default-funnel path (waworker events.ts):
+    // title = contact.name ?? phoneNumber, position = max(position) + 1 no stage.
+    const [conv, maxPos] = await Promise.all([
+      prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { contact: { select: { name: true, phoneNumber: true } } },
+      }),
+      prisma.card.aggregate({
+        where: { stageId: routeStageId },
+        _max: { position: true },
+      }),
+    ]);
+    const cardTitle =
+      conv?.contact?.name ??
+      conv?.contact?.phoneNumber ??
+      `Conversa #${conversationId.slice(-6)}`;
+    const cardPosition = (maxPos._max.position ?? -1) + 1;
+
+    // Tenta criar card. Race: dois calls concurrent podem ambos passar o findFirst e
+    // tentar create. Trata P2002 (unique violation) como no-op idempotente.
+    let card: { id: string } | null = null;
+    try {
+      card = await prisma.card.create({
+        data: {
+          workspaceId,
+          funnelId: routeFunnelId,
+          stageId: routeStageId,
+          conversationId,
+          title: cardTitle,
+          position: cardPosition,
+        },
+        select: { id: true },
+      });
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'P2002') {
+        logger.debug(
+          { workspaceId, conversationId, funnelId: routeFunnelId },
+          'auto-routing: card already exists (unique constraint race), skip',
+        );
+        return;
+      }
+      throw err;
+    }
+
+    // Espelhar label tambem no card
+    await prisma.cardLabel.create({ data: { cardId: card.id, labelId } });
+
+    await publishEvent(workspaceId, 'cards', 'card.created', {
+      cardId: card.id,
+      funnelId: routeFunnelId,
+      stageId: routeStageId,
+      conversationId,
+      autoRouted: true,
+      source,
+    });
+
+    void audit({
+      workspaceId,
+      actorId,
+      action: AUDIT_ACTIONS.CARD_AUTO_ROUTED,
+      resource: `card:${card.id}`,
+      metadata: { source, labelId, conversationId, funnelId: routeFunnelId },
+    });
   }
 }

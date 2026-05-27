@@ -11,7 +11,9 @@ let funnelId: string;
 let stageId: string;
 
 beforeAll(async () => {
-  // Cleanup
+  // Cleanup. welcomeFlow primeiro (cascata pra welcome_options) — senão sobra de
+  // outro arquivo de teste bloqueia o delete de inbox/label/funnel/stage por FK.
+  await prisma.welcomeFlow.deleteMany();
   await prisma.cardLabel.deleteMany();
   await prisma.card.deleteMany();
   await prisma.conversationLabel.deleteMany();
@@ -107,6 +109,32 @@ describe('applyTagWithRouting', () => {
 
     const cards = await prisma.card.findMany({ where: { conversationId } });
     expect(cards).toHaveLength(1);
+  });
+
+  it('moveIfExists move o card pro stage destino (mesmo funil) sem duplicar', async () => {
+    const stage2 = await prisma.stage.create({
+      data: { funnelId, name: 'Negociação', order: 1 },
+    });
+
+    // 1ª chamada: cria card no stage inicial
+    await applyTagWithRouting({ workspaceId, conversationId, labelId, source: 'welcome_flow' });
+    let cards = await prisma.card.findMany({ where: { conversationId } });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.stageId).toBe(stageId);
+
+    // 2ª chamada com override de stage + moveIfExists: move o mesmo card (não duplica)
+    await applyTagWithRouting({
+      workspaceId,
+      conversationId,
+      labelId,
+      source: 'welcome_flow',
+      funnelId,
+      stageId: stage2.id,
+      moveIfExists: true,
+    });
+    cards = await prisma.card.findMany({ where: { conversationId } });
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.stageId).toBe(stage2.id);
   });
 
   it('cria card paralelo se label rotear pra outro funil', async () => {
