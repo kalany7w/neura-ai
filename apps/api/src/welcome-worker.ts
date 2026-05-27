@@ -174,6 +174,11 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
         labelId: fullOpt.targetLabelId,
         source: 'welcome_flow',
         assignAgentId: fullOpt.targetUserId,
+        // Funil/stage explícito da opção (não depende das rotas da label) + move a card
+        // de New Lead (criada no envio do welcome) pra coluna da opção.
+        funnelId: fullOpt.targetFunnelId,
+        stageId: fullOpt.targetStageId,
+        moveIfExists: true,
       });
     }
     await markCompleted({

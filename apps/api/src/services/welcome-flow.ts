@@ -169,6 +169,25 @@ export async function sendWelcome(
     conversationId,
     messageId: msg.id,
   });
+
+  // Coloca a conversa em New Lead (funil/label fallback) já no envio do welcome — assim
+  // clientes que ainda NÃO responderam (e os que escolherem a opção tipo "lead") ficam
+  // visíveis no kanban. Quando responderem uma opção, a card é MOVIDA pra coluna certa
+  // (welcome-worker chama applyTagWithRouting com moveIfExists). Idempotente: se já
+  // existe card no funil, não duplica.
+  if (flow.fallbackLabelId) {
+    await applyTagWithRouting({
+      workspaceId,
+      conversationId,
+      labelId: flow.fallbackLabelId,
+      source: 'welcome_flow',
+      assignAgentId: flow.fallbackUserId,
+      // Usa o funil/stage explícito do fallback do flow (New Lead) — garante o landing
+      // no kanban mesmo se a label fallback não tiver routesToFunnel/Stage em Etiquetas.
+      funnelId: flow.fallbackFunnelId,
+      stageId: flow.fallbackStageId,
+    });
+  }
 }
 
 interface MarkCompletedParams {
