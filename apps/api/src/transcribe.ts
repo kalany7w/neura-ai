@@ -49,8 +49,8 @@ async function callWhisper(
   const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
   form.append('file', blob, filename);
   form.append('model', env.WHISPER_MODEL);
-  // language hint pt-BR (Whisper detecta sozinho, mas hint melhora curtos)
-  form.append('language', 'pt');
+  // Sem language hint fixo — Whisper auto-detecta o idioma. (Hint fixo 'pt' degradava
+  // áudios em espanhol e outros idiomas; auto-detect é neutro pra multi-tenant.)
   form.append('response_format', 'json');
 
   const ctrl = new AbortController();
