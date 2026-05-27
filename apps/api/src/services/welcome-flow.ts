@@ -101,14 +101,21 @@ export async function sendWelcome(
     conv.contact.name || 'cliente',
   );
 
-  // Persistir Message do bot (AI_AGENT, OUTBOUND, armazenado como TEXT no DB pra histórico visível pro agente)
+  // Opções numeradas embutidas no corpo. WhatsApp via Baileys NÃO renderiza listMessage/
+  // botões de forma confiável (Meta restringe mensagens interativas a libs oficiais) — o
+  // cliente via só o prompt, sem as opções. Mandamos como TEXTO numerado; o parser entende
+  // o número (além de keyword/IA). welcomeFallbackSent=true evita o retry reenviar o mesmo.
+  const optionsText = flow.options.map((o) => `${o.position}. ${o.label}`).join('\n');
+  const fullText = `${prompt}\n\n${optionsText}`;
+
+  // Persistir Message do bot (AI_AGENT, OUTBOUND) — content já com as opções visíveis.
   const msg = await prisma.message.create({
     data: {
       conversationId,
       direction: 'OUTBOUND',
       type: 'TEXT',
       senderType: 'AI_AGENT',
-      content: prompt,
+      content: fullText,
       status: 'PENDING',
     },
   });
@@ -120,28 +127,19 @@ export async function sendWelcome(
     data: {
       isAwaitingWelcomeChoice: true,
       welcomeSentAt: new Date(),
+      welcomeFallbackSent: true,
     },
   });
 
-  // Enfileirar job INTERACTIVE
+  // Enfileirar job TEXT (opções já no corpo)
   const job: SendMessageJob = {
     inboxId: conv.inboxId,
     workspaceId,
     conversationId,
     messageId: msg.id,
     to: conv.contact.phoneNumber,
-    type: 'INTERACTIVE',
-    text: prompt,
-    interactivePayload: {
-      title: 'Atendimento',
-      body: prompt,
-      buttonText: 'Ver opções',
-      options: flow.options.map((o) => ({
-        rowId: o.id,
-        title: o.label,
-        description: o.description ?? undefined,
-      })),
-    },
+    type: 'TEXT',
+    text: fullText,
   };
 
   await enqueue(job);

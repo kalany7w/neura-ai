@@ -137,18 +137,22 @@ describe('shouldTriggerWelcome', () => {
 });
 
 describe('sendWelcome', () => {
-  it('marca conversa como awaiting + welcomeSentAt + enfileira outbound INTERACTIVE', async () => {
+  it('marca conversa awaiting + welcomeSentAt + fallbackSent e enfileira TEXT com opções numeradas no corpo', async () => {
     const enqueueSpy = vi.fn().mockResolvedValue(undefined);
     await sendWelcome({ workspaceId, conversationId }, { enqueueOutbound: enqueueSpy });
 
     const conv = await prisma.conversation.findUnique({ where: { id: conversationId } });
     expect(conv?.isAwaitingWelcomeChoice).toBe(true);
     expect(conv?.welcomeSentAt).not.toBeNull();
+    // Welcome inicial já é texto numerado → marca fallbackSent pra não reenviar no retry
+    expect(conv?.welcomeFallbackSent).toBe(true);
 
     expect(enqueueSpy).toHaveBeenCalledOnce();
     const job = enqueueSpy.mock.calls[0]?.[0];
-    expect(job.type).toBe('INTERACTIVE');
-    expect(job.interactivePayload.options).toHaveLength(2);
+    // Baileys não renderiza listMessage/botões — mandamos TEXT com opções no corpo
+    expect(job.type).toBe('TEXT');
+    expect(job.text).toContain('1.');
+    expect(job.text).toContain('2.');
   });
 });
 
