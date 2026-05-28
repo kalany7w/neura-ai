@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -114,6 +115,7 @@ interface Card {
   value: string | null;
   currency?: string;
   assignedAgentId: string | null;
+  conversationId?: string | null;
   slaStatus: string;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
@@ -378,6 +380,7 @@ function DraggableCard({
   onToggleSelect: (id: string) => void;
   anySelected: boolean;
 }) {
+  const router = useRouter();
   const activeSnooze = card.snoozes?.[0];
   const isSnoozed = !!activeSnooze;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -413,7 +416,13 @@ function DraggableCard({
           if (isDragging) return;
           // Ignora click vindo do menu de ações
           if ((e.target as HTMLElement).closest('[data-card-menu]')) return;
-          onOpen(card.id);
+          // Card com conversa vinculada → vai pra view do chat (Kommo-style).
+          // Sem conversa (card manual) → modal de detalhes.
+          if (card.conversationId) {
+            router.push(`/inbox/${card.conversationId}`);
+          } else {
+            onOpen(card.id);
+          }
         }}
         className={isSnoozed ? 'cursor-pointer' : 'cursor-pointer active:cursor-grabbing'}
       >

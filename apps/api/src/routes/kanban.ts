@@ -291,6 +291,9 @@ const cardSchema = z.object({
   assignedAgentId: z.string().nullable().optional(),
   dueDate: z.string().datetime().optional(),
   conversationId: z.string().optional(),
+  // Atributos customizados (CARD scope) — Json com pares { [key]: valor }. Renderizado
+  // no side panel da conversa via cardAttributeDefs do lead-detail.
+  customAttrs: z.record(z.unknown()).nullable().optional(),
 });
 
 const listCardsQuery = z.object({
@@ -522,6 +525,9 @@ kanbanRouter.patch(
         currency: parsed.data.currency,
         assignedAgentId: parsed.data.assignedAgentId,
         dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
+        ...(parsed.data.customAttrs !== undefined && {
+          customAttrs: (parsed.data.customAttrs ?? undefined) as never,
+        }),
       },
     });
     await publishEvent(workspaceId, 'cards', 'card.updated', { card: updated });

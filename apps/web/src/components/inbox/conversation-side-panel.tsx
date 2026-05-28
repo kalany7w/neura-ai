@@ -39,6 +39,8 @@ export interface LeadDetail {
     id: string;
     title: string;
     value: string | null;
+    currency: string;
+    customAttrs: Record<string, unknown> | null;
     funnel: { id: string; name: string };
     stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
     products: Array<{ id: string; name: string; price: string | null; quantity: number }>;
@@ -49,6 +51,13 @@ export interface LeadDetail {
     label: string;
     type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT';
     // SELECT: stored as { values: ["A","B"] } no schema.options Json.
+    options: { values?: string[] } | null;
+  }>;
+  cardAttributeDefs: Array<{
+    id: string;
+    key: string;
+    label: string;
+    type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT';
     options: { values?: string[] } | null;
   }>;
   allLabels: Array<{ id: string; name: string; color: string; scope: string }>;
@@ -183,6 +192,15 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           <CustomAttrsSection
             defs={data.customAttributeDefs}
             values={data.contact.customAttrs ?? {}}
+            conversationId={conversationId}
+          />
+        )}
+
+        {data.card && data.cardAttributeDefs.length > 0 && (
+          <CardAttrsSection
+            defs={data.cardAttributeDefs}
+            values={(data.card.customAttrs ?? {}) as Record<string, unknown>}
+            cardId={data.card.id}
             conversationId={conversationId}
           />
         )}
@@ -517,5 +535,203 @@ function ContactInfoSection({
         Telefone: {contact.phoneNumber} (não editável)
       </p>
     </section>
+  );
+}
+
+/**
+ * Atributos customizados scope=CARD (ex: Vinculo do Caltech). Salvam em card.customAttrs
+ * via PATCH /api/kanban/cards/:id. SELECT permite adicionar nova opção inline (PATCH
+ * /api/custom-attributes/:id) — assim o agente, durante atendimento, pode criar uma
+ * disposição nova sem ir em Configurações.
+ */
+interface CardAttrsSectionProps {
+  defs: LeadDetail['cardAttributeDefs'];
+  values: Record<string, unknown>;
+  cardId: string;
+  conversationId: string;
+}
+
+function CardAttrsSection({ defs, values, cardId, conversationId }: CardAttrsSectionProps) {
+  const qc = useQueryClient();
+  const [local, setLocal] = useState<Record<string, unknown>>(values);
+
+  useEffect(() => {
+    setLocal(values);
+  }, [values]);
+
+  const saveMut = useMutation({
+    mutationFn: (next: Record<string, unknown>) =>
+      api(`/api/kanban/cards/${cardId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ customAttrs: next }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao salvar atributo do card'),
+  });
+
+  function updateField(key: string, value: unknown) {
+    const next = { ...local, [key]: value };
+    setLocal(next);
+    saveMut.mutate(next);
+  }
+
+  return (
+    <section className="space-y-2 rounded-md border bg-card p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Atributos do card
+      </p>
+      {defs.map((def) => {
+        const current = local[def.key];
+        if (def.type === 'SELECT') {
+          return (
+            <SelectAttrField
+              key={def.id}
+              def={def}
+              value={typeof current === 'string' ? current : ''}
+              onChange={(v) => updateField(def.key, v || null)}
+              onOptionsChanged={() =>
+                qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] })
+              }
+            />
+          );
+        }
+        if (def.type === 'NUMBER') {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <input
+                type="number"
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'number' ? current : ''}
+                onChange={(e) =>
+                  updateField(def.key, e.target.value ? Number(e.target.value) : null)
+                }
+              />
+            </div>
+          );
+        }
+        if (def.type === 'DATE') {
+          return (
+            <div key={def.id} className="space-y-1">
+              <label className="text-xs">{def.label}</label>
+              <input
+                type="date"
+                className="w-full rounded border bg-background px-2 py-1 text-sm"
+                value={typeof current === 'string' ? current : ''}
+                onChange={(e) => updateField(def.key, e.target.value || null)}
+              />
+            </div>
+          );
+        }
+        return (
+          <div key={def.id} className="space-y-1">
+            <label className="text-xs">{def.label}</label>
+            <input
+              type="text"
+              className="w-full rounded border bg-background px-2 py-1 text-sm"
+              value={typeof current === 'string' ? current : ''}
+              onChange={(e) => setLocal({ ...local, [def.key]: e.target.value || null })}
+              onBlur={(e) => saveMut.mutate({ ...local, [def.key]: e.target.value || null })}
+            />
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
+interface SelectAttrFieldProps {
+  def: LeadDetail['cardAttributeDefs'][number];
+  value: string;
+  onChange: (v: string) => void;
+  onOptionsChanged: () => void;
+}
+
+function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrFieldProps) {
+  const [adding, setAdding] = useState(false);
+  const [newOption, setNewOption] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const options = def.options?.values ?? [];
+
+  async function addOption() {
+    const trimmed = newOption.trim();
+    if (!trimmed || submitting) return;
+    if (options.includes(trimmed)) {
+      toast.error('Essa opção já existe');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const nextValues = [...options, trimmed];
+      await api(`/api/custom-attributes/${def.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ options: { values: nextValues } }),
+      });
+      toast.success('Opção adicionada');
+      setNewOption('');
+      setAdding(false);
+      onOptionsChanged();
+      onChange(trimmed);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar opção');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs">{def.label}</label>
+      <div className="flex gap-1">
+        <select
+          className="flex-1 rounded border bg-background px-2 py-1 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">—</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setAdding((v) => !v)}
+          className="rounded border bg-background px-2 text-xs hover:bg-accent"
+          title="Adicionar nova opção"
+        >
+          +
+        </button>
+      </div>
+      {adding && (
+        <div className="flex gap-1">
+          <input
+            type="text"
+            value={newOption}
+            onChange={(e) => setNewOption(e.target.value)}
+            placeholder="Nova opção"
+            maxLength={80}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addOption();
+              if (e.key === 'Escape') {
+                setAdding(false);
+                setNewOption('');
+              }
+            }}
+            className="flex-1 rounded border bg-background px-2 py-1 text-xs"
+          />
+          <button
+            type="button"
+            onClick={addOption}
+            disabled={!newOption.trim() || submitting}
+            className="rounded border bg-primary px-2 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            {submitting ? '…' : 'OK'}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
