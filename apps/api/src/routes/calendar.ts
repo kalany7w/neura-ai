@@ -5,6 +5,7 @@ import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { audit } from '../services/audit.js';
 import { publishEvent } from '../redis-pub.js';
+import { createNotification } from '../services/notifications.js';
 
 export const calendarRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -107,6 +108,28 @@ calendarRouter.post('/', requireAuth, requireWorkspace, async (c) => {
     resource: `CalendarEvent:${event.id}`,
     metadata: { eventDate: event.eventDate, type: event.type },
   });
+
+  // Notifica o assignee na hora — sino fica esperando o calendar-scheduler disparar
+  // só no dia do evento. Especialmente útil pra tarefas (type=TASK).
+  if (event.assignedUserId && event.assignedUserId !== userId) {
+    const dateLabel = event.eventDate.toLocaleString('es-PY', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const isTask = event.type === 'TASK';
+    void createNotification({
+      workspaceId,
+      userId: event.assignedUserId,
+      kind: 'calendar.reminder',
+      title: isTask ? `Nova tarefa: ${event.title}` : `Novo evento: ${event.title}`,
+      body: `Vencimento: ${dateLabel}`,
+      link: event.cardId ? `/kanban?cardId=${event.cardId}` : '/calendar',
+      metadata: { eventId: event.id, type: event.type, eventDate: event.eventDate },
+    });
+  }
 
   await publishEvent(workspaceId, 'calendar', 'calendar_event.created', { event });
   return c.json({ event }, 201);

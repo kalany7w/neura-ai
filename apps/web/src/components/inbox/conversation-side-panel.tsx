@@ -48,7 +48,8 @@ export interface LeadDetail {
     key: string;
     label: string;
     type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT';
-    options: string[] | null;
+    // SELECT: stored as { values: ["A","B"] } no schema.options Json.
+    options: { values?: string[] } | null;
   }>;
   allLabels: Array<{ id: string; name: string; color: string; scope: string }>;
   funnels: Array<{ id: string; name: string; stages: Array<{ id: string; name: string; order: number }> }>;
@@ -336,7 +337,7 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
       </p>
       {defs.map((def) => {
         const current = local[def.key];
-        if (def.type === 'SELECT' && def.options) {
+        if (def.type === 'SELECT' && def.options?.values?.length) {
           return (
             <div key={def.id} className="space-y-1">
               <label className="text-xs">{def.label}</label>
@@ -346,7 +347,7 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
                 onChange={(e) => updateField(def.key, e.target.value || null)}
               >
                 <option value="">—</option>
-                {def.options.map((o) => (
+                {def.options.values.map((o) => (
                   <option key={o} value={o}>{o}</option>
                 ))}
               </select>

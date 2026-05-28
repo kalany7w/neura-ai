@@ -87,6 +87,26 @@ kanbanRouter.post(
         action: 'funnel.created',
         resource: `Funnel:${funnel.id}`,
       });
+      // Se o preset trouxe atributos customizados (ex: Vinculo do Caltech),
+      // upsert por (workspaceId, key). Idempotente — não sobrescreve se já existe.
+      if (preset?.defaultAttributes) {
+        await Promise.all(
+          preset.defaultAttributes.map((attr) =>
+            prisma.customAttributeDef.upsert({
+              where: { workspaceId_key: { workspaceId, key: attr.key } },
+              create: {
+                workspaceId,
+                key: attr.key,
+                label: attr.label,
+                type: attr.type,
+                appliesTo: attr.appliesTo,
+                options: attr.options ? { values: attr.options } : undefined,
+              },
+              update: {},
+            }),
+          ),
+        );
+      }
       return c.json({ funnel }, 201);
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {

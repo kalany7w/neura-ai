@@ -16,11 +16,22 @@ export interface FunnelPresetStage {
   outcome?: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
 }
 
+export interface FunnelPresetAttribute {
+  key: string; // snake_case
+  label: string;
+  type: 'STRING' | 'NUMBER' | 'DATE' | 'SELECT';
+  appliesTo: 'CONTACT' | 'CONVERSATION' | 'CARD';
+  options?: string[]; // só pra SELECT
+}
+
 export interface FunnelPreset {
   id: string;
   name: string;
   description: string;
   stages: FunnelPresetStage[];
+  // Atributos customizados criados em conjunto com o funnel (idempotente: upsert por
+  // workspaceId+key). Útil pra seedar "Vinculo" do Caltech com opções predefinidas.
+  defaultAttributes?: FunnelPresetAttribute[];
 }
 
 export const FUNNEL_PRESETS: FunnelPreset[] = [
@@ -57,6 +68,25 @@ export const FUNNEL_PRESETS: FunnelPreset[] = [
       { name: 'Venta de consultores', color: '#22c55e' },
       { name: 'Expansion', color: '#84cc16' },
       { name: 'Post venta', color: '#65a30d' },
+    ],
+    defaultAttributes: [
+      {
+        key: 'vinculo',
+        label: 'Vinculo',
+        type: 'SELECT',
+        appliesTo: 'CARD',
+        options: [
+          'Não atendeu',
+          'Telefone apagado',
+          'Já não tem interesse',
+          'Interesse em setembro',
+          'Vai avisar',
+          'Muito caro, quer mais econômico',
+          'Comprou outro',
+          'Engano',
+          'Segmento',
+        ],
+      },
     ],
   },
 ];
