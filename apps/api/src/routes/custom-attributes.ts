@@ -73,6 +73,50 @@ customAttributesRouter.post(
   },
 );
 
+/**
+ * PATCH /:id — atualiza label e/ou options. Key/type/appliesTo são imutáveis pra
+ * não invalidar valores já gravados em customAttrs.
+ */
+const updateSchema = z.object({
+  label: z.string().min(1).max(80).optional(),
+  options: z
+    .object({
+      values: z.array(z.string()).min(1),
+    })
+    .nullable()
+    .optional(),
+});
+
+customAttributesRouter.patch(
+  '/:id',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('custom_attr.manage'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = updateSchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    }
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const existing = await prisma.customAttributeDef.findFirst({
+      where: { id, workspaceId },
+    });
+    if (!existing) return c.json({ error: 'not_found' }, 404);
+    const def = await prisma.customAttributeDef.update({
+      where: { id },
+      data: {
+        ...(parsed.data.label !== undefined && { label: parsed.data.label }),
+        ...(parsed.data.options !== undefined && {
+          options: (parsed.data.options ?? undefined) as never,
+        }),
+      },
+    });
+    return c.json({ def });
+  },
+);
+
 customAttributesRouter.delete(
   '/:id',
   requireAuth,
