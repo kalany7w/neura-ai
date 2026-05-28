@@ -19,7 +19,7 @@ const createSchema = z.object({
     .regex(/^[a-z][a-z0-9_]*$/, 'Use snake_case: a-z, 0-9, _'),
   label: z.string().min(1).max(80),
   type: typeEnum.default('STRING'),
-  appliesTo: z.enum(['CONTACT', 'CONVERSATION']).default('CONTACT'),
+  appliesTo: z.enum(['CONTACT', 'CONVERSATION', 'CARD']).default('CONTACT'),
   options: z
     .object({
       values: z.array(z.string()).min(1),

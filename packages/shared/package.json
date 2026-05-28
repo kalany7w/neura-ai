@@ -36,6 +36,10 @@
     "./welcome-presets": {
       "types": "./dist/welcome-presets.d.ts",
       "default": "./dist/welcome-presets.js"
+    },
+    "./funnel-presets": {
+      "types": "./dist/funnel-presets.d.ts",
+      "default": "./dist/funnel-presets.js"
     }
   },
   "scripts": {
