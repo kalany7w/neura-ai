@@ -429,6 +429,8 @@ function CardDetailBody({
             />
 
             <NotesSection notes={card.notes} onAdd={addNote} onRemove={removeNote} />
+
+            <TasksSection cardId={card.id} members={members} />
           </div>
 
           {/* Coluna direita: metadata */}
@@ -991,6 +993,193 @@ function MetaField({
         )}
       </button>
       {open && children}
+    </div>
+  );
+}
+
+interface TaskEvent {
+  id: string;
+  title: string;
+  eventDate: string;
+  status: 'SCHEDULED' | 'DONE' | 'CANCELLED';
+  assignedUserId: string | null;
+}
+
+/**
+ * Tarefas vinculadas ao card. Reutiliza CalendarEvent com type=TASK — assim
+ * aparecem em /calendar e disparam recordatorio in-app no dia (calendar-scheduler).
+ */
+function TasksSection({ cardId, members }: { cardId: string; members: Member[] }) {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery<{ events: TaskEvent[] }>({
+    queryKey: ['card-tasks', cardId],
+    queryFn: () => api(`/api/calendar?cardId=${cardId}&type=TASK`),
+    enabled: !!cardId,
+  });
+
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [assignedUserId, setAssignedUserId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const tasks = data?.events ?? [];
+
+  async function create() {
+    if (!title.trim() || !eventDate || submitting) return;
+    setSubmitting(true);
+    try {
+      await api('/api/calendar', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: title.trim(),
+          eventDate: new Date(eventDate).toISOString(),
+          type: 'TASK',
+          cardId,
+          assignedUserId: assignedUserId || null,
+        }),
+      });
+      toast.success('Tarefa criada');
+      setTitle('');
+      setEventDate('');
+      setAssignedUserId('');
+      setOpen(false);
+      qc.invalidateQueries({ queryKey: ['card-tasks', cardId] });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function toggleDone(t: TaskEvent) {
+    try {
+      await api(`/api/calendar/${t.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: t.status === 'DONE' ? 'SCHEDULED' : 'DONE' }),
+      });
+      qc.invalidateQueries({ queryKey: ['card-tasks', cardId] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  async function deleteTask(id: string) {
+    try {
+      await api(`/api/calendar/${id}`, { method: 'DELETE' });
+      qc.invalidateQueries({ queryKey: ['card-tasks', cardId] });
+      qc.invalidateQueries({ queryKey: ['calendar'] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro');
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Tarefas ({tasks.length})
+        </h3>
+        <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+          <Plus className="h-3 w-3" />
+          {open ? 'Cancelar' : 'Nova tarefa'}
+        </Button>
+      </div>
+
+      {open && (
+        <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ex: Ligar pra cliente pela 2ª vez"
+            maxLength={200}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              type="datetime-local"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+            />
+            <select
+              value={assignedUserId}
+              onChange={(e) => setAssignedUserId(e.target.value)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+            >
+              <option value="">Sem responsável</option>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.user.name ?? m.user.email}
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button
+            onClick={create}
+            disabled={!title.trim() || !eventDate || submitting}
+            size="sm"
+          >
+            {submitting ? 'Criando…' : 'Criar tarefa'}
+          </Button>
+        </div>
+      )}
+
+      {isLoading ? (
+        <p className="text-xs text-muted-foreground">Carregando…</p>
+      ) : tasks.length === 0 ? (
+        <p className="text-xs italic text-muted-foreground">
+          Nenhuma tarefa. Adicione uma pra acompanhar o lead.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {tasks.map((t) => {
+            const done = t.status === 'DONE';
+            const assignee = members.find((m) => m.userId === t.assignedUserId);
+            return (
+              <li
+                key={t.id}
+                className={`flex items-start gap-2 rounded-md border bg-card p-2.5 text-sm ${
+                  done ? 'opacity-60' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleDone(t)}
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 ${
+                    done ? 'border-emerald-500 bg-emerald-500' : 'border-muted-foreground/40'
+                  }`}
+                  title={done ? 'Marcar como pendente' : 'Marcar como feita'}
+                >
+                  {done && <Check className="h-3 w-3 text-white" />}
+                </button>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-xs font-medium ${done ? 'line-through' : ''}`}>{t.title}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-2.5 w-2.5" />
+                      {formatDateTime(t.eventDate)}
+                    </span>
+                    {assignee && (
+                      <span className="inline-flex items-center gap-1">
+                        <UserCheck className="h-2.5 w-2.5" />
+                        {assignee.user.name ?? assignee.user.email}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => deleteTask(t.id)}
+                  className="text-muted-foreground hover:text-destructive"
+                  title="Excluir tarefa"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

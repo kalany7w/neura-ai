@@ -14,7 +14,9 @@ const eventSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).nullable().optional(),
   eventDate: z.string().datetime(),
-  type: z.enum(['APPLICATION', 'MAINTENANCE', 'REPAIR', 'SALE_FOLLOWUP', 'OTHER']).default('OTHER'),
+  type: z
+    .enum(['APPLICATION', 'MAINTENANCE', 'REPAIR', 'SALE_FOLLOWUP', 'TASK', 'OTHER'])
+    .default('OTHER'),
   conversationId: z.string().nullable().optional(),
   contactId: z.string().nullable().optional(),
   cardId: z.string().nullable().optional(),
@@ -41,7 +43,12 @@ calendarRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
   const fromStr = c.req.query('from');
   const toStr = c.req.query('to');
+  const cardId = c.req.query('cardId');
+  const typeFilter = c.req.query('type');
 
+  // Quando filtro por cardId/type, ignora o range (lista todos do card).
+  // Sem cardId/type, usa range padrão (mês atual).
+  const useRange = !cardId && !typeFilter;
   const now = new Date();
   const from = fromStr ? new Date(fromStr) : new Date(now.getFullYear(), now.getMonth(), 1);
   const to = toStr
@@ -49,7 +56,12 @@ calendarRouter.get('/', requireAuth, requireWorkspace, async (c) => {
     : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
   const events = await prisma.calendarEvent.findMany({
-    where: { workspaceId, eventDate: { gte: from, lte: to } },
+    where: {
+      workspaceId,
+      ...(useRange ? { eventDate: { gte: from, lte: to } } : {}),
+      ...(cardId ? { cardId } : {}),
+      ...(typeFilter ? { type: typeFilter as 'TASK' | 'APPLICATION' | 'MAINTENANCE' | 'REPAIR' | 'SALE_FOLLOWUP' | 'OTHER' } : {}),
+    },
     orderBy: { eventDate: 'asc' },
     include: {
       assignedUser: { select: { id: true, name: true, email: true } },
