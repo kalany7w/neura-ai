@@ -10,6 +10,7 @@ import { publishEvent } from '../redis-pub.js';
 import { forecastCard } from '../services/ai-forecast.js';
 import { aiQueue } from '../queue.js';
 import { env } from '../env.js';
+import { findFunnelPresetById } from '@neura/shared/funnel-presets';
 
 export const kanbanRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -21,6 +22,8 @@ const funnelSchema = z.object({
   name: z.string().min(1).max(80),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#3b82f6'),
   isDefault: z.boolean().default(false),
+  // Preset opcional (xag, caltech) — se passado, cria stages do preset em vez do default.
+  preset: z.string().optional(),
 });
 
 kanbanRouter.get('/funnels', requireAuth, requireWorkspace, async (c) => {
@@ -48,6 +51,22 @@ kanbanRouter.post(
         where: { workspaceId },
         _max: { order: true },
       });
+      // Resolve stages a criar: preset (se passado e válido) ou default (New Lead/Ganho/Perda).
+      const preset = parsed.data.preset ? findFunnelPresetById(parsed.data.preset) : null;
+      const stageData: Prisma.StageCreateWithoutFunnelInput[] = preset
+        ? preset.stages.map((s, i) => ({
+            name: s.name,
+            color: s.color,
+            order: i,
+            outcome: s.outcome ?? null,
+          }))
+        : [
+            { name: 'New Lead', color: '#94a3b8', order: 0 },
+            { name: 'Ganho', color: '#10b981', order: 100, outcome: 'POSITIVE' },
+            { name: 'Perda', color: '#ef4444', order: 101, outcome: 'NEGATIVE' },
+          ];
+      // `preset` não é coluna do model — remove antes de espalhar no create.
+      const { preset: _presetIgnored, ...funnelData } = parsed.data;
       const funnel = await prisma.$transaction(async (tx) => {
         if (parsed.data.isDefault) {
           await tx.funnel.updateMany({ where: { workspaceId }, data: { isDefault: false } });
@@ -55,15 +74,9 @@ kanbanRouter.post(
         return tx.funnel.create({
           data: {
             workspaceId,
-            ...parsed.data,
+            ...funnelData,
             order: (maxOrder._max.order ?? -1) + 1,
-            stages: {
-              create: [
-                { name: 'New Lead', color: '#94a3b8', order: 0 },
-                { name: 'Ganho', color: '#10b981', order: 100, outcome: 'POSITIVE' },
-                { name: 'Perda', color: '#ef4444', order: 101, outcome: 'NEGATIVE' },
-              ],
-            },
+            stages: { create: stageData },
           },
           include: { stages: true },
         });

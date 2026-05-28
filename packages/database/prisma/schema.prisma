@@ -1296,6 +1296,7 @@ enum CalendarEventType {
   MAINTENANCE
   REPAIR
   SALE_FOLLOWUP
+  TASK
   OTHER
 }
 

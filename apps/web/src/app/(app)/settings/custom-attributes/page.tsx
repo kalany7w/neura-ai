@@ -24,7 +24,7 @@ interface AttrDef {
   key: string;
   label: string;
   type: AttrType;
-  appliesTo: 'CONTACT' | 'CONVERSATION';
+  appliesTo: 'CONTACT' | 'CONVERSATION' | 'CARD';
   options: { values?: string[] } | null;
   createdAt: string;
 }
@@ -78,7 +78,7 @@ export default function CustomAttrsPage() {
       acc[d.appliesTo].push(d);
       return acc;
     },
-    { CONTACT: [] as AttrDef[], CONVERSATION: [] as AttrDef[] },
+    { CONTACT: [] as AttrDef[], CONVERSATION: [] as AttrDef[], CARD: [] as AttrDef[] },
   );
 
   return (
@@ -111,13 +111,15 @@ export default function CustomAttrsPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          {(['CONTACT', 'CONVERSATION'] as const).map((scope) => {
+          {(['CONTACT', 'CONVERSATION', 'CARD'] as const).map((scope) => {
             const items = byAppliesTo[scope];
             if (items.length === 0) return null;
+            const scopeLabel =
+              scope === 'CONTACT' ? 'Contatos' : scope === 'CONVERSATION' ? 'Conversas' : 'Cards';
             return (
               <section key={scope}>
                 <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {scope === 'CONTACT' ? 'Contatos' : 'Conversas'} ({items.length})
+                  {scopeLabel} ({items.length})
                 </h2>
                 <div className="rounded-lg border bg-card overflow-hidden">
                   <table className="w-full text-sm">
@@ -189,7 +191,7 @@ function CreateAttrDialog({
   const [key, setKey] = useState('');
   const [keyTouched, setKeyTouched] = useState(false);
   const [type, setType] = useState<AttrType>('STRING');
-  const [appliesTo, setAppliesTo] = useState<'CONTACT' | 'CONVERSATION'>('CONTACT');
+  const [appliesTo, setAppliesTo] = useState<'CONTACT' | 'CONVERSATION' | 'CARD'>('CONTACT');
   const [selectValues, setSelectValues] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -305,11 +307,12 @@ function CreateAttrDialog({
               <select
                 id="attr-applies"
                 value={appliesTo}
-                onChange={(e) => setAppliesTo(e.target.value as 'CONTACT' | 'CONVERSATION')}
+                onChange={(e) => setAppliesTo(e.target.value as 'CONTACT' | 'CONVERSATION' | 'CARD')}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="CONTACT">Contatos</option>
                 <option value="CONVERSATION">Conversas</option>
+                <option value="CARD">Cards (kanban)</option>
               </select>
             </div>
           </div>
