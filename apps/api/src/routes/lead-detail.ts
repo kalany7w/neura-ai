@@ -70,9 +70,7 @@ leadDetailRouter.get('/conversations/:id/lead-detail', requireAuth, requireWorks
       },
     }),
     prisma.customAttributeDef.findMany({
-      // Side panel só renderiza CONTACT/CONVERSATION (salva em contact.customAttrs).
-      // CARD-scope attrs aparecem só no card-detail (UI separada).
-      where: { workspaceId, appliesTo: { in: ['CONTACT', 'CONVERSATION'] } },
+      where: { workspaceId },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.label.findMany({
@@ -124,7 +122,10 @@ leadDetailRouter.get('/conversations/:id/lead-detail', requireAuth, requireWorks
     },
     contact: conv.contact,
     card,
-    customAttributeDefs,
+    // Split por scope: CONTACT/CONVERSATION renderizam no contact section (salvam em
+    // contact.customAttrs); CARD renderizam na Card section (salvam em card.customAttrs).
+    customAttributeDefs: customAttributeDefs.filter((d) => d.appliesTo !== 'CARD'),
+    cardAttributeDefs: customAttributeDefs.filter((d) => d.appliesTo === 'CARD'),
     allLabels,
     funnels,
     temperature,
