@@ -23,9 +23,11 @@ const labelSchema = z.object({
 });
 
 /**
- * Valida que se routesToFunnelId está setado:
- * - routesToStageId também deve estar setado
- * - O stage deve pertencer a esse funnel (e ao workspace)
+ * Valida routesToFunnelId / routesToStageId:
+ * - routesToFunnelId sem stageId: OK. Label vinculada ao funil pra visibilidade
+ *   (escopo multi-empresa), sem auto-routing inbound.
+ * - routesToStageId sem funnelId: ERRO. Stage isolado não faz sentido.
+ * - Ambos: stage deve pertencer ao funnel (e ao workspace).
  */
 async function validateRoutingFields(
   workspaceId: string,
@@ -33,11 +35,17 @@ async function validateRoutingFields(
   routesToStageId: string | null | undefined,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!routesToFunnelId && !routesToStageId) return { ok: true };
-  if (routesToFunnelId && !routesToStageId) {
-    return { ok: false, error: 'routing_requires_stage' };
-  }
   if (!routesToFunnelId && routesToStageId) {
     return { ok: false, error: 'stage_requires_funnel' };
+  }
+  if (routesToFunnelId && !routesToStageId) {
+    // Valida que o funnel existe no workspace.
+    const funnel = await prisma.funnel.findFirst({
+      where: { id: routesToFunnelId, workspaceId },
+      select: { id: true },
+    });
+    if (!funnel) return { ok: false, error: 'invalid_funnel' };
+    return { ok: true };
   }
   // Both set — verify stage belongs to funnel + workspace
   const stage = await prisma.stage.findFirst({
@@ -52,10 +60,27 @@ async function validateRoutingFields(
   return { ok: true };
 }
 
+/**
+ * GET /api/labels
+ * Query params:
+ * - funnelId: opcional. Quando passado, devolve apenas labels visíveis nesse funnel
+ *   (routesToFunnelId IS NULL = globais + routesToFunnelId = funnelId = do funil).
+ *   Sem param: devolve TODAS labels do workspace (uso de /settings/labels, etc).
+ *
+ * Semântica: routesToFunnelId tem duplo papel — (1) auto-routing inbound (label aplicada
+ * cria card no funnel destino) e (2) escopo de visibilidade (label só aparece em cards
+ * desse funnel). Labels sem routesToFunnelId são globais e aparecem em todos os funis.
+ */
 labelsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
+  const funnelId = c.req.query('funnelId');
   const labels = await prisma.label.findMany({
-    where: { workspaceId },
+    where: {
+      workspaceId,
+      ...(funnelId
+        ? { OR: [{ routesToFunnelId: null }, { routesToFunnelId: funnelId }] }
+        : {}),
+    },
     orderBy: { name: 'asc' },
   });
   return c.json({ labels });
