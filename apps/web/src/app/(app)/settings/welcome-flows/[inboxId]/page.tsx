@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -57,6 +57,9 @@ interface LabelOpt {
   id: string;
   name: string;
   color: string;
+  // routesToFunnelId: dueño de funnel. null = label global (visível em todos os funis).
+  routesToFunnelId?: string | null;
+  routesToStageId?: string | null;
 }
 interface FunnelOpt {
   id: string;
@@ -173,7 +176,30 @@ export default function WelcomeFlowEditorPage() {
   });
 
   const fallbackFunnelId = watch('fallbackFunnelId');
+  const fallbackLabelId = watch('fallbackLabelId');
+  const fallbackStageId = watch('fallbackStageId');
   const fallbackStages = funnelsData?.funnels.find((f) => f.id === fallbackFunnelId)?.stages ?? [];
+
+  // Labels visíveis no fallback: globais + as do funnel selecionado.
+  // (Mesmo escopo multi-empresa que kanban: label de XAG não aparece em fluxo apontando pra Caltech.)
+  const visibleFallbackLabels = (labelsData?.labels ?? []).filter(
+    (l) =>
+      !l.routesToFunnelId ||
+      (fallbackFunnelId ? l.routesToFunnelId === fallbackFunnelId : true),
+  );
+
+  // Auto-reset fallbackLabelId quando muda o funnel e a label atual não está mais visível.
+  // Evita state stale apontando pra label de outro funnel (que sumiu do dropdown e
+  // faria o Radix Select renderizar com value inválido — placeholder, mas o form ainda
+  // enviaria o id antigo no submit). Mesmo pra stageId.
+  useEffect(() => {
+    if (fallbackLabelId && !visibleFallbackLabels.some((l) => l.id === fallbackLabelId)) {
+      setValue('fallbackLabelId', null);
+    }
+    if (fallbackStageId && !fallbackStages.some((s) => s.id === fallbackStageId)) {
+      setValue('fallbackStageId', null);
+    }
+  }, [fallbackFunnelId, fallbackLabelId, fallbackStageId, visibleFallbackLabels, fallbackStages, setValue]);
 
   async function onSave(values: FlowInput) {
     setSubmitting(true);
@@ -283,7 +309,7 @@ export default function WelcomeFlowEditorPage() {
           <div className="space-y-2">
             <Label>Etiqueta aplicada</Label>
             <Select
-              value={watch('fallbackLabelId') ?? 'none'}
+              value={fallbackLabelId ?? 'none'}
               onValueChange={(v) => setValue('fallbackLabelId', v === 'none' ? null : v)}
             >
               <SelectTrigger>
@@ -291,13 +317,23 @@ export default function WelcomeFlowEditorPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Nenhuma</SelectItem>
-                {labelsData?.labels.map((l) => (
+                {visibleFallbackLabels.map((l) => (
                   <SelectItem key={l.id} value={l.id}>
                     {l.name}
+                    {l.routesToFunnelId && (
+                      <span className="ml-2 text-[10px] text-muted-foreground">
+                        · {funnelsData?.funnels.find((f) => f.id === l.routesToFunnelId)?.name ?? ''}
+                      </span>
+                    )}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {fallbackFunnelId && (
+              <p className="text-[11px] text-muted-foreground">
+                Mostrando apenas labels globais + do funil selecionado.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

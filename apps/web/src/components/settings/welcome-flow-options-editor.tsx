@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
@@ -49,6 +49,8 @@ interface LabelOpt {
   id: string;
   name: string;
   color: string;
+  routesToFunnelId?: string | null;
+  routesToStageId?: string | null;
 }
 
 interface FunnelOpt {
@@ -207,6 +209,32 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
   const stages = funnels.find((f) => f.id === option.targetFunnelId)?.stages ?? [];
   const [keywordInput, setKeywordInput] = useState('');
 
+  // Labels visíveis nessa opção: globais + as do funil selecionado.
+  // (Escopo multi-empresa: label de XAG só aparece se a opção apontar pro funil XAG.)
+  const visibleLabels = useMemo(
+    () =>
+      labels.filter(
+        (l) =>
+          !l.routesToFunnelId ||
+          (option.targetFunnelId ? l.routesToFunnelId === option.targetFunnelId : true),
+      ),
+    [labels, option.targetFunnelId],
+  );
+
+  // Auto-reset targetLabelId se a label atual sumiu do dropdown (admin mudou o funil
+  // da opção e a label antiga não pertence ao novo funil). Pega a primeira label visível
+  // como default — evita state com value que não está no Select (Radix renderiza vazio
+  // mas o backend ainda recebe o id antigo no PUT seguinte).
+  useEffect(() => {
+    if (option.targetLabelId && !visibleLabels.some((l) => l.id === option.targetLabelId)) {
+      const fallback = visibleLabels[0]?.id ?? '';
+      onUpdate({ targetLabelId: fallback });
+    }
+    // intencionalmente sem onUpdate nas deps — onUpdate é recriada a cada render do pai
+    // e dispararia loop. option.targetLabelId + visibleLabels são suficientes pra detectar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [option.targetLabelId, visibleLabels]);
+
   return (
     <div ref={setNodeRef} style={style} className="rounded-md border bg-muted/30 p-3 space-y-3">
       <div className="flex items-center gap-2">
@@ -241,18 +269,35 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
         <div className="space-y-1">
           <Label className="text-xs">Etiqueta aplicada</Label>
           <Select
-            value={option.targetLabelId}
+            value={
+              option.targetLabelId && visibleLabels.some((l) => l.id === option.targetLabelId)
+                ? option.targetLabelId
+                : undefined
+            }
             onValueChange={(v) => onUpdate({ targetLabelId: v })}
           >
             <SelectTrigger>
               <SelectValue placeholder="Escolha" />
             </SelectTrigger>
             <SelectContent>
-              {labels.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.name}
+              {visibleLabels.length === 0 ? (
+                // SelectItem precisa value não-vazio (Radix lança erro com value=""):
+                // usamos disabled placeholder com value="__empty__" pra não quebrar.
+                <SelectItem value="__empty__" disabled>
+                  Nenhuma etiqueta no funil — crie em /settings/labels
                 </SelectItem>
-              ))}
+              ) : (
+                visibleLabels.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name}
+                    {l.routesToFunnelId && (
+                      <span className="ml-2 text-[10px] text-muted-foreground">
+                        · {funnels.find((f) => f.id === l.routesToFunnelId)?.name ?? ''}
+                      </span>
+                    )}
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
         </div>
