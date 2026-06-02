@@ -56,27 +56,9 @@ welcomePresetsRouter.post(
     });
     if (existing) return c.json({ error: 'flow_already_exists' }, 409);
 
-    // Resolve / criar labels
-    const labelNamesNeeded = new Set<string>();
-    for (const opt of preset.options) labelNamesNeeded.add(opt.targetLabelName);
-    if (preset.fallbackLabelName) labelNamesNeeded.add(preset.fallbackLabelName);
-
-    const existingLabels = await prisma.label.findMany({
-      where: {
-        workspaceId,
-        name: { in: [...labelNamesNeeded], mode: 'insensitive' },
-      },
-    });
-    const labelByName = new Map(existingLabels.map((l) => [l.name.toLowerCase(), l]));
-
-    for (const name of labelNamesNeeded) {
-      if (!labelByName.has(name.toLowerCase())) {
-        const created = await prisma.label.create({
-          data: { workspaceId, name, color: '#94a3b8', scope: 'BOTH' },
-        });
-        labelByName.set(name.toLowerCase(), created);
-      }
-    }
+    // ORDEM: funnels primeiro, labels depois. As labels precisam saber funnelId+stageId
+    // pra setar routesToFunnelId/StageId no momento da criação (escopo de visibilidade
+    // multi-empresa: label de XAG não aparece em cards de Caltech).
 
     // Resolve / criar funnels + stages
     const funnelNamesNeeded = new Set<string>();
@@ -111,6 +93,83 @@ welcomePresetsRouter.post(
         });
         funnelByName.set(name.toLowerCase(), created);
       }
+    }
+
+    // Helper pra resolver funnel+stage de uma opção (ou fallback)
+    function resolveFunnelStage(
+      funnelName: string | undefined | null,
+      stageName: string | undefined | null,
+    ): { funnelId: string | null; stageId: string | null } {
+      if (!funnelName) return { funnelId: null, stageId: null };
+      const funnel = funnelByName.get(funnelName.toLowerCase());
+      if (!funnel) return { funnelId: null, stageId: null };
+      const stage = stageName
+        ? funnel.stages.find((s) => s.name.toLowerCase() === stageName.toLowerCase())
+        : funnel.stages.find((s) => s.order === 0);
+      return { funnelId: funnel.id, stageId: stage?.id ?? null };
+    }
+
+    // Resolve / criar labels (já com routesToFunnelId/StageId do funnel destino)
+    const labelNamesNeeded = new Map<string, { funnelId: string | null; stageId: string | null }>();
+    for (const opt of preset.options) {
+      const route = resolveFunnelStage(opt.targetFunnelName, opt.targetStageName);
+      labelNamesNeeded.set(opt.targetLabelName.toLowerCase(), {
+        ...route,
+        // Preserva o nome original (case) — usa Map<lowercase, route>; nome real vem do preset.
+      });
+    }
+    if (preset.fallbackLabelName) {
+      const key = preset.fallbackLabelName.toLowerCase();
+      if (!labelNamesNeeded.has(key)) {
+        // Fallback geralmente não tem funnel atrelado — fica como label global.
+        labelNamesNeeded.set(key, {
+          ...resolveFunnelStage(preset.fallbackFunnelName, null),
+        });
+      }
+    }
+
+    const existingLabels = await prisma.label.findMany({
+      where: {
+        workspaceId,
+        name: { in: [...labelNamesNeeded.keys()], mode: 'insensitive' },
+      },
+    });
+    const labelByName = new Map(existingLabels.map((l) => [l.name.toLowerCase(), l]));
+
+    // Mapa de nome lowercase → nome original do preset (preserva case na criação)
+    const originalNames = new Map<string, string>();
+    for (const opt of preset.options) {
+      originalNames.set(opt.targetLabelName.toLowerCase(), opt.targetLabelName);
+    }
+    if (preset.fallbackLabelName) {
+      originalNames.set(preset.fallbackLabelName.toLowerCase(), preset.fallbackLabelName);
+    }
+
+    for (const [key, route] of labelNamesNeeded) {
+      const existing = labelByName.get(key);
+      if (existing) {
+        // Se label já existe sem routesToFunnelId e o preset tem um — heal: anexa o funil.
+        // Não sobrescreve se já estiver vinculado a outro funil (admin pode ter editado).
+        if (existing.routesToFunnelId == null && route.funnelId) {
+          const healed = await prisma.label.update({
+            where: { id: existing.id },
+            data: { routesToFunnelId: route.funnelId, routesToStageId: route.stageId },
+          });
+          labelByName.set(key, healed);
+        }
+        continue;
+      }
+      const created = await prisma.label.create({
+        data: {
+          workspaceId,
+          name: originalNames.get(key) ?? key,
+          color: '#94a3b8',
+          scope: 'BOTH',
+          routesToFunnelId: route.funnelId,
+          routesToStageId: route.stageId,
+        },
+      });
+      labelByName.set(key, created);
     }
 
     // Resolve targetUserName por nome — busca via Membership + User.name
@@ -148,28 +207,15 @@ welcomePresetsRouter.post(
           create: preset.options.map((opt) => {
             const label = labelByName.get(opt.targetLabelName.toLowerCase());
             if (!label) throw new Error(`Label not resolved: ${opt.targetLabelName}`);
-            let funnelId: string | undefined;
-            let stageId: string | undefined;
-            if (opt.targetFunnelName) {
-              const funnel = funnelByName.get(opt.targetFunnelName.toLowerCase());
-              if (funnel) {
-                funnelId = funnel.id;
-                const stage = opt.targetStageName
-                  ? funnel.stages.find(
-                      (s) => s.name.toLowerCase() === opt.targetStageName!.toLowerCase(),
-                    )
-                  : funnel.stages.find((s) => s.order === 0);
-                stageId = stage?.id;
-              }
-            }
+            const route = resolveFunnelStage(opt.targetFunnelName, opt.targetStageName);
             return {
               position: opt.position,
               label: opt.label,
               description: opt.description ?? null,
               matchKeywords: opt.matchKeywords,
               targetLabelId: label.id,
-              targetFunnelId: funnelId ?? null,
-              targetStageId: stageId ?? null,
+              targetFunnelId: route.funnelId,
+              targetStageId: route.stageId,
               targetUserId: opt.targetUserName
                 ? userByName.get(opt.targetUserName.toLowerCase()) ?? null
                 : null,

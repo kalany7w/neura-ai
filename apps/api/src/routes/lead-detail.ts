@@ -126,7 +126,14 @@ leadDetailRouter.get('/conversations/:id/lead-detail', requireAuth, requireWorks
     // contact.customAttrs); CARD renderizam na Card section (salvam em card.customAttrs).
     customAttributeDefs: customAttributeDefs.filter((d) => d.appliesTo !== 'CARD'),
     cardAttributeDefs: customAttributeDefs.filter((d) => d.appliesTo === 'CARD'),
-    allLabels,
+    // Se existe card, filtra labels visíveis nesse funil: globais (routesToFunnelId=null)
+    // + as do funnel do card. Sem card, devolve tudo (qualquer label pode ser aplicada
+    // pra criar card automaticamente via routesToFunnelId).
+    allLabels: card
+      ? allLabels.filter(
+          (l) => l.routesToFunnelId === null || l.routesToFunnelId === card.funnelId,
+        )
+      : allLabels,
     funnels,
     temperature,
   });

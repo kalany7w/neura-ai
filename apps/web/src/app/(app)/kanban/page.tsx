@@ -837,11 +837,16 @@ export default function KanbanPage() {
     enabled: !!funnelId,
   });
 
+  // Labels filtradas pelo funnel atual (escopo multi-empresa): só globais
+  // (routesToFunnelId=null) + as do funnel selecionado. Quando troca de funnel,
+  // refetch — assim cards de Caltech não veem labels de XAG no dropdown.
   const { data: labelsData } = useQuery<{
     labels: Array<{ id: string; name: string; color: string }>;
   }>({
-    queryKey: ['labels'],
-    queryFn: () => api('/api/labels'),
+    queryKey: ['labels', funnelId],
+    queryFn: () =>
+      api(`/api/labels${funnelId ? `?funnelId=${funnelId}` : ''}`),
+    enabled: !!funnelId,
   });
 
   const { data: wsData } = useQuery<{ workspace: { members: Member[] } }>({
