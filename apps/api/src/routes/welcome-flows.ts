@@ -7,6 +7,7 @@ import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
 import { sendWelcome } from '../services/welcome-flow.js';
 import { publishEvent } from '../redis-pub.js';
+import { logger } from '../logger.js';
 
 export const welcomeFlowsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -127,26 +128,32 @@ welcomeFlowsRouter.put(
     });
     if (!flow) return c.json({ error: 'not_found' }, 404);
 
-    const updated = await prisma.welcomeFlow.update({
-      where: { id: flow.id },
-      data: parsed.data,
-      include: { options: { orderBy: { position: 'asc' } } },
-    });
+    try {
+      const updated = await prisma.welcomeFlow.update({
+        where: { id: flow.id },
+        data: parsed.data,
+        include: { options: { orderBy: { position: 'asc' } } },
+      });
 
-    await audit({
-      workspaceId,
-      actorId: c.get('userId'),
-      action: 'welcome_flow.updated',
-      resource: `WelcomeFlow:${flow.id}`,
-      metadata: { changes: parsed.data },
-    });
+      await audit({
+        workspaceId,
+        actorId: c.get('userId'),
+        action: 'welcome_flow.updated',
+        resource: `WelcomeFlow:${flow.id}`,
+        metadata: { changes: parsed.data },
+      });
 
-    await publishEvent(workspaceId, 'settings', 'welcome_flow.updated', {
-      inboxId,
-      flowId: flow.id,
-    });
+      await publishEvent(workspaceId, 'settings', 'welcome_flow.updated', {
+        inboxId,
+        flowId: flow.id,
+      });
 
-    return c.json({ flow: updated });
+      return c.json({ flow: updated });
+    } catch (err) {
+      logger.error({ err, flowId: flow.id, body: parsed.data }, 'welcome_flow.update_failed');
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'update_failed', message: msg }, 500);
+    }
   },
 );
 
@@ -318,7 +325,18 @@ welcomeFlowsRouter.put(
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === 'P2002') return c.json({ error: 'position_taken' }, 409);
-      throw err;
+      // Log detalhado + retorna mensagem util pra debug em vez de 500 genérico.
+      // Caso comum: coluna não existe (migration não rodou). Frontend mostra o
+      // hint do schema dessincronizado em vez de "internal_error" genérico.
+      logger.error(
+        { err, optionId, flowId, body: parsed.data },
+        'welcome_flow.option_update_failed',
+      );
+      const msg = err instanceof Error ? err.message : String(err);
+      const hint = msg.includes('confirmationText') || msg.includes('column')
+        ? 'schema desatualizado — verifique se a migration rodou no startup do api'
+        : undefined;
+      return c.json({ error: 'update_failed', message: msg, hint }, 500);
     }
   },
 );
