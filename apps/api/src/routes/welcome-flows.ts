@@ -195,6 +195,9 @@ const optionUpsertSchema = z.object({
   label: z.string().min(1).max(60),
   description: z.string().max(120).nullable().optional(),
   matchKeywords: z.array(z.string().min(1).max(40)).max(10).default([]),
+  // Mensagem custom enviada após o cliente selecionar essa opção. Null/vazio = usa
+  // fallback natural genérico. Suporta {{agent.name}} e {{contact.name}}.
+  confirmationText: z.string().max(1000).nullable().optional(),
   targetLabelId: z.string().min(1),
   targetFunnelId: z.string().nullable().optional(),
   targetStageId: z.string().nullable().optional(),

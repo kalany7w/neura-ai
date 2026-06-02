@@ -213,6 +213,7 @@ welcomePresetsRouter.post(
               label: opt.label,
               description: opt.description ?? null,
               matchKeywords: opt.matchKeywords,
+              confirmationText: opt.confirmationText ?? null,
               targetLabelId: label.id,
               targetFunnelId: route.funnelId,
               targetStageId: route.stageId,

@@ -1270,6 +1270,11 @@ model WelcomeOption {
   label           String
   description     String?
   matchKeywords   String[]
+  // Mensagem enviada ao cliente após ele selecionar essa opção. Quando null/vazio,
+  // usa fallback natural genérico em sendHandoffMessage. Suporta placeholders
+  // {{agent.name}} (nome do targetUser) e {{contact.name}}. Texto livre — admin
+  // adapta ao tipo de negócio (drones agrícolas, e-commerce, etc).
+  confirmationText String?
   targetLabelId   String
   targetFunnelId  String?
   targetStageId   String?

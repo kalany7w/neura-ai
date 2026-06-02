@@ -39,6 +39,7 @@ interface WelcomeOption {
   label: string;
   description: string | null;
   matchKeywords: string[];
+  confirmationText: string | null;
   targetLabelId: string;
   targetFunnelId: string | null;
   targetStageId: string | null;
@@ -361,6 +362,23 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs">Mensagem de confirmação (enviada após o cliente escolher)</Label>
+        <textarea
+          value={option.confirmationText ?? ''}
+          onChange={(e) => onUpdate({ confirmationText: e.target.value || null })}
+          placeholder="Ex: ¡Excelente! {{agent.name}} se va a poner en contacto contigo en breve para mostrarte los modelos…"
+          rows={3}
+          maxLength={1000}
+          className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        <p className="text-[10px] text-muted-foreground">
+          Vazio = usa mensagem genérica. Suporta <code>{'{{agent.name}}'}</code> (nome do
+          responsável) e <code>{'{{contact.name}}'}</code>. Personalize por opção pra
+          falar do produto/serviço (ex: drones agrícolas, e-commerce, etc).
+        </p>
       </div>
 
       <div className="space-y-1">
