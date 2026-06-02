@@ -18,6 +18,9 @@ export interface WelcomePresetOption {
   targetFunnelName?: string;
   targetStageName?: string;
   targetUserName?: string;
+  // Mensagem enviada ao cliente após selecionar essa opção. Suporta placeholders
+  // {{agent.name}} e {{contact.name}}. Quando omitido, usa fallback natural genérico.
+  confirmationText?: string;
 }
 
 export interface WelcomePreset {
@@ -187,49 +190,58 @@ export const WELCOME_PRESETS: WelcomePreset[] = [
     id: 'drones-agro',
     name: 'Drones agrícolas',
     description: 'Venda + manutenção de drones para pulverização, siembra e monitoreo',
-    prompt: 'Olá {{contact.name}}! Bem-vindo. Como podemos te ajudar?',
+    prompt:
+      '¡Hola {{contact.name}}! Gracias por escribirnos. Somos especialistas en drones para soluciones agrícolas — pulverización, siembra y monitoreo aéreo. ¿En qué podemos ayudarte? Elegí una opción:',
     fallbackLabelName: 'Lead',
     fallbackUserName: 'Ariel',
     options: [
       {
         position: 1,
         label: 'Comprar drone',
-        description: 'Quero adquirir um equipamento',
-        matchKeywords: ['comprar', 'orçamento', 'preço', 'cotação'],
+        description: 'Quiero adquirir un equipo',
+        matchKeywords: ['comprar', 'cotización', 'precio', 'orçamento', 'cotação'],
         targetLabelName: 'Vendas',
         targetFunnelName: 'Vendas',
         targetStageName: 'Novo lead',
         targetUserName: 'Ariel',
+        confirmationText:
+          '¡Excelente, {{contact.name}}! {{agent.name}} se va a poner en contacto contigo en breve para mostrarte los modelos disponibles y armar una cotización adaptada al tipo de cultivo y a las hectáreas que necesitás cubrir.',
       },
       {
         position: 2,
-        label: 'Conhecer / saber mais',
-        description: 'Quero entender como funciona',
-        matchKeywords: ['informação', 'saber', 'conhecer', 'detalhes'],
+        label: 'Conocer / saber más',
+        description: 'Quiero entender cómo funciona',
+        matchKeywords: ['información', 'saber', 'conocer', 'detalles', 'cómo'],
         targetLabelName: 'Lead',
         targetFunnelName: 'Lead',
         targetStageName: 'Triagem',
         targetUserName: 'Ariel',
+        confirmationText:
+          '¡Genial! {{agent.name}} te va a contactar enseguida para contarte cómo nuestros drones ayudan a optimizar pulverización, siembra y monitoreo de cultivos — y resolver cualquier duda que tengas sobre el equipo.',
       },
       {
         position: 3,
-        label: 'Manutenção preventiva',
-        description: 'Revisão do meu equipamento',
-        matchKeywords: ['manutenção', 'revisão', 'check'],
+        label: 'Mantenimiento preventivo',
+        description: 'Revisión de mi equipo',
+        matchKeywords: ['mantenimiento', 'revisión', 'check', 'manutenção'],
         targetLabelName: 'Manutenção',
         targetFunnelName: 'Manutenção',
         targetStageName: 'Solicitação',
         targetUserName: 'Marcos',
+        confirmationText:
+          '¡Recibido! {{agent.name}} se va a comunicar contigo para coordinar la revisión preventiva de tu equipo y dejarlo listo para la temporada de aplicación.',
       },
       {
         position: 4,
-        label: 'Reparação / falha',
-        description: 'Meu drone parou de funcionar',
-        matchKeywords: ['quebrou', 'falha', 'reparo', 'conserto', 'problema'],
+        label: 'Reparación / falla',
+        description: 'Mi drone dejó de funcionar',
+        matchKeywords: ['quebrou', 'falla', 'reparo', 'conserto', 'problema', 'no anda'],
         targetLabelName: 'Reparação',
         targetFunnelName: 'Reparação',
         targetStageName: 'Diagnóstico',
         targetUserName: 'Diego',
+        confirmationText:
+          'Entendido, vamos a resolverlo. {{agent.name}} se va a contactar contigo para hacer el diagnóstico y guiarte sobre los próximos pasos lo antes posible.',
       },
     ],
   },

@@ -12,7 +12,9 @@ export const reactionsRouter = new Hono<{
 }>();
 
 const reactBody = z.object({
-  emoji: z.string().min(1).max(20), // emoji unicode, ou string vazia '' pra remover
+  // Emoji unicode (ex: '❤️') OU string vazia '' pra remover reação existente.
+  // Não usa .min(1): a UI manda '' quando o user clica em remover reaction.
+  emoji: z.string().max(20),
 });
 
 // POST /api/messages/:id/react

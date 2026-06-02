@@ -31,6 +31,7 @@ interface WelcomeOption {
   label: string;
   description: string | null;
   matchKeywords: string[];
+  confirmationText: string | null;
   targetLabelId: string;
   targetFunnelId: string | null;
   targetStageId: string | null;

@@ -237,9 +237,14 @@ interface SendHandoffParams {
 }
 
 /**
- * 2º mensagem do agente IA: confirma pro cliente que ele será encaminhado pro
- * responsável da área escolhida. Texto dinâmico (área = label da opção + nome do
- * targetUser, se houver). Enviado depois do routing/markCompleted.
+ * 2º mensagem do agente IA: confirma pro cliente que ele será encaminhado.
+ *
+ * Prioridade do texto:
+ * 1. option.confirmationText (custom do admin) — suporta {{agent.name}}
+ *    e {{contact.name}}. Permite adaptar ao tipo de negócio (drones agrícolas,
+ *    e-commerce, etc) sem usar o option.label cru ("del área de Conocer más"
+ *    soava robótico).
+ * 2. Fallback natural genérico — sem mencionar o label cru.
  */
 export async function sendHandoffMessage(
   params: SendHandoffParams,
@@ -250,20 +255,41 @@ export async function sendHandoffMessage(
 
   const conv = await prisma.conversation.findFirst({
     where: { id: conversationId, workspaceId },
-    select: { inboxId: true, contact: { select: { phoneNumber: true } } },
+    select: {
+      inboxId: true,
+      contact: { select: { phoneNumber: true, name: true } },
+    },
   });
   if (!conv?.contact?.phoneNumber) return;
 
   const option = await prisma.welcomeOption.findUnique({
     where: { id: optionId },
-    select: { label: true, targetUser: { select: { name: true } } },
+    select: {
+      label: true,
+      confirmationText: true,
+      targetUser: { select: { name: true } },
+    },
   });
   if (!option) return;
 
-  const agentName = option.targetUser?.name?.trim();
-  const text = agentName
-    ? `Perfecto. Te derivamos con ${agentName}, del área de ${option.label}. En breve se pondrá en contacto contigo.`
-    : `Perfecto. Te derivamos al área de ${option.label}. En breve te atenderemos.`;
+  const agentName = option.targetUser?.name?.trim() ?? '';
+  const contactName = conv.contact.name ? capitalizeName(conv.contact.name) : '';
+
+  let text: string;
+  const custom = option.confirmationText?.trim();
+  if (custom) {
+    // Custom text — substitui placeholders. Se {{agent.name}} sem agente atribuído,
+    // troca por "nuestro equipo" pra não soar quebrado.
+    text = custom
+      .replace(/\{\{agent\.name\}\}/g, agentName || 'nuestro equipo')
+      .replace(/\{\{contact\.name\}\}/g, contactName || 'cliente');
+  } else {
+    // Fallback natural — não menciona option.label cru, deixa o admin customizar
+    // depois via confirmationText se quiser algo específico do negócio.
+    text = agentName
+      ? `¡Perfecto! Te derivamos con ${agentName} para que te atienda personalmente. En breve se pondrá en contacto contigo por aquí.`
+      : `¡Perfecto! Recibimos tu solicitud. Un miembro del equipo se pondrá en contacto contigo en breve.`;
+  }
 
   const msg = await prisma.message.create({
     data: {
