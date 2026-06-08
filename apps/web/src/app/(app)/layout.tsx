@@ -26,6 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const { data: workspaces, isLoading: workspacesLoading } = useQuery<{
     workspaces: WorkspaceListItem[];
+    activeWorkspaceId: string | null;
   }>({
     queryKey: ['workspaces'],
     queryFn: () => api('/api/workspaces'),
@@ -54,10 +55,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!session?.user) return null;
 
-  const activeWorkspace = workspaces?.workspaces[0];
+  // Workspace ativo: vem do servidor (session.activeWorkspaceId). Sem essa info, o
+  // sidebar mostrava sempre o primeiro workspace por createdAt — desincronizando com
+  // os dados que o backend serve via header/session.
+  const activeWorkspace =
+    workspaces?.workspaces.find((w) => w.id === workspaces.activeWorkspaceId) ??
+    workspaces?.workspaces[0];
 
-  // /onboarding renderiza sem sidebar — user ainda não tem workspace
-  if (pathname === '/onboarding') {
+  // /onboarding e /select-workspace renderizam sem sidebar — fluxos pré-app.
+  if (pathname === '/onboarding' || pathname === '/select-workspace') {
     return <RealtimeProvider>{children}</RealtimeProvider>;
   }
 
