@@ -29,7 +29,10 @@ export function LoginForm() {
         return;
       }
       toast.success('Bem-vindo!');
-      router.push('/dashboard');
+      // Vai pra tela de seleção de empresa. Se user tem 1 workspace, /select-workspace
+      // auto-redireciona pra /dashboard. Se 0, vai pra /onboarding. Se 2+, mostra
+      // os cards pra escolher antes de entrar.
+      router.push('/select-workspace');
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro inesperado');

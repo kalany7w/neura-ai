@@ -72,11 +72,28 @@ workspacesRouter.post('/', requireAuth, async (c) => {
 // GET /api/workspaces — lista workspaces do user
 workspacesRouter.get('/', requireAuth, async (c) => {
   const userId = c.get('userId');
-  const memberships = await prisma.membership.findMany({
-    where: { userId },
-    include: { workspace: true },
-    orderBy: { createdAt: 'asc' },
-  });
+  const sessionId = c.get('sessionId');
+  const [memberships, session] = await Promise.all([
+    prisma.membership.findMany({
+      where: { userId },
+      include: { workspace: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    sessionId && !sessionId.startsWith('apikey:')
+      ? prisma.session.findUnique({
+          where: { id: sessionId },
+          select: { activeWorkspaceId: true },
+        })
+      : Promise.resolve(null),
+  ]);
+  // activeWorkspaceId: session.activeWorkspaceId (válido) > primeira membership.
+  // Valida membership pra evitar apontar pra workspace que o user foi removido.
+  const memberWsIds = new Set(memberships.map((m) => m.workspaceId));
+  const sessionActive =
+    session?.activeWorkspaceId && memberWsIds.has(session.activeWorkspaceId)
+      ? session.activeWorkspaceId
+      : null;
+  const activeWorkspaceId = sessionActive ?? memberships[0]?.workspaceId ?? null;
   return c.json({
     workspaces: memberships.map((m) => ({
       id: m.workspace.id,
@@ -84,6 +101,7 @@ workspacesRouter.get('/', requireAuth, async (c) => {
       slug: m.workspace.slug,
       role: m.role,
     })),
+    activeWorkspaceId,
   });
 });
 
