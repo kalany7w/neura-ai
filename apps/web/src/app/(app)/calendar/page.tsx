@@ -6,6 +6,7 @@ import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
+import { useT } from '@/lib/i18n';
 
 interface CalEvent {
   id: string;
@@ -45,6 +46,7 @@ interface WorkspaceMeta {
 
 export default function CalendarPage() {
   const qc = useQueryClient();
+  const { t, lang } = useT();
   const [ref, setRef] = useState(() => new Date());
   const year = ref.getFullYear();
   const month = ref.getMonth();
@@ -98,30 +100,32 @@ export default function CalendarPage() {
     eventsByDay.set(day, arr);
   });
 
-  const monthName = ref.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const locale = lang === 'es' ? 'es-PY' : 'pt-BR';
+  const monthName = ref.toLocaleDateString(locale, { month: 'long', year: 'numeric' });
   const todayDate = new Date();
   const isCurrentMonth = todayDate.getFullYear() === year && todayDate.getMonth() === month;
+  // Dias da semana traduzidos (Dom/Seg/... ou Dom/Lun/...)
+  const weekdays = lang === 'es'
+    ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold">Calendário</h1>
+            <h1 className="text-3xl font-bold">{t('page.calendar.title')}</h1>
             {activeWorkspace && (
               <span
                 className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
-                title="Eventos isolados por empresa — você está vendo apenas os desta."
+                title={t('page.calendar.subtitle')}
               >
                 <Building2 className="h-3 w-3" />
                 {activeWorkspace.name}
               </span>
             )}
           </div>
-          <p className="text-muted-foreground">
-            Eventos da equipe — aplicações, manutenções, reparações e tarefas dos cards. Cada
-            empresa tem seu próprio calendário.
-          </p>
+          <p className="text-muted-foreground">{t('page.calendar.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => setRef(new Date(year, month - 1, 1))}>
@@ -132,13 +136,13 @@ export default function CalendarPage() {
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setRef(new Date())}>
-            Hoje
+            {t('action.today')}
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
-        {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => (
+        {weekdays.map((d) => (
           <div key={d} className="bg-card p-2 text-center text-xs font-semibold text-muted-foreground">
             {d}
           </div>
