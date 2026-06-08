@@ -11,6 +11,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 
 interface InboxItem {
@@ -26,6 +27,7 @@ interface InboxItem {
 }
 
 export default function WelcomeFlowsListPage() {
+  const { t } = useT();
   const { data, isLoading } = useQuery<{ inboxes: InboxItem[] }>({
     queryKey: ['welcome-flows-list'],
     queryFn: () => api('/api/inboxes?includeWelcomeFlow=true'),
@@ -34,11 +36,8 @@ export default function WelcomeFlowsListPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Fluxo de boas-vindas</h1>
-        <p className="text-muted-foreground">
-          Configure mensagens automáticas iniciais com opções pra classificar conversas e rotear pra
-          funis no kanban.
-        </p>
+        <h1 className="text-3xl font-bold">{t('page.welcome_flows.title')}</h1>
+        <p className="text-muted-foreground">{t('page.welcome_flows.subtitle')}</p>
       </div>
 
       {isLoading && <p className="text-muted-foreground">Carregando…</p>}

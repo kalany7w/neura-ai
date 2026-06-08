@@ -16,6 +16,7 @@ import {
   Send,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -84,6 +85,7 @@ const STATUS_COLOR: Record<ArticleStatus, string> = {
 export default function KbPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [selectedCategory, setSelectedCategory] = useState<string | 'all' | 'uncategorized'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ArticleStatus>('all');
   const [q, setQ] = useState('');
@@ -226,12 +228,9 @@ export default function KbPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
             <BookOpen className="h-7 w-7 text-indigo-500" />
-            Base de conhecimento
+            {t('page.kb.title')}
           </h1>
-          <p className="mt-1 max-w-2xl text-muted-foreground">
-            Artigos com busca semântica via IA — agentes pesquisam no composer e inserem
-            conteúdo pronto. Embeddings gerados automaticamente quando o artigo é publicado.
-          </p>
+          <p className="mt-1 max-w-2xl text-muted-foreground">{t('page.kb.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setCatDialogOpen(true)}>

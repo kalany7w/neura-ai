@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -210,6 +211,7 @@ const ACTION_KIND_ICON: Record<ActionKind, React.ComponentType<{ className?: str
 export default function AutomationsPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
   const [runsRule, setRunsRule] = useState<Rule | null>(null);
@@ -287,12 +289,9 @@ export default function AutomationsPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
             <Bot className="h-7 w-7 text-indigo-500" />
-            Automações
+            {t('page.automations.title')}
           </h1>
-          <p className="text-muted-foreground">
-            Regras “se X então Y” que rodam dentro do sistema. Quando o gatilho dispara, as
-            condições são avaliadas e, se passarem, as ações são executadas.
-          </p>
+          <p className="text-muted-foreground">{t('page.automations.subtitle')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)} disabled={settings?.paused}>
           <Plus className="h-4 w-4" />

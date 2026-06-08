@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import { renderTemplate, TEMPLATE_VARIABLES } from '@neura/shared/template-render';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -43,6 +44,7 @@ type Input = z.infer<typeof schema>;
 export default function TemplatesPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const { data, isLoading } = useQuery<{ templates: TemplateItem[] }>({
     queryKey: ['templates'],
     queryFn: () => api('/api/templates'),
@@ -135,12 +137,8 @@ export default function TemplatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Templates de resposta</h1>
-        <p className="text-muted-foreground">
-          Respostas rápidas com atalhos (ex: <code>/saudacao</code>) e placeholders
-          condicionais — use <code>{`{{contact.firstName | default 'amigo'}}`}</code> pra dar
-          fallback quando o contato não tem nome cadastrado.
-        </p>
+        <h1 className="text-3xl font-bold">{t('page.templates.title')}</h1>
+        <p className="text-muted-foreground">{t('page.templates.subtitle')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

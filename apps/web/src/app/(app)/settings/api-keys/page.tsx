@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,7 @@ interface CreateResp {
 export default function ApiKeysPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [revealed, setRevealed] = useState<{ plain: string; name: string } | null>(null);
 
@@ -91,12 +93,9 @@ export default function ApiKeysPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
             <Key className="h-7 w-7 text-amber-500" />
-            API Keys
+            {t('page.api_keys.title')}
           </h1>
-          <p className="text-muted-foreground">
-            Chaves de acesso pra integrar o Neura AI externamente. Use no header{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">Authorization: Bearer …</code>.
-          </p>
+          <p className="text-muted-foreground">{t('page.api_keys.subtitle')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />

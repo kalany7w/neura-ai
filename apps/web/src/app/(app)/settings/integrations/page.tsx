@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { InboundWebhooksSection } from '@/components/integrations/inbound-webhooks-section';
 import { Button } from '@/components/ui/button';
@@ -99,6 +100,7 @@ function StatusBadge({ webhook }: { webhook: Webhook }) {
 export default function IntegrationsPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Webhook | null>(null);
 
@@ -170,12 +172,9 @@ export default function IntegrationsPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
             <Zap className="h-7 w-7 text-amber-500" />
-            Integrações
+            {t('page.integrations.title')}
           </h1>
-          <p className="text-muted-foreground">
-            Conecte o Neura AI a sistemas externos via webhooks. Compatível com n8n, Zapier, Make e
-            qualquer endpoint HTTP que aceite POST.
-          </p>
+          <p className="text-muted-foreground">{t('page.integrations.subtitle')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />

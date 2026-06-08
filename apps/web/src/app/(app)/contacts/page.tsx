@@ -11,6 +11,7 @@ import { ContactsBulkActionsBar } from '@/components/contacts/bulk-actions-bar';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -46,6 +47,7 @@ type CreateInput = z.infer<typeof createSchema>;
 
 export default function ContactsPage() {
   const qc = useQueryClient();
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [labelId, setLabelId] = useState<string | null>(null);
@@ -119,10 +121,8 @@ export default function ContactsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Contatos</h1>
-          <p className="text-muted-foreground">
-            Pessoas que conversaram com você. Etiquete pra filtrar.
-          </p>
+          <h1 className="text-3xl font-bold">{t('page.contacts.title')}</h1>
+          <p className="text-muted-foreground">{t('page.contacts.subtitle')}</p>
         </div>
         <div className="flex gap-2">
         <Button variant="outline" onClick={() => setImportOpen(true)}>

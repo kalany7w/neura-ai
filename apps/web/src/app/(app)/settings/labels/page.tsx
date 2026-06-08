@@ -8,6 +8,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ type Input = z.infer<typeof schema>;
 export default function LabelsPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const { data, isLoading } = useQuery<{ labels: LabelItem[] }>({
     queryKey: ['labels'],
     queryFn: () => api('/api/labels'),
@@ -119,12 +121,8 @@ export default function LabelsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Etiquetas</h1>
-        <p className="text-muted-foreground">
-          Reutilize em contatos e conversas pra filtrar. Quando vincula a um funil, a etiqueta
-          aparece APENAS em cards desse funil (escopo multi-empresa) — e ainda cria card no funil
-          quando aplicada a uma conversa.
-        </p>
+        <h1 className="text-3xl font-bold">{t('page.labels.title')}</h1>
+        <p className="text-muted-foreground">{t('page.labels.subtitle')}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

@@ -69,6 +69,11 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
 
   // Pages — headers
   'page.dashboard.title': { pt: 'Dashboard', es: 'Panel' },
+  'page.dashboard.welcome': { pt: 'Bem-vindo', es: 'Bienvenido' },
+  'page.dashboard.subtitle': {
+    pt: 'Visão geral do workspace.',
+    es: 'Vista general del workspace.',
+  },
   'page.kanban.title': { pt: 'Kanban', es: 'Kanban' },
   'page.calendar.title': { pt: 'Calendário', es: 'Calendario' },
   'page.calendar.subtitle': {
@@ -76,10 +81,101 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
     es: 'Eventos del equipo — aplicaciones, mantenimientos, reparaciones y tareas de las cards. Cada empresa tiene su propio calendario.',
   },
   'page.contacts.title': { pt: 'Contatos', es: 'Contactos' },
+  'page.contacts.subtitle': {
+    pt: 'Pessoas e empresas com quem você conversa.',
+    es: 'Personas y empresas con las que conversas.',
+  },
   'page.reports.title': { pt: 'Relatórios', es: 'Reportes' },
+  'page.reports.subtitle': {
+    pt: 'Performance da equipe e tendências do workspace.',
+    es: 'Rendimiento del equipo y tendencias del workspace.',
+  },
   'page.inboxes.title': { pt: 'Inboxes', es: 'Bandejas de entrada' },
+  'page.inboxes.subtitle': {
+    pt: 'Canais conectados — WhatsApp, Telegram, Email, Webchat.',
+    es: 'Canales conectados — WhatsApp, Telegram, Email, Webchat.',
+  },
   'page.inbox.title': { pt: 'Conversas', es: 'Conversaciones' },
+  'page.inbox.subtitle': {
+    pt: 'Atenda mensagens em tempo real.',
+    es: 'Atiende mensajes en tiempo real.',
+  },
   'page.import.title': { pt: 'Importar de outro CRM', es: 'Importar desde otro CRM' },
+  'page.import.subtitle': {
+    pt: 'Sobe arquivos CSV exportados do Kommo, Pipedrive, HubSpot, etc. para migrar contatos e leads. Idempotente: re-rodar com o mesmo arquivo não duplica registros.',
+    es: 'Sube archivos CSV exportados de Kommo, Pipedrive, HubSpot, etc. para migrar contactos y leads. Idempotente: volver a ejecutar con el mismo archivo no duplica registros.',
+  },
+  'page.profile.title': { pt: 'Meu perfil', es: 'Mi perfil' },
+  'page.profile.subtitle': {
+    pt: 'Edite seus dados de atendente e troque sua senha.',
+    es: 'Edita tus datos de agente y cambia tu contraseña.',
+  },
+  'page.members.title': { pt: 'Membros', es: 'Miembros' },
+  'page.members.subtitle': {
+    pt: 'Convide agentes e gerencie permissões.',
+    es: 'Invita agentes y gestiona permisos.',
+  },
+  'page.labels.title': { pt: 'Etiquetas', es: 'Etiquetas' },
+  'page.labels.subtitle': {
+    pt: 'Reutilize em contatos e conversas pra filtrar. Quando vincula a um funil, a etiqueta aparece APENAS em cards desse funil (escopo multi-empresa) — e ainda cria card no funil quando aplicada a uma conversa.',
+    es: 'Reutilízalas en contactos y conversaciones para filtrar. Al vincular a un embudo, la etiqueta aparece SOLO en cards de ese embudo (alcance multi-empresa) — y crea card en el embudo cuando se aplica a una conversación.',
+  },
+  'page.templates.title': { pt: 'Templates de resposta', es: 'Plantillas de respuesta' },
+  'page.templates.subtitle': {
+    pt: 'Atalhos pra respostas rápidas. Digite /atalho na conversa pra expandir.',
+    es: 'Atajos para respuestas rápidas. Escribe /atajo en la conversación para expandir.',
+  },
+  'page.kb.title': { pt: 'Base de conhecimento', es: 'Base de conocimiento' },
+  'page.kb.subtitle': {
+    pt: 'Documentação que a IA usa pra responder perguntas frequentes da sua empresa.',
+    es: 'Documentación que la IA usa para responder preguntas frecuentes de tu empresa.',
+  },
+  'page.welcome_flows.title': { pt: 'Fluxo de boas-vindas', es: 'Flujo de bienvenida' },
+  'page.welcome_flows.subtitle': {
+    pt: 'Configure o menu interativo que recebe novos clientes em cada inbox.',
+    es: 'Configura el menú interactivo que recibe a nuevos clientes en cada bandeja de entrada.',
+  },
+  'page.welcome_flow_editor.subtitle': { pt: 'Fluxo de boas-vindas', es: 'Flujo de bienvenida' },
+  'page.sla.title': { pt: 'SLA', es: 'SLA' },
+  'page.sla.subtitle': {
+    pt: 'Defina tempos máximos pra primeira resposta e resolução por inbox/etiqueta.',
+    es: 'Define tiempos máximos para la primera respuesta y resolución por bandeja/etiqueta.',
+  },
+  'page.api_keys.title': { pt: 'API Keys', es: 'API Keys' },
+  'page.api_keys.subtitle': {
+    pt: 'Tokens pra integrar a API do Neura com outros sistemas.',
+    es: 'Tokens para integrar la API de Neura con otros sistemas.',
+  },
+  'page.automations.title': { pt: 'Automações', es: 'Automatizaciones' },
+  'page.automations.subtitle': {
+    pt: 'Regras que disparam ações automaticamente — atribuir, etiquetar, mover, enviar mensagem.',
+    es: 'Reglas que disparan acciones automáticamente — asignar, etiquetar, mover, enviar mensaje.',
+  },
+  'page.csat.title': { pt: 'CSAT / NPS', es: 'CSAT / NPS' },
+  'page.csat.subtitle': {
+    pt: 'Pesquisas de satisfação enviadas após resolução das conversas.',
+    es: 'Encuestas de satisfacción enviadas tras resolver las conversaciones.',
+  },
+  'page.audit.title': { pt: 'Audit log', es: 'Registro de auditoría' },
+  'page.audit.subtitle': {
+    pt: 'Histórico imutável de todas as ações sensíveis do workspace.',
+    es: 'Historial inmutable de todas las acciones sensibles del workspace.',
+  },
+  'page.custom_attributes.title': { pt: 'Atributos customizados', es: 'Atributos personalizados' },
+  'page.custom_attributes.subtitle': {
+    pt: 'Campos personalizados que aparecem no side panel da conversa, em contatos e cards.',
+    es: 'Campos personalizados que aparecen en el panel lateral de la conversación, en contactos y cards.',
+  },
+  'page.integrations.title': { pt: 'Integrações', es: 'Integraciones' },
+  'page.integrations.subtitle': {
+    pt: 'Conecte serviços externos — calendário, CRM, transcrição, IA.',
+    es: 'Conecta servicios externos — calendario, CRM, transcripción, IA.',
+  },
+  'page.onboarding.title': { pt: 'Crie seu workspace', es: 'Crea tu empresa' },
+  'page.onboarding.subtitle': {
+    pt: 'Cada empresa tem seu próprio espaço isolado com inboxes, cards, contatos e equipe.',
+    es: 'Cada empresa tiene su propio espacio aislado con bandejas, cards, contactos y equipo.',
+  },
 
   // Common actions
   'action.save': { pt: 'Salvar', es: 'Guardar' },
@@ -92,6 +188,28 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
   'action.loading': { pt: 'Carregando…', es: 'Cargando…' },
   'action.saving': { pt: 'Salvando…', es: 'Guardando…' },
   'action.today': { pt: 'Hoje', es: 'Hoy' },
+  'action.close': { pt: 'Fechar', es: 'Cerrar' },
+  'action.confirm': { pt: 'Confirmar', es: 'Confirmar' },
+  'action.copy': { pt: 'Copiar', es: 'Copiar' },
+  'action.export': { pt: 'Exportar', es: 'Exportar' },
+  'action.filter': { pt: 'Filtrar', es: 'Filtrar' },
+  'action.try_again': { pt: 'Tentar novamente', es: 'Intentar de nuevo' },
+  'action.show_more': { pt: 'Ver mais', es: 'Ver más' },
+
+  // Roles
+  'role.admin': { pt: 'Administrador', es: 'Administrador' },
+  'role.supervisor': { pt: 'Supervisor', es: 'Supervisor' },
+  'role.agent': { pt: 'Agente', es: 'Agente' },
+
+  // Common
+  'common.error': { pt: 'Erro', es: 'Error' },
+  'common.success': { pt: 'Sucesso', es: 'Éxito' },
+  'common.no_data': { pt: 'Sem dados', es: 'Sin datos' },
+  'common.name': { pt: 'Nome', es: 'Nombre' },
+  'common.email': { pt: 'Email', es: 'Email' },
+  'common.phone': { pt: 'Telefone', es: 'Teléfono' },
+  'common.role': { pt: 'Papel', es: 'Rol' },
+  'common.status': { pt: 'Status', es: 'Estado' },
 };
 
 interface I18nContextValue {

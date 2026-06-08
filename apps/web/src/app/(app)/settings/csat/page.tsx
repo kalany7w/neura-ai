@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { renderTemplate } from '@neura/shared/template-render';
 import { Button } from '@/components/ui/button';
@@ -75,6 +76,7 @@ const DEFAULT_BODY_THUMBS =
 export default function CsatPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Survey | null>(null);
 
@@ -144,12 +146,9 @@ export default function CsatPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
             <Smile className="h-7 w-7 text-indigo-500" />
-            CSAT / NPS — satisfação pós-atendimento
+            {t('page.csat.title')}
           </h1>
-          <p className="mt-1 max-w-2xl text-muted-foreground">
-            Surveys automáticos após conversa resolvida. Cliente responde 1-5 / 0-10 / 👍
-            👎 e o Neura captura a métrica + responde com agradecimento.
-          </p>
+          <p className="mt-1 max-w-2xl text-muted-foreground">{t('page.csat.subtitle')}</p>
         </div>
         <Button onClick={openNew}>
           <Plus className="mr-2 h-4 w-4" />
