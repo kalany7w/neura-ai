@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Lock, Mail, User as UserIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { authClient, useSession } from '@/lib/auth-client';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,7 @@ import { ActiveSessions } from '@/components/settings/active-sessions';
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { t } = useT();
   const { data: session, isPending } = useSession();
   const [name, setName] = useState('');
   const [savingName, setSavingName] = useState(false);
@@ -89,8 +91,8 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-3xl font-bold">Meu perfil</h1>
-        <p className="text-muted-foreground">Edite seus dados de atendente e troque sua senha.</p>
+        <h1 className="text-3xl font-bold">{t('page.profile.title')}</h1>
+        <p className="text-muted-foreground">{t('page.profile.subtitle')}</p>
       </div>
 
       <div className="rounded-lg border bg-card p-5">

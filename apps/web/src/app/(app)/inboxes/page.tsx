@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useRealtimeStore } from '@/lib/realtime-store';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { InboxCard, type InboxItem } from '@/components/inboxes/inbox-card';
@@ -42,6 +43,7 @@ const STATUS_TABS: Array<{ value: StatusFilter; label: string }> = [
 
 export default function InboxesPage() {
   const qc = useQueryClient();
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [telegramOpen, setTelegramOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
@@ -109,18 +111,14 @@ export default function InboxesPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
-            Inboxes
+            {t('page.inboxes.title')}
             {wsState === 'open' ? (
               <Wifi className="h-5 w-5 text-emerald-500" />
             ) : (
               <WifiOff className="h-5 w-5 text-muted-foreground" />
             )}
           </h1>
-          <p className="text-muted-foreground">
-            Conecte canais (WhatsApp via Baileys, Telegram via Bot API, Email via Resend
-            inbound, Webchat embedável) para receber e enviar mensagens. Cada inbox = 1
-            canal.
-          </p>
+          <p className="text-muted-foreground">{t('page.inboxes.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           <Dialog open={webchatOpen} onOpenChange={setWebchatOpen}>

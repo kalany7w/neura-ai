@@ -6,6 +6,7 @@ import Papa from 'papaparse';
 import { Upload, FileText, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -84,6 +85,7 @@ function suggestMapping(
 // ============================ Page ============================
 
 export default function ImportPage() {
+  const { t } = useT();
   const [kind, setKind] = useState<ImportKind>('contacts');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -285,11 +287,8 @@ export default function ImportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Importar de outro CRM</h1>
-        <p className="text-muted-foreground">
-          Sobe arquivos CSV exportados do Kommo, Pipedrive, HubSpot, etc. para migrar contatos e
-          leads. Idempotente: re-rodar com o mesmo arquivo não duplica registros.
-        </p>
+        <h1 className="text-3xl font-bold">{t('page.import.title')}</h1>
+        <p className="text-muted-foreground">{t('page.import.subtitle')}</p>
       </div>
 
       {/* Kind selector */}

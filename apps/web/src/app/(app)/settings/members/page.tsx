@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ChevronDown, Mail, RefreshCw, Trash2, UserMinus } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/auth-client';
 import { useConfirm } from '@/components/confirm-provider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -82,6 +83,7 @@ function initialsFrom(s: string): string {
 export default function MembersPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
   const online = useOnlineAgents();
@@ -184,8 +186,8 @@ export default function MembersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Membros</h1>
-        <p className="text-muted-foreground">Convide agentes e gerencie permissões.</p>
+        <h1 className="text-3xl font-bold">{t('page.members.title')}</h1>
+        <p className="text-muted-foreground">{t('page.members.subtitle')}</p>
       </div>
 
       {!canManage && (

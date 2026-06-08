@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -168,6 +169,7 @@ interface SlaReport {
 }
 
 export default function ReportsPage() {
+  const { t } = useT();
   const today = new Date();
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
   const [since, setSince] = useState(toInputDate(thirtyDaysAgo));
@@ -220,11 +222,9 @@ export default function ReportsPage() {
       <div>
         <h1 className="flex items-center gap-2 text-3xl font-bold">
           <BarChart3 className="h-7 w-7 text-violet-500" />
-          Relatórios
+          {t('page.reports.title')}
         </h1>
-        <p className="text-muted-foreground">
-          Métricas de atendimento. Filtre por período e exporte como CSV.
-        </p>
+        <p className="text-muted-foreground">{t('page.reports.subtitle')}</p>
       </div>
 
       {/* Date range + export */}

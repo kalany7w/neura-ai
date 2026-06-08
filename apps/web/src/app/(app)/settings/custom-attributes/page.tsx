@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus, Tag, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +47,7 @@ const TYPE_BADGE: Record<AttrType, string> = {
 export default function CustomAttrsPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading } = useQuery<{ defs: AttrDef[] }>({
@@ -87,11 +89,9 @@ export default function CustomAttrsPage() {
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
             <Tag className="h-7 w-7 text-cyan-500" />
-            Atributos customizados
+            {t('page.custom_attributes.title')}
           </h1>
-          <p className="text-muted-foreground">
-            Campos extras pra contatos e conversas — categorize leads por fonte, plano, segmento…
-          </p>
+          <p className="text-muted-foreground">{t('page.custom_attributes.subtitle')}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />

@@ -18,6 +18,7 @@ import {
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { DashboardTimeseriesChart } from '@/components/dashboard/timeseries-chart';
+import { useT } from '@/lib/i18n';
 
 interface DashboardStats {
   inbox: {
@@ -90,6 +91,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
+  const { t } = useT();
   const { data, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: () => api('/api/dashboard/stats'),
@@ -106,10 +108,10 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Bem-vindo{firstName ? `, ${firstName}` : ''}</h1>
-        <p className="text-muted-foreground">
-          Visão geral do workspace em tempo real — atualiza a cada minuto.
-        </p>
+        <h1 className="text-3xl font-bold">
+          {t('page.dashboard.welcome')}{firstName ? `, ${firstName}` : ''}
+        </h1>
+        <p className="text-muted-foreground">{t('page.dashboard.subtitle')}</p>
       </div>
 
       {/* KPIs principais */}

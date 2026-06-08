@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -176,6 +177,7 @@ interface LabelRef {
 
 export default function InboxPage() {
   const qc = useQueryClient();
+  const { t } = useT();
   const [tab, setTab] = useState<Tab>('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -318,10 +320,8 @@ export default function InboxPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Conversas</h1>
-        <p className="text-muted-foreground">
-          Atenda clientes em tempo real. Atualiza sozinho — sem refresh.
-        </p>
+        <h1 className="text-3xl font-bold">{t('page.inbox.title')}</h1>
+        <p className="text-muted-foreground">{t('page.inbox.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Timer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +50,7 @@ function formatMinutes(min: number): string {
 export default function SlaPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SlaPolicy | null>(null);
 
@@ -116,13 +118,9 @@ export default function SlaPage() {
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Timer className="h-7 w-7" />
-            SLA
+            {t('page.sla.title')}
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Tempo-alvo de primeira resposta (FRT) e resolução (RT). Policy mais específica
-            ganha: <strong>etiqueta &gt; inbox &gt; padrão</strong>. Breach alerts via
-            notificação automática quando passa do threshold sem resposta.
-          </p>
+          <p className="text-muted-foreground mt-1">{t('page.sla.subtitle')}</p>
         </div>
         <Button
           onClick={() => {

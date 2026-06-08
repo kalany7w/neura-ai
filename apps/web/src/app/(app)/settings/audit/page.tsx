@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, ScrollText, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -49,6 +50,7 @@ function formatDate(iso: string): string {
 }
 
 export default function AuditPage() {
+  const { t } = useT();
   const [page, setPage] = useState(1);
   const [actionFilter, setActionFilter] = useState('');
   const [resourceFilter, setResourceFilter] = useState('');
@@ -72,11 +74,9 @@ export default function AuditPage() {
       <div>
         <h1 className="flex items-center gap-2 text-3xl font-bold">
           <ScrollText className="h-7 w-7 text-slate-500" />
-          Audit log
+          {t('page.audit.title')}
         </h1>
-        <p className="text-muted-foreground">
-          Registro imutável de todas as ações sensíveis no workspace.
-        </p>
+        <p className="text-muted-foreground">{t('page.audit.subtitle')}</p>
       </div>
 
       <div className="flex flex-wrap gap-3 rounded-lg border bg-card p-3">
