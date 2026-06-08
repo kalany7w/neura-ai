@@ -40,6 +40,7 @@ import { welcomeFlowsRouter } from './routes/welcome-flows.js';
 import { welcomePresetsRouter } from './routes/welcome-presets.js';
 import { leadDetailRouter } from './routes/lead-detail.js';
 import { calendarRouter } from './routes/calendar.js';
+import { importRouter } from './routes/import.js';
 import { startScheduledMsgsScheduler } from './scheduled-messages.js';
 import { setupWebSocket } from './ws.js';
 import { startSlaScheduler } from './sla.js';
@@ -123,6 +124,8 @@ app.route('/api', welcomePresetsRouter);
 app.route('/api', leadDetailRouter);
 // Calendar events — agenda de eventos (aplicação, manutenção, reparo, etc.)
 app.route('/api/calendar', calendarRouter);
+// CSV importer — migração de outros CRMs (Kommo, Pipedrive, HubSpot).
+app.route('/api/import', importRouter);
 
 // WebSocket /ws — setup antes do serve()
 const { injectWebSocket } = setupWebSocket(app);
