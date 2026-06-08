@@ -10,10 +10,13 @@ interface CalEvent {
   id: string;
   title: string;
   eventDate: string;
-  type: 'APPLICATION' | 'MAINTENANCE' | 'REPAIR' | 'SALE_FOLLOWUP' | 'OTHER';
+  // TASK = tarefa vinculada a um card (criada via TasksSection no card-detail).
+  // Compartilha o mesmo modelo CalendarEvent — aparece aqui igual aos outros tipos.
+  type: 'APPLICATION' | 'MAINTENANCE' | 'REPAIR' | 'SALE_FOLLOWUP' | 'TASK' | 'OTHER';
   status: 'SCHEDULED' | 'DONE' | 'CANCELLED';
   assignedUser: { id: string; name: string | null } | null;
   contact: { id: string; name: string | null } | null;
+  cardId?: string | null;
 }
 
 const TYPE_COLOR: Record<CalEvent['type'], string> = {
@@ -21,6 +24,7 @@ const TYPE_COLOR: Record<CalEvent['type'], string> = {
   MAINTENANCE: '#f59e0b',
   REPAIR: '#ef4444',
   SALE_FOLLOWUP: '#3b82f6',
+  TASK: '#8b5cf6', // violet — distingue tarefa do card de outros eventos do calendário
   OTHER: '#71717a',
 };
 
@@ -29,6 +33,7 @@ const TYPE_LABEL: Record<CalEvent['type'], string> = {
   MAINTENANCE: 'Manutenção',
   REPAIR: 'Reparação',
   SALE_FOLLOWUP: 'Follow-up',
+  TASK: 'Tarefa',
   OTHER: 'Outro',
 };
 
@@ -71,7 +76,7 @@ export default function CalendarPage() {
         <div>
           <h1 className="text-3xl font-bold">Calendário</h1>
           <p className="text-muted-foreground">
-            Eventos da equipe — aplicações, manutenções, reparações.
+            Eventos da equipe — aplicações, manutenções, reparações e tarefas dos cards.
           </p>
         </div>
         <div className="flex items-center gap-2">
