@@ -304,6 +304,10 @@ model Contact {
   // Custom attributes — populado na Fase 5 com defs por workspace
   customAttrs Json?
   welcomeRespondedAt DateTime?
+  // ID do contato no sistema externo de origem (Kommo, Pipedrive, HubSpot, etc.)
+  // — usado pra idempotência de re-imports CSV. Único por workspace; null se o
+  // contato foi criado nativamente no Neura.
+  externalId  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -318,6 +322,7 @@ model Contact {
   @@unique([workspaceId, telegramChatId])
   @@unique([workspaceId, email])
   @@unique([workspaceId, webchatSessionId])
+  @@unique([workspaceId, externalId])
   @@index([workspaceId])
   @@map("contacts")
 }
@@ -635,6 +640,9 @@ model Card {
   // Raciocínio que IA usou pra estimar (1-2 frases pra agente entender)
   aiWinReasoning     String?   @db.Text
   aiForecastAt       DateTime?
+  // ID do lead no sistema externo de origem (Kommo Lead ID, Pipedrive Deal ID, etc.)
+  // — usado pra idempotência de re-imports CSV. Único por workspace.
+  externalId         String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -647,6 +655,7 @@ model Card {
   notes     CardNote[]
   calendarEvents CalendarEvent[]
 
+  @@unique([workspaceId, externalId])
   @@index([workspaceId])
   @@index([funnelId, stageId, position])
   @@index([conversationId])

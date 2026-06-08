@@ -25,6 +25,7 @@ import {
   BookOpen,
   Smile,
   MessageSquarePlus,
+  Upload,
 } from 'lucide-react';
 import { signOut } from '@/lib/auth-client';
 import { useRealtimeStore } from '@/lib/realtime-store';
@@ -89,6 +90,7 @@ const groups: NavGroup[] = [
       { href: '/settings/sla', label: 'SLA', icon: Timer, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/csat', label: 'CSAT / NPS', icon: Smile, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
+      { href: '/settings/import', label: 'Importar CSV', icon: Upload, roles: ['ADMIN'] },
       { href: '/settings/custom-attributes', label: 'Atributos', icon: Tag, roles: ['ADMIN'] },
       { href: '/settings/api-keys', label: 'API Keys', icon: Key, roles: ['ADMIN'] },
       { href: '/settings/audit', label: 'Audit log', icon: ScrollText, roles: ['ADMIN'] },
