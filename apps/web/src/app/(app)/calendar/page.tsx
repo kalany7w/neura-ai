@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 
 interface CalEvent {
   id: string;
@@ -37,7 +38,13 @@ const TYPE_LABEL: Record<CalEvent['type'], string> = {
   OTHER: 'Outro',
 };
 
+interface WorkspaceMeta {
+  workspaces: Array<{ id: string; name: string; slug: string }>;
+  activeWorkspaceId: string | null;
+}
+
 export default function CalendarPage() {
+  const qc = useQueryClient();
   const [ref, setRef] = useState(() => new Date());
   const year = ref.getFullYear();
   const month = ref.getMonth();
@@ -47,9 +54,34 @@ export default function CalendarPage() {
   const from = firstDay.toISOString();
   const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
 
+  // Workspace ativo — usado na queryKey pra que ao trocar de empresa o cache
+  // do React Query NÃO sirva eventos do workspace anterior. Backend já isola
+  // por workspaceId; isso é defesa em profundidade no cliente.
+  const { data: wsData } = useQuery<WorkspaceMeta>({
+    queryKey: ['workspaces'],
+    queryFn: () => api('/api/workspaces'),
+  });
+  const activeWorkspaceId = wsData?.activeWorkspaceId ?? null;
+  const activeWorkspace = wsData?.workspaces.find((w) => w.id === activeWorkspaceId);
+
   const { data } = useQuery<{ events: CalEvent[] }>({
-    queryKey: ['calendar', year, month],
+    // activeWorkspaceId na key: troca de empresa → nova key → refetch limpo
+    // (não mostra eventos da empresa anterior nem que por 1 frame).
+    queryKey: ['calendar', activeWorkspaceId, year, month],
     queryFn: () => api(`/api/calendar?from=${from}&to=${to}`),
+    enabled: !!activeWorkspaceId,
+  });
+
+  // Realtime: invalida quando outro user da MESMA empresa cria/edita/exclui evento.
+  // Eventos vêm filtrados pelo workspaceId do backend, então só dispara pra este ws.
+  useRealtimeListener((evt) => {
+    if (
+      evt.event === 'calendar_event.created' ||
+      evt.event === 'calendar_event.updated' ||
+      evt.event === 'calendar_event.deleted'
+    ) {
+      qc.invalidateQueries({ queryKey: ['calendar', activeWorkspaceId] });
+    }
   });
 
   const startOffset = firstDay.getDay();
@@ -74,9 +106,21 @@ export default function CalendarPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Calendário</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold">Calendário</h1>
+            {activeWorkspace && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
+                title="Eventos isolados por empresa — você está vendo apenas os desta."
+              >
+                <Building2 className="h-3 w-3" />
+                {activeWorkspace.name}
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground">
-            Eventos da equipe — aplicações, manutenções, reparações e tarefas dos cards.
+            Eventos da equipe — aplicações, manutenções, reparações e tarefas dos cards. Cada
+            empresa tem seu próprio calendário.
           </p>
         </div>
         <div className="flex items-center gap-2">
