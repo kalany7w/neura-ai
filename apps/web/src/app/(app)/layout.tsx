@@ -11,6 +11,7 @@ import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { DesktopNotificationsProvider } from '@/components/desktop-notifications-provider';
 import { OfflineBanner } from '@/components/offline-banner';
+import { I18nProvider } from '@/lib/i18n';
 
 interface WorkspaceListItem {
   id: string;
@@ -64,32 +65,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // /onboarding e /select-workspace renderizam sem sidebar — fluxos pré-app.
   if (pathname === '/onboarding' || pathname === '/select-workspace') {
-    return <RealtimeProvider>{children}</RealtimeProvider>;
+    return (
+      <I18nProvider>
+        <RealtimeProvider>{children}</RealtimeProvider>
+      </I18nProvider>
+    );
   }
 
   return (
-    <RealtimeProvider>
-      <DesktopNotificationsProvider />
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar
-          user={{
-            id: session.user.id,
-            name: session.user.name,
-            email: session.user.email,
-          }}
-          workspace={activeWorkspace ?? null}
-          workspaces={workspaces?.workspaces}
-          activeWorkspaceId={activeWorkspace?.id}
-        />
-        <main className="flex-1 overflow-y-auto">
-          <OfflineBanner />
-          <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
-            <GlobalSearch />
-            <NotificationsBell />
-          </header>
-          <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
-        </main>
-      </div>
-    </RealtimeProvider>
+    <I18nProvider>
+      <RealtimeProvider>
+        <DesktopNotificationsProvider />
+        <div className="flex h-screen overflow-hidden">
+          <Sidebar
+            user={{
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+            }}
+            workspace={activeWorkspace ?? null}
+            workspaces={workspaces?.workspaces}
+            activeWorkspaceId={activeWorkspace?.id}
+          />
+          <main className="flex-1 overflow-y-auto">
+            <OfflineBanner />
+            <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
+              <GlobalSearch />
+              <NotificationsBell />
+            </header>
+            <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
+          </main>
+        </div>
+      </RealtimeProvider>
+    </I18nProvider>
   );
 }

@@ -34,6 +34,8 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TeamPresence } from '@/components/layout/team-presence';
+import { LanguageSwitcher } from '@/components/layout/language-switcher';
+import { useT } from '@/lib/i18n';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,42 +60,45 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// NavItem.label = chave i18n. O render usa t(label) — se sem tradução, retorna
+// a própria chave (mostra fallback claro tipo "sidebar.dashboard"), facilitando
+// detectar strings não-traduzidas em dev.
 const groups: NavGroup[] = [
   {
-    items: [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [{ href: '/dashboard', label: 'sidebar.dashboard', icon: LayoutDashboard }],
   },
   {
-    label: 'Operação',
+    label: 'sidebar.group.operation',
     items: [
-      { href: '/inbox', label: 'Conversas', icon: MessageCircle },
-      { href: '/kanban', label: 'Kanban', icon: LayoutGrid },
-      { href: '/calendar', label: 'Calendário', icon: CalendarDays },
+      { href: '/inbox', label: 'sidebar.conversations', icon: MessageCircle },
+      { href: '/kanban', label: 'sidebar.kanban', icon: LayoutGrid },
+      { href: '/calendar', label: 'sidebar.calendar', icon: CalendarDays },
     ],
   },
   {
-    label: 'Gestão',
+    label: 'sidebar.group.management',
     items: [
-      { href: '/contacts', label: 'Contatos', icon: Users },
-      { href: '/inboxes', label: 'Inboxes', icon: Inbox },
-      { href: '/reports', label: 'Relatórios', icon: BarChart3 },
+      { href: '/contacts', label: 'sidebar.contacts', icon: Users },
+      { href: '/inboxes', label: 'sidebar.inboxes', icon: Inbox },
+      { href: '/reports', label: 'sidebar.reports', icon: BarChart3 },
     ],
   },
   {
-    label: 'Configurações',
+    label: 'sidebar.group.settings',
     items: [
-      { href: '/settings/templates', label: 'Templates', icon: FileText },
-      { href: '/settings/welcome-flows', label: 'Fluxo de boas-vindas', icon: MessageSquarePlus, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/kb', label: 'Base de conhecimento', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/labels', label: 'Etiquetas', icon: Tag, roles: ['ADMIN'] },
-      { href: '/settings/members', label: 'Membros', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/automations', label: 'Automações', icon: Bot, roles: ['ADMIN'] },
-      { href: '/settings/sla', label: 'SLA', icon: Timer, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/csat', label: 'CSAT / NPS', icon: Smile, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/integrations', label: 'Integrações', icon: Zap, roles: ['ADMIN'] },
-      { href: '/settings/import', label: 'Importar CSV', icon: Upload, roles: ['ADMIN'] },
-      { href: '/settings/custom-attributes', label: 'Atributos', icon: Tag, roles: ['ADMIN'] },
-      { href: '/settings/api-keys', label: 'API Keys', icon: Key, roles: ['ADMIN'] },
-      { href: '/settings/audit', label: 'Audit log', icon: ScrollText, roles: ['ADMIN'] },
+      { href: '/settings/templates', label: 'sidebar.templates', icon: FileText },
+      { href: '/settings/welcome-flows', label: 'sidebar.welcome_flows', icon: MessageSquarePlus, roles: ['ADMIN', 'SUPERVISOR'] },
+      { href: '/settings/kb', label: 'sidebar.kb', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
+      { href: '/settings/labels', label: 'sidebar.labels', icon: Tag, roles: ['ADMIN'] },
+      { href: '/settings/members', label: 'sidebar.members', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },
+      { href: '/settings/automations', label: 'sidebar.automations', icon: Bot, roles: ['ADMIN'] },
+      { href: '/settings/sla', label: 'sidebar.sla', icon: Timer, roles: ['ADMIN', 'SUPERVISOR'] },
+      { href: '/settings/csat', label: 'sidebar.csat', icon: Smile, roles: ['ADMIN', 'SUPERVISOR'] },
+      { href: '/settings/integrations', label: 'sidebar.integrations', icon: Zap, roles: ['ADMIN'] },
+      { href: '/settings/import', label: 'sidebar.import', icon: Upload, roles: ['ADMIN'] },
+      { href: '/settings/custom-attributes', label: 'sidebar.custom_attributes', icon: Tag, roles: ['ADMIN'] },
+      { href: '/settings/api-keys', label: 'sidebar.api_keys', icon: Key, roles: ['ADMIN'] },
+      { href: '/settings/audit', label: 'sidebar.audit', icon: ScrollText, roles: ['ADMIN'] },
     ],
   },
 ];
@@ -144,6 +149,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
   const wsState = useRealtimeStore((s) => s.state);
   const role = workspace?.role;
   const hasMultiple = (workspaces?.length ?? 0) > 1;
+  const { t } = useT();
 
   async function switchWorkspace(wsId: string) {
     if (wsId === activeWorkspaceId) return;
@@ -152,11 +158,11 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
         method: 'POST',
         body: JSON.stringify({ workspaceId: wsId }),
       });
-      toast.success('Workspace trocado');
+      toast.success(t('workspace.switched'));
       router.refresh();
       window.location.reload();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao trocar workspace');
+      toast.error(err instanceof Error ? err.message : t('workspace.switch_error'));
     }
   }
 
@@ -205,7 +211,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel>Seus workspaces</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t('workspace.your_workspaces')}</DropdownMenuLabel>
                   {workspaces!.map((w) => (
                     <DropdownMenuItem
                       key={w.id}
@@ -224,7 +230,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => router.push('/onboarding')}>
                     <Plus className="h-3.5 w-3.5" />
-                    Novo workspace
+                    {t('workspace.new')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -254,7 +260,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
             <div key={idx}>
               {group.label && (
                 <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.label}
+                  {t(group.label)}
                 </p>
               )}
               <ul className="space-y-0.5">
@@ -274,7 +280,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
                         )}
                       >
                         <Icon className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{item.label}</span>
+                        <span className="truncate">{t(item.label)}</span>
                       </Link>
                     </li>
                   );
@@ -308,6 +314,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
               <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
             </div>
           </Link>
+          <LanguageSwitcher />
           <ThemeToggle />
           <Link
             href="/settings/profile"
@@ -319,7 +326,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
           <button
             type="button"
             onClick={handleSignOut}
-            title="Sair"
+            title={t('user.sign_out')}
             className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
           >
             <LogOut className="h-4 w-4" />
