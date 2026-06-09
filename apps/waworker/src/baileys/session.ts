@@ -2,7 +2,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
   type WASocket,
-} from '@whiskeysockets/baileys';
+} from 'baileys';
 import { pino } from 'pino';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';

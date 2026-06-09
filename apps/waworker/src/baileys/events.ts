@@ -3,8 +3,9 @@ import type {
   ConnectionState,
   proto,
   WAMessage,
-} from '@whiskeysockets/baileys';
-import { DisconnectReason } from '@whiskeysockets/baileys';
+  WAMessageKey,
+} from 'baileys';
+import { DisconnectReason } from 'baileys';
 import QRCode from 'qrcode';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
@@ -234,6 +235,92 @@ export async function handlePresenceUpdate(
   });
 }
 
+/**
+ * Resolve o número de telefone real (E.164) a partir da key da mensagem.
+ *
+ * Com o rollout de LID do WhatsApp, `remoteJid` chega como `<id>@lid` — um
+ * identificador interno que NÃO é o telefone. O número real vem em `remoteJidAlt`
+ * (preenchido pelo Baileys v7 quando o endereçamento é por LID). Fallback: o store
+ * de mapeamento LID→PN do socket (persistido em WaAuthKey via auth-state).
+ *
+ * Retorna também `lidDigits` (parte numérica do LID) pra permitir migrar contatos
+ * legados gravados com o LID como se fosse telefone (bug pré-v7).
+ */
+async function resolvePhone(
+  sock: WASocket | undefined,
+  key: WAMessageKey,
+): Promise<{ phoneNumber: string | null; lidDigits: string | null }> {
+  const remoteJid = key.remoteJid ?? '';
+  if (remoteJid.endsWith('@s.whatsapp.net')) {
+    const digits = remoteJid.split('@')[0];
+    return { phoneNumber: digits ? `+${digits}` : null, lidDigits: null };
+  }
+  if (!remoteJid.endsWith('@lid')) {
+    return { phoneNumber: null, lidDigits: null };
+  }
+  const lidDigits = remoteJid.split('@')[0] || null;
+  // 1) remoteJidAlt traz o PN quando o endereçamento é por LID.
+  let pnJid = key.remoteJidAlt;
+  // 2) Fallback: store de mapeamento LID→PN do Baileys.
+  if ((!pnJid || !pnJid.endsWith('@s.whatsapp.net')) && sock) {
+    try {
+      pnJid = (await sock.signalRepository.lidMapping.getPNForLID(remoteJid)) ?? undefined;
+    } catch (err) {
+      logger.debug({ err, remoteJid }, 'getPNForLID failed (ignored)');
+    }
+  }
+  if (pnJid && pnJid.endsWith('@s.whatsapp.net')) {
+    const digits = pnJid.split('@')[0];
+    return { phoneNumber: digits ? `+${digits}` : null, lidDigits };
+  }
+  return { phoneNumber: null, lidDigits };
+}
+
+/**
+ * Cura contato legado: registros gravados antes do upgrade v7 usaram o LID como
+ * telefone. Quando o número real aparece, move conversas, notas e respostas CSAT
+ * do contato-LID pro contato real e remove o fantasma. Idempotente e barato:
+ * no-op quando não há legado (findUnique indexado retorna null).
+ *
+ * `Conversation.contactId` é `onDelete: Cascade` — por isso as conversas (e em
+ * cascata messages/cards) são migradas ANTES do delete, nunca depois.
+ */
+async function mergeLegacyLidContact(
+  workspaceId: string,
+  lidPhone: string,
+  realContactId: string,
+): Promise<void> {
+  const legacy = await prisma.contact.findUnique({
+    where: { workspaceId_phoneNumber: { workspaceId, phoneNumber: lidPhone } },
+    select: { id: true },
+  });
+  if (!legacy || legacy.id === realContactId) return;
+
+  await prisma.$transaction([
+    prisma.conversation.updateMany({
+      where: { contactId: legacy.id },
+      data: { contactId: realContactId },
+    }),
+    prisma.contactNote.updateMany({
+      where: { contactId: legacy.id },
+      data: { contactId: realContactId },
+    }),
+    prisma.csatResponse.updateMany({
+      where: { contactId: legacy.id },
+      data: { contactId: realContactId },
+    }),
+    // PK composta (contactId,labelId) pode colidir com labels do contato real;
+    // são labels do contato-fantasma, então descarta.
+    prisma.contactLabel.deleteMany({ where: { contactId: legacy.id } }),
+    prisma.contact.delete({ where: { id: legacy.id } }),
+  ]);
+
+  logger.info(
+    { workspaceId, lidPhone, realContactId },
+    'Contato legado (LID) fundido no contato com número real',
+  );
+}
+
 async function persistInboundMessage(
   ctx: MessagesContext,
   msg: WAMessage,
@@ -263,15 +350,15 @@ async function persistInboundMessage(
       }
     }
   }
-  // Extrai número. WhatsApp pode mascarar o contato com um LID (remoteJid = <lid>@lid,
-  // privacidade). Nesse caso o número REAL vem em msg.key.senderPn. Usar o LID faria o
-  // outbound reconstruir <lid>@s.whatsapp.net — que o WhatsApp ACEITA mas NÃO entrega
-  // (fica em 1 tick). Baileys 6.7.21 só decodifica senderPn (sem store de mapeo), então
-  // gravamos o PN real e respondemos por <pn>@s.whatsapp.net (caminho padrão, suportado).
-  const idJid = remoteJid.endsWith('@lid') && msg.key.senderPn ? msg.key.senderPn : remoteJid;
-  const phoneRaw = idJid.split('@')[0];
-  if (!phoneRaw) return;
-  const phoneNumber = `+${phoneRaw}`;
+  // Resolve o número real. Em endereçamento LID, remoteJid é só identificador
+  // interno; o telefone vem de remoteJidAlt / lidMapping (ver resolvePhone).
+  const resolved = await resolvePhone(ctx.sock, msg.key);
+  // Fallback: se o PN ainda não resolveu (LID sem alt nem mapping), usa o LID como
+  // chave temporária pra não perder a mensagem — mergeLegacyLidContact() cura assim
+  // que o número real aparecer num inbound seguinte.
+  const phoneNumber = resolved.phoneNumber ?? `+${remoteJid.split('@')[0] ?? ''}`;
+  const lidDigits = resolved.lidDigits;
+  if (phoneNumber === '+') return;
 
   // Texto da mensagem
   const messageContent = msg.message;
@@ -470,6 +557,7 @@ async function persistInboundMessage(
     return {
       isNewConversation,
       conversationId: conversation.id,
+      contactId: contact.id,
       contactPhone: phoneNumber,
       contactName: contact.name,
       isFirstInbound,
@@ -479,6 +567,13 @@ async function persistInboundMessage(
   });
 
   if (txResult) {
+    // Cura legado: se resolvemos o número real E havia um LID, funde o contato
+    // antigo (gravado com o LID como telefone) no contato com número real.
+    if (resolved.phoneNumber && lidDigits) {
+      void mergeLegacyLidContact(ctx.workspaceId, `+${lidDigits}`, txResult.contactId).catch((err) =>
+        logger.error({ err, lidDigits }, 'mergeLegacyLidContact failed'),
+      );
+    }
     // Cache jid → conversation pra resolver presence.update sem hit DB (LRU)
     jidCachePut(remoteJid, {
       conversationId: txResult.conversationId,

@@ -1,4 +1,4 @@
-import { downloadMediaMessage, type WAMessage, type MessageType } from '@whiskeysockets/baileys';
+import { downloadMediaMessage, type WAMessage, type MessageType } from 'baileys';
 import { pino } from 'pino';
 import sharp from 'sharp';
 import { putMedia } from '../storage.js';
