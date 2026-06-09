@@ -5,7 +5,7 @@ import {
   type AuthenticationCreds,
   type AuthenticationState,
   type SignalDataTypeMap,
-} from '@whiskeysockets/baileys';
+} from 'baileys';
 import { prisma } from '../db.js';
 import { encrypt, decrypt } from '../crypto.js';
 import { logger } from '../logger.js';

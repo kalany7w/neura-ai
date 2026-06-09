@@ -9,7 +9,7 @@ allowBuilds:
   esbuild: true
   sharp: true
   unrs-resolver: true
-  "@whiskeysockets/baileys": true
+  baileys: true
   msgpackr-extract: true
   protobufjs: true
 
