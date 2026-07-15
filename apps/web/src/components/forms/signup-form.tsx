@@ -15,12 +15,12 @@ import { Label } from '@/components/ui/label';
 // Signup do Better Auth: só name/email/password.
 // Workspace é criado na tela /onboarding após login.
 const signupFormSchema = z.object({
-  name: z.string().min(2, 'Nome muito curto').max(80),
-  email: z.string().email('Email inválido'),
+  name: z.string().min(2, 'validation.name_short').max(80),
+  email: z.string().email('validation.email_invalid'),
   password: z
     .string()
-    .min(8, 'Senha precisa ter no mínimo 8 caracteres')
-    .max(128, 'Senha muito longa'),
+    .min(8, 'validation.password_min')
+    .max(128, 'validation.password_max'),
 });
 type SignupFormInput = z.infer<typeof signupFormSchema>;
 
@@ -63,17 +63,17 @@ export function SignupForm() {
       <div className="space-y-2">
         <Label htmlFor="name">{t('common.name')}</Label>
         <Input id="name" autoComplete="name" {...register('name')} />
-        {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+        {errors.name && <p className="text-xs text-destructive">{t(errors.name.message ?? '')}</p>}
       </div>
       <div className="space-y-2">
         <Label htmlFor="email">{t('common.email')}</Label>
         <Input id="email" type="email" autoComplete="email" {...register('email')} />
-        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+        {errors.email && <p className="text-xs text-destructive">{t(errors.email.message ?? '')}</p>}
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">{t('c_forms_signup_form.password')}</Label>
         <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
-        {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+        {errors.password && <p className="text-xs text-destructive">{t(errors.password.message ?? '')}</p>}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? t('c_forms_signup_form.submitting') : t('c_forms_signup_form.submit')}

@@ -33,7 +33,7 @@ const schema = z.object({
   name: z.string().min(1).max(80),
   shortcut: z
     .string()
-    .regex(/^\/[a-z0-9_-]{1,30}$/i, 'Atalho deve ser /palavra')
+    .regex(/^\/[a-z0-9_-]{1,30}$/i, 'validation.shortcut')
     .or(z.literal(''))
     .optional()
     .transform((v) => (v ? v : null)),
@@ -153,7 +153,7 @@ export default function TemplatesPage() {
             <div className="space-y-2">
               <Label htmlFor="shortcut">{t('settings_templates.shortcut_label')}</Label>
               <Input id="shortcut" placeholder={t('settings_templates.shortcut_placeholder')} {...register('shortcut')} />
-              {errors.shortcut && <p className="text-xs text-destructive">{errors.shortcut.message}</p>}
+              {errors.shortcut && <p className="text-xs text-destructive">{t(errors.shortcut.message ?? '')}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="body">{t('settings_templates.body_label')}</Label>

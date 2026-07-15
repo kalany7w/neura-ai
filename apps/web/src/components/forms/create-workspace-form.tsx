@@ -19,7 +19,7 @@ const schema = z.object({
     .string()
     .min(2)
     .max(40)
-    .regex(/^[a-z0-9-]+$/, 'Apenas a-z, 0-9 e -'),
+    .regex(/^[a-z0-9-]+$/, 'validation.slug_chars'),
 });
 type Input = z.infer<typeof schema>;
 
@@ -84,7 +84,7 @@ export function CreateWorkspaceForm() {
         <Label htmlFor="slug">{t('c_forms_create_workspace_form.slug_label')}</Label>
         <Input id="slug" placeholder="minha-empresa" {...register('slug')} />
         <p className="text-xs text-muted-foreground">{t('c_forms_create_workspace_form.slug_hint')}</p>
-        {errors.slug && <p className="text-xs text-destructive">{errors.slug.message}</p>}
+        {errors.slug && <p className="text-xs text-destructive">{t(errors.slug.message ?? '')}</p>}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting || !name}>
         {isSubmitting ? t('c_forms_create_workspace_form.creating') : t('c_forms_create_workspace_form.submit')}
