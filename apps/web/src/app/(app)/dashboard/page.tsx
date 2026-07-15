@@ -19,6 +19,7 @@ import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { DashboardTimeseriesChart } from '@/components/dashboard/timeseries-chart';
 import { useT, formatMoney, formatRelativeTime } from '@/lib/i18n';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 
 interface DashboardStats {
   inbox: {
@@ -72,6 +73,7 @@ const STATUS_BADGE: Record<string, string> = {
 export default function DashboardPage() {
   const { data: session } = useSession();
   const { t, lang } = useT();
+  const currency = useWorkspaceCurrency();
   const { data, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: () => api('/api/dashboard/stats'),
@@ -153,7 +155,7 @@ export default function DashboardPage() {
               <p className="mt-1 text-2xl font-bold">{pipeline.activeCount}</p>
               {pipeline.activeValue > 0 && (
                 <p className="text-xs font-medium text-emerald-600">
-                  {formatMoney(pipeline.activeValue, lang)}
+                  {formatMoney(pipeline.activeValue, lang, currency)}
                 </p>
               )}
             </div>
@@ -165,7 +167,7 @@ export default function DashboardPage() {
               <p className="mt-1 text-2xl font-bold text-emerald-600">{pipeline.positive30d}</p>
               {pipeline.positiveValue30d > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {formatMoney(pipeline.positiveValue30d, lang)}
+                  {formatMoney(pipeline.positiveValue30d, lang, currency)}
                 </p>
               )}
             </div>
@@ -177,7 +179,7 @@ export default function DashboardPage() {
               <p className="mt-1 text-2xl font-bold text-red-600">{pipeline.negative30d}</p>
               {pipeline.negativeValue30d > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {formatMoney(pipeline.negativeValue30d, lang)}
+                  {formatMoney(pipeline.negativeValue30d, lang, currency)}
                 </p>
               )}
             </div>

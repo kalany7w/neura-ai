@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useT, formatMoney, localeFor } from '@/lib/i18n';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -855,6 +856,7 @@ function setShortcut(
 
 function OverviewTab({ data }: { data: Overview }) {
   const { t, lang } = useT();
+  const currency = useWorkspaceCurrency();
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -947,7 +949,7 @@ function OverviewTab({ data }: { data: Overview }) {
                 <p className="text-lg font-bold text-emerald-700">{data.pipeline.positive}</p>
                 {data.pipeline.positiveValue > 0 && (
                   <p className="text-[10px] text-muted-foreground">
-                    {formatMoney(data.pipeline.positiveValue, lang)}
+                    {formatMoney(data.pipeline.positiveValue, lang, currency)}
                   </p>
                 )}
               </div>
@@ -961,7 +963,7 @@ function OverviewTab({ data }: { data: Overview }) {
                 <p className="text-lg font-bold text-red-700">{data.pipeline.negative}</p>
                 {data.pipeline.negativeValue > 0 && (
                   <p className="text-[10px] text-muted-foreground">
-                    {formatMoney(data.pipeline.negativeValue, lang)}
+                    {formatMoney(data.pipeline.negativeValue, lang, currency)}
                   </p>
                 )}
               </div>
