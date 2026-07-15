@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Search as SearchIcon, Sparkles, Loader2, FileText, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -41,6 +42,7 @@ interface Props {
 const DEBOUNCE_MS = 300;
 
 export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: Props) {
+  const { t } = useT();
   const [query, setQuery] = useState(initialQuery ?? '');
   const [debouncedQuery, setDebouncedQuery] = useState(query);
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -98,9 +100,9 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (err instanceof ApiError && err.status === 403) {
-          setError('Sem permissão pra consultar a base.');
+          setError(t('c_kb_search_dialog.no_permission'));
         } else {
-          setError(err instanceof Error ? err.message : 'Erro');
+          setError(err instanceof Error ? err.message : t('common.error'));
         }
         setResults([]);
       })
@@ -123,7 +125,7 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
       // Incrementa viewCount em background (não bloqueia UI).
       api(`/api/kb/articles/${id}/view`, { method: 'POST' }).catch(() => {});
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao carregar artigo');
+      toast.error(err instanceof Error ? err.message : t('c_kb_search_dialog.load_article_error'));
       setExpandedId(null);
     } finally {
       setLoadingFull(false);
@@ -133,18 +135,18 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
   function insertCurrent() {
     if (!fullArticle) return;
     onInsert(fullArticle.body);
-    toast.success(`"${fullArticle.title}" inserido no composer`);
+    toast.success(t('c_kb_search_dialog.inserted', { title: fullArticle.title }));
     onOpenChange(false);
   }
 
   const hasQuery = debouncedQuery.trim().length > 0;
   const emptyHint = useMemo(() => {
-    if (!hasQuery) return 'Digite pra buscar artigos publicados';
-    if (loading) return 'Buscando…';
+    if (!hasQuery) return t('c_kb_search_dialog.hint_type');
+    if (loading) return t('c_kb_search_dialog.searching');
     if (error) return error;
-    if (results.length === 0) return 'Nenhum artigo encontrado';
+    if (results.length === 0) return t('c_kb_search_dialog.no_results');
     return null;
-  }, [hasQuery, loading, error, results]);
+  }, [hasQuery, loading, error, results, t]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -152,17 +154,16 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-indigo-500" />
-            Buscar na base de conhecimento
+            {t('c_kb_search_dialog.title')}
           </DialogTitle>
           <DialogDescription>
             {semantic ? (
               <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
                 <Sparkles className="h-3 w-3" />
-                Busca semântica por IA — encontra artigos pelo significado, não só palavras
-                exatas.
+                {t('c_kb_search_dialog.semantic_desc')}
               </span>
             ) : (
-              'Busca por palavra-chave (IA desabilitada — sem OPENAI_API_KEY).'
+              t('c_kb_search_dialog.keyword_desc')
             )}
           </DialogDescription>
         </DialogHeader>
@@ -173,7 +174,7 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Como faço pra cancelar a assinatura?"
+            placeholder={t('c_kb_search_dialog.search_placeholder')}
             className="pl-9"
           />
           {loading && (
@@ -193,7 +194,7 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
                 >
-                  Gerenciar base de conhecimento
+                  {t('c_kb_search_dialog.manage_kb')}
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}
@@ -230,7 +231,7 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
                                 : 'bg-muted text-muted-foreground'
                           }`}
                         >
-                          {scorePct}% match
+                          {t('c_kb_search_dialog.match', { n: scorePct })}
                         </span>
                       )}
                     </div>
@@ -261,10 +262,10 @@ export function KbSearchDialog({ open, onOpenChange, initialQuery, onInsert }: P
                             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
                           >
                             <ExternalLink className="h-3 w-3" />
-                            Abrir editor
+                            {t('c_kb_search_dialog.open_editor')}
                           </a>
                           <Button size="sm" onClick={insertCurrent}>
-                            Inserir conteúdo no composer
+                            {t('c_kb_search_dialog.insert_content')}
                           </Button>
                         </div>
                       </>

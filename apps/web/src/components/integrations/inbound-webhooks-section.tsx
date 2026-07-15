@@ -17,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useT, formatRelativeTime } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,11 +51,11 @@ interface ListResponse {
   availableActions: Action[];
 }
 
-const ACTION_LABEL: Record<Action, string> = {
-  send_message: 'Enviar mensagem',
-  create_conversation: 'Criar conversa',
-  apply_label: 'Aplicar etiqueta',
-  create_note: 'Criar nota interna',
+const ACTION_LABEL_KEY: Record<Action, string> = {
+  send_message: 'c_integrations_inbound_webhooks_section.action_send_message',
+  create_conversation: 'c_integrations_inbound_webhooks_section.action_create_conversation',
+  apply_label: 'c_integrations_inbound_webhooks_section.action_apply_label',
+  create_note: 'c_integrations_inbound_webhooks_section.action_create_note',
 };
 
 function getApiBase(): string {
@@ -66,19 +67,8 @@ function inboundUrl(slug: string): string {
   return `${getApiBase()}/api/inbound/${slug}`;
 }
 
-function formatRelative(iso: string | null): string {
-  if (!iso) return 'nunca';
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return 'agora há pouco';
-  if (minutes < 60) return `há ${minutes}min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `há ${days}d`;
-}
-
 export function InboundWebhooksSection() {
+  const { t, lang } = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const [createOpen, setCreateOpen] = useState(false);
@@ -97,7 +87,7 @@ export function InboundWebhooksSection() {
         setCopiedKey(key);
         setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
       },
-      () => toast.error('Falha ao copiar'),
+      () => toast.error(t('c_integrations_inbound_webhooks_section.toast_copy_failed')),
     );
   }
 
@@ -107,19 +97,23 @@ export function InboundWebhooksSection() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !h.enabled }),
       });
-      toast.success(h.enabled ? 'Desativado' : 'Ativado');
+      toast.success(
+        h.enabled
+          ? t('c_integrations_inbound_webhooks_section.toast_disabled')
+          : t('c_integrations_inbound_webhooks_section.toast_enabled'),
+      );
       await qc.invalidateQueries({ queryKey: ['inbound-webhooks'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function regenerate(h: InboundHook) {
     if (
       !(await confirm({
-        title: `Regenerar secret do "${h.name}"?`,
-        description: 'O secret antigo deixa de funcionar imediatamente. Integrações que usam o secret antigo precisam ser atualizadas.',
-        confirmLabel: 'Regenerar',
+        title: t('c_integrations_inbound_webhooks_section.confirm_regen_title', { name: h.name }),
+        description: t('c_integrations_inbound_webhooks_section.confirm_regen_desc'),
+        confirmLabel: t('c_integrations_inbound_webhooks_section.confirm_regen_label'),
         destructive: true,
       }))
     )
@@ -129,30 +123,30 @@ export function InboundWebhooksSection() {
         `/api/integrations/inbound/${h.id}`,
         { method: 'PATCH', body: JSON.stringify({ regenerateSecret: true }) },
       );
-      toast.success('Secret regenerado');
+      toast.success(t('c_integrations_inbound_webhooks_section.toast_secret_regenerated'));
       await qc.invalidateQueries({ queryKey: ['inbound-webhooks'] });
       if (res.fullSecret) setRevealedSecret((m) => ({ ...m, [h.id]: true }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove(h: InboundHook) {
     if (
       !(await confirm({
-        title: `Excluir webhook inbound "${h.name}"?`,
-        description: 'A URL deixa de aceitar requests imediatamente. Esta ação é definitiva.',
-        confirmLabel: 'Excluir',
+        title: t('c_integrations_inbound_webhooks_section.confirm_delete_title', { name: h.name }),
+        description: t('c_integrations_inbound_webhooks_section.confirm_delete_desc'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/integrations/inbound/${h.id}`, { method: 'DELETE' });
-      toast.success('Webhook excluído');
+      toast.success(t('c_integrations_inbound_webhooks_section.toast_deleted'));
       await qc.invalidateQueries({ queryKey: ['inbound-webhooks'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -162,35 +156,34 @@ export function InboundWebhooksSection() {
         <div>
           <h2 className="flex items-center gap-2 text-xl font-semibold">
             <ArrowDownToLine className="h-5 w-5 text-violet-500" />
-            Webhooks Inbound
+            {t('c_integrations_inbound_webhooks_section.title')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Sistemas externos disparam ações no Neura via POST autenticado. Use pra integrar com CRM,
-            n8n, Zapier, scripts internos ou IA externa.
+            {t('c_integrations_inbound_webhooks_section.intro')}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
-          Novo inbound
+          {t('c_integrations_inbound_webhooks_section.new_inbound')}
         </Button>
       </div>
 
       <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
         <p>
-          <strong>Como chamar:</strong>{' '}
+          <strong>{t('c_integrations_inbound_webhooks_section.how_to_call')}</strong>{' '}
           <code className="rounded bg-background px-1 py-0.5">POST {getApiBase()}/api/inbound/&lt;slug&gt;</code>
-          {' '}com header{' '}
-          <code className="rounded bg-background px-1 py-0.5">X-Neura-Signature: sha256=&lt;HMAC-SHA256 do body com o secret&gt;</code>.
-          Body JSON com <code className="rounded bg-background px-1 py-0.5">{'{ "action": "send_message", ... }'}</code>.
-          Limite: 50 req/min por slug.
+          {' '}{t('c_integrations_inbound_webhooks_section.with_header')}{' '}
+          <code className="rounded bg-background px-1 py-0.5">X-Neura-Signature: sha256=&lt;{t('c_integrations_inbound_webhooks_section.hmac_desc')}&gt;</code>.
+          {' '}{t('c_integrations_inbound_webhooks_section.body_json_with')} <code className="rounded bg-background px-1 py-0.5">{'{ "action": "send_message", ... }'}</code>.
+          {' '}{t('c_integrations_inbound_webhooks_section.rate_limit')}
         </p>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.hooks.length ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          Nenhum webhook inbound. Crie um pra receber comandos externos.
+          {t('c_integrations_inbound_webhooks_section.empty')}
         </div>
       ) : (
         <div className="space-y-3">
@@ -205,15 +198,22 @@ export function InboundWebhooksSection() {
                       {h.name}
                       {!h.enabled && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                          desativado
+                          {t('c_integrations_inbound_webhooks_section.disabled_badge')}
                         </span>
                       )}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {h.callCount} chamada(s) · último disparo {formatRelative(h.lastFiredAt)}
+                      {t('c_integrations_inbound_webhooks_section.calls_and_last', {
+                        n: h.callCount,
+                        when: formatRelativeTime(h.lastFiredAt, lang),
+                      })}
                       {h.lastStatus !== null && h.lastStatus !== 200 && (
                         <span className="ml-1 text-destructive">
-                          (erro {h.lastStatus}: {h.lastError ?? '—'})
+                          {' '}
+                          {t('c_integrations_inbound_webhooks_section.last_error', {
+                            status: h.lastStatus,
+                            error: h.lastError ?? '—',
+                          })}
                         </span>
                       )}
                     </p>
@@ -223,7 +223,7 @@ export function InboundWebhooksSection() {
                       size="sm"
                       variant="ghost"
                       onClick={() => setSampleHook(h)}
-                      title="Ver exemplo de chamada"
+                      title={t('c_integrations_inbound_webhooks_section.title_view_sample')}
                     >
                       <Code className="h-3.5 w-3.5" />
                     </Button>
@@ -231,7 +231,7 @@ export function InboundWebhooksSection() {
                       size="sm"
                       variant="ghost"
                       onClick={() => regenerate(h)}
-                      title="Regenerar secret"
+                      title={t('c_integrations_inbound_webhooks_section.title_regenerate')}
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
                     </Button>
@@ -239,13 +239,17 @@ export function InboundWebhooksSection() {
                       size="sm"
                       variant="ghost"
                       onClick={() => toggle(h)}
-                      title={h.enabled ? 'Desativar' : 'Ativar'}
+                      title={
+                        h.enabled
+                          ? t('c_integrations_inbound_webhooks_section.title_disable')
+                          : t('c_integrations_inbound_webhooks_section.title_enable')
+                      }
                     >
                       <Power
                         className={`h-3.5 w-3.5 ${h.enabled ? 'text-emerald-600' : 'text-muted-foreground'}`}
                       />
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => remove(h)} title="Excluir">
+                    <Button size="sm" variant="ghost" onClick={() => remove(h)} title={t('action.delete')}>
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </Button>
                   </div>
@@ -263,7 +267,7 @@ export function InboundWebhooksSection() {
                       type="button"
                       onClick={() => copy(url, `url-${h.id}`)}
                       className="rounded p-1 text-muted-foreground hover:text-foreground"
-                      title="Copiar URL"
+                      title={t('c_integrations_inbound_webhooks_section.title_copy_url')}
                     >
                       {copiedKey === `url-${h.id}` ? (
                         <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
@@ -278,7 +282,7 @@ export function InboundWebhooksSection() {
                     </Label>
                     <code className="min-w-0 flex-1 truncate rounded bg-muted/50 px-2 py-1 text-[11px] font-mono">
                       {h.secret === '***'
-                        ? '••• (apenas ADMIN vê)'
+                        ? t('c_integrations_inbound_webhooks_section.secret_admin_only')
                         : showSecret
                           ? h.secret
                           : h.secret.replace(/./g, '•').slice(0, 32) + '…'}
@@ -290,7 +294,11 @@ export function InboundWebhooksSection() {
                           setRevealedSecret((m) => ({ ...m, [h.id]: !m[h.id] }))
                         }
                         className="rounded p-1 text-muted-foreground hover:text-foreground"
-                        title={showSecret ? 'Esconder' : 'Revelar'}
+                        title={
+                          showSecret
+                            ? t('c_integrations_inbound_webhooks_section.title_hide')
+                            : t('c_integrations_inbound_webhooks_section.title_reveal')
+                        }
                       >
                         {showSecret ? (
                           <EyeOff className="h-3.5 w-3.5" />
@@ -304,7 +312,7 @@ export function InboundWebhooksSection() {
                         type="button"
                         onClick={() => copy(h.secret, `secret-${h.id}`)}
                         className="rounded p-1 text-muted-foreground hover:text-foreground"
-                        title="Copiar secret"
+                        title={t('c_integrations_inbound_webhooks_section.title_copy_secret')}
                       >
                         {copiedKey === `secret-${h.id}` ? (
                           <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
@@ -323,14 +331,14 @@ export function InboundWebhooksSection() {
                         key={a}
                         className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
                       >
-                        {ACTION_LABEL[a]}
+                        {t(ACTION_LABEL_KEY[a])}
                       </span>
                     ))}
                   </div>
                 )}
                 {h.allowedActions.length === 0 && (
                   <p className="text-[10px] italic text-muted-foreground">
-                    Sem restrição — aceita qualquer action.
+                    {t('c_integrations_inbound_webhooks_section.no_restriction')}
                   </p>
                 )}
               </div>
@@ -359,6 +367,7 @@ function CreateInboundDialog({
   onOpenChange: (v: boolean) => void;
   availableActions: Action[];
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [name, setName] = useState('');
   const [restrict, setRestrict] = useState(false);
@@ -390,14 +399,14 @@ function CreateInboundDialog({
           }),
         },
       );
-      toast.success('Inbound criado — copie o secret agora, só aparece uma vez aqui');
+      toast.success(t('c_integrations_inbound_webhooks_section.toast_created'));
       setCreated(res);
       await qc.invalidateQueries({ queryKey: ['inbound-webhooks'] });
     } catch (err) {
       if (err instanceof ApiError) {
-        toast.error(err.code ?? 'Erro');
+        toast.error(err.code ?? t('common.error'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -414,10 +423,9 @@ function CreateInboundDialog({
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Novo webhook inbound</DialogTitle>
+          <DialogTitle>{t('c_integrations_inbound_webhooks_section.dialog_title')}</DialogTitle>
           <DialogDescription>
-            Slug + secret são gerados automaticamente. Depois de criar, copie o secret — só aparece
-            uma vez aqui.
+            {t('c_integrations_inbound_webhooks_section.dialog_desc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -425,14 +433,14 @@ function CreateInboundDialog({
           <div className="space-y-3">
             <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm dark:border-emerald-700 dark:bg-emerald-950/40">
               <p className="font-medium text-emerald-900 dark:text-emerald-200">
-                Webhook criado!
+                {t('c_integrations_inbound_webhooks_section.created_title')}
               </p>
               <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">
                 URL: <code className="rounded bg-background px-1 py-0.5">{inboundUrl(created.hook.slug)}</code>
               </p>
             </div>
             <div>
-              <Label className="mb-1 text-xs">Secret (copie agora)</Label>
+              <Label className="mb-1 text-xs">{t('c_integrations_inbound_webhooks_section.secret_copy_now')}</Label>
               <div className="flex gap-2">
                 <Input value={created.fullSecret} readOnly className="font-mono text-xs" />
                 <Button
@@ -440,7 +448,7 @@ function CreateInboundDialog({
                   variant="outline"
                   onClick={() => {
                     navigator.clipboard.writeText(created.fullSecret);
-                    toast.success('Secret copiado');
+                    toast.success(t('c_integrations_inbound_webhooks_section.toast_secret_copied'));
                   }}
                 >
                   <Clipboard className="h-4 w-4" />
@@ -454,18 +462,18 @@ function CreateInboundDialog({
               }}
               className="w-full"
             >
-              Fechar
+              {t('action.close')}
             </Button>
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="inbound-name">Nome</Label>
+              <Label htmlFor="inbound-name">{t('common.name')}</Label>
               <Input
                 id="inbound-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: n8n disparador de boas-vindas"
+                placeholder={t('c_integrations_inbound_webhooks_section.name_placeholder')}
                 maxLength={80}
               />
             </div>
@@ -478,7 +486,7 @@ function CreateInboundDialog({
                   onChange={(e) => setRestrict(e.target.checked)}
                   className="h-3.5 w-3.5 rounded border-input"
                 />
-                Restringir actions permitidas
+                {t('c_integrations_inbound_webhooks_section.restrict_actions')}
               </label>
               {restrict && (
                 <div className="space-y-1.5 rounded-md border p-3">
@@ -497,12 +505,12 @@ function CreateInboundDialog({
                         }}
                         className="h-3.5 w-3.5 rounded border-input"
                       />
-                      {ACTION_LABEL[a]}
+                      {t(ACTION_LABEL_KEY[a])}
                     </label>
                   ))}
                   {selected.size === 0 && (
                     <p className="text-[10px] italic text-muted-foreground">
-                      Nenhuma selecionada — selecione ao menos uma ou desmarque a restrição.
+                      {t('c_integrations_inbound_webhooks_section.none_selected')}
                     </p>
                   )}
                 </div>
@@ -511,7 +519,7 @@ function CreateInboundDialog({
 
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancelar
+                {t('action.cancel')}
               </Button>
               <Button
                 type="submit"
@@ -519,7 +527,9 @@ function CreateInboundDialog({
                   submitting || !name.trim() || (restrict && selected.size === 0)
                 }
               >
-                {submitting ? 'Criando…' : 'Criar'}
+                {submitting
+                  ? t('c_integrations_inbound_webhooks_section.creating')
+                  : t('action.create')}
               </Button>
             </div>
           </form>
@@ -536,6 +546,7 @@ function SampleDialog({
   hook: InboundHook | null;
   onOpenChange: () => void;
 }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
 
   if (!hook) return null;
@@ -543,8 +554,8 @@ function SampleDialog({
   const body = JSON.stringify(
     {
       action: 'send_message',
-      conversationId: '<id-da-conversa>',
-      text: 'Olá pelo webhook!',
+      conversationId: `<${t('c_integrations_inbound_webhooks_section.conv_id_placeholder')}>`,
+      text: t('c_integrations_inbound_webhooks_section.sample_text'),
     },
     null,
     2,
@@ -569,10 +580,14 @@ function SampleDialog({
     <Dialog open={!!hook} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Exemplo de chamada — {hook.name}</DialogTitle>
+          <DialogTitle>
+            {t('c_integrations_inbound_webhooks_section.example_title', { name: hook.name })}
+          </DialogTitle>
           <DialogDescription>
-            Substitua <code>&lt;SECRET&gt;</code> pelo seu secret e <code>&lt;id-da-conversa&gt;</code>{' '}
-            por um id real. O Neura valida via HMAC-SHA256.
+            {t('c_integrations_inbound_webhooks_section.replace_prefix')} <code>&lt;SECRET&gt;</code>{' '}
+            {t('c_integrations_inbound_webhooks_section.by_secret_and')}{' '}
+            <code>&lt;{t('c_integrations_inbound_webhooks_section.conv_id_placeholder')}&gt;</code>{' '}
+            {t('c_integrations_inbound_webhooks_section.by_real_id')}
           </DialogDescription>
         </DialogHeader>
 
@@ -592,23 +607,23 @@ function SampleDialog({
               {copied ? (
                 <>
                   <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
-                  Copiado
+                  {t('c_integrations_inbound_webhooks_section.copied')}
                 </>
               ) : (
                 <>
                   <Clipboard className="h-3.5 w-3.5" />
-                  Copiar
+                  {t('action.copy')}
                 </>
               )}
             </Button>
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
-            <p className="font-semibold">Actions disponíveis</p>
+            <p className="font-semibold">{t('c_integrations_inbound_webhooks_section.actions_available')}</p>
             <ul className="space-y-1.5 text-[11px] text-muted-foreground">
               <li>
-                <code className="rounded bg-background px-1">send_message</code> — envia texto:{' '}
-                <code className="rounded bg-background px-1">{'{ conversationId, text }'}</code> ou{' '}
+                <code className="rounded bg-background px-1">send_message</code> — {t('c_integrations_inbound_webhooks_section.send_message_desc')}{' '}
+                <code className="rounded bg-background px-1">{'{ conversationId, text }'}</code> {t('c_integrations_inbound_webhooks_section.or')}{' '}
                 <code className="rounded bg-background px-1">{'{ inboxId, phoneNumber, text }'}</code>
               </li>
               <li>
@@ -616,7 +631,7 @@ function SampleDialog({
                 <code className="rounded bg-background px-1">
                   {'{ inboxId, phoneNumber, contactName?, text? }'}
                 </code>{' '}
-                (reusa conversa OPEN/PENDING existente)
+                {t('c_integrations_inbound_webhooks_section.create_conversation_desc')}
               </li>
               <li>
                 <code className="rounded bg-background px-1">apply_label</code> —{' '}
@@ -625,7 +640,7 @@ function SampleDialog({
               <li>
                 <code className="rounded bg-background px-1">create_note</code> —{' '}
                 <code className="rounded bg-background px-1">{'{ conversationId, body }'}</code>{' '}
-                (interna)
+                {t('c_integrations_inbound_webhooks_section.create_note_desc')}
               </li>
             </ul>
           </div>

@@ -40,7 +40,7 @@ interface LabelItem {
 }
 
 const createSchema = z.object({
-  phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'Formato E.164: +5511999999999'),
+  phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'validation.e164'),
   name: z.string().min(1).max(120).optional(),
 });
 type CreateInput = z.infer<typeof createSchema>;
@@ -150,7 +150,7 @@ export default function ContactsPage() {
                   {...register('phoneNumber')}
                 />
                 {errors.phoneNumber && (
-                  <p className="text-xs text-destructive">{errors.phoneNumber.message}</p>
+                  <p className="text-xs text-destructive">{t(errors.phoneNumber.message ?? '')}</p>
                 )}
               </div>
               <div className="space-y-2">

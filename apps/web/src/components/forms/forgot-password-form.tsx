@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const schema = z.object({ email: z.string().email('Email inválido') });
+const schema = z.object({ email: z.string().email('validation.email_invalid') });
 type Input = z.infer<typeof schema>;
 
 export function ForgotPasswordForm() {
@@ -64,7 +64,7 @@ export function ForgotPasswordForm() {
       <div className="space-y-2">
         <Label htmlFor="email">{t('common.email')}</Label>
         <Input id="email" type="email" autoComplete="email" {...register('email')} />
-        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+        {errors.email && <p className="text-xs text-destructive">{t(errors.email.message ?? '')}</p>}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? t('c_forms_forgot_password_form.sending') : t('c_forms_forgot_password_form.submit')}
