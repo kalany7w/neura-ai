@@ -210,13 +210,119 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
   'common.phone': { pt: 'Telefone', es: 'Teléfono' },
   'common.role': { pt: 'Papel', es: 'Rol' },
   'common.status': { pt: 'Status', es: 'Estado' },
+
+  // Dashboard
+  'dashboard.subtitle_full': {
+    pt: 'Visão geral do workspace em tempo real — atualiza a cada minuto.',
+    es: 'Vista general del workspace en tiempo real — se actualiza cada minuto.',
+  },
+  'dashboard.loading': { pt: 'Carregando dashboard…', es: 'Cargando panel…' },
+  'dashboard.kpi.open': { pt: 'Conversas abertas', es: 'Conversaciones abiertas' },
+  'dashboard.kpi.open_sub': { pt: '{open} abertas · {pending} pendentes', es: '{open} abiertas · {pending} pendientes' },
+  'dashboard.kpi.unassigned': { pt: 'Sem agente', es: 'Sin agente' },
+  'dashboard.kpi.unassigned_sub': { pt: 'Aguardando atribuição', es: 'Esperando asignación' },
+  'dashboard.kpi.sla': { pt: 'SLA crítico', es: 'SLA crítico' },
+  'dashboard.kpi.sla_sub': { pt: 'Cards atrasados ou no limite', es: 'Cards atrasadas o al límite' },
+  'dashboard.kpi.mine': { pt: 'Minha fila', es: 'Mi fila' },
+  'dashboard.kpi.mine_sub': { pt: 'Conversas atribuídas a você', es: 'Conversaciones asignadas a ti' },
+  'dashboard.pipeline.open': { pt: 'Em aberto', es: 'Abiertas' },
+  'dashboard.pipeline.positive': { pt: 'Positivos (30d)', es: 'Positivos (30d)' },
+  'dashboard.pipeline.negative': { pt: 'Negativos (30d)', es: 'Negativos (30d)' },
+  'dashboard.pipeline.conversion': { pt: 'Taxa de conversão (30d)', es: 'Tasa de conversión (30d)' },
+  'dashboard.see_kanban': { pt: 'ver kanban →', es: 'ver kanban →' },
+  'dashboard.see_all': { pt: 'ver todas →', es: 'ver todas →' },
+  'dashboard.contacts': { pt: 'Contatos', es: 'Contactos' },
+  'dashboard.active_inboxes': { pt: 'Inboxes ativas', es: 'Inboxes activas' },
+  'dashboard.recent': { pt: 'Conversas recentes', es: 'Conversaciones recientes' },
+  'dashboard.empty': {
+    pt: 'Sem conversas em aberto. Conecte uma inbox em /inboxes.',
+    es: 'Sin conversaciones abiertas. Conecta una inbox en /inboxes.',
+  },
+
+  // Dashboard — gráfico de volume
+  'dashboard.volume.title': { pt: 'Volume — últimos 14 dias', es: 'Volumen — últimos 14 días' },
+  'dashboard.volume.conversations': { pt: 'Conversas iniciadas', es: 'Conversaciones iniciadas' },
+  'dashboard.volume.messages': { pt: 'Mensagens (in / out)', es: 'Mensajes (in / out)' },
+  'dashboard.volume.received': { pt: 'Recebidas', es: 'Recibidas' },
+  'dashboard.volume.sent': { pt: 'Enviadas', es: 'Enviadas' },
+  'dashboard.chart_loading': { pt: 'Carregando gráfico…', es: 'Cargando gráfico…' },
+
+  // Kanban — estado vazio
+  'kanban.empty.title': { pt: 'Nenhum funil criado', es: 'Ningún embudo creado' },
+  'kanban.empty.subtitle': {
+    pt: 'Crie um funil pra começar a organizar conversas em estágios.',
+    es: 'Crea un embudo para empezar a organizar conversaciones en etapas.',
+  },
+  'kanban.new_funnel': { pt: 'Novo funil', es: 'Nuevo embudo' },
+
+  // Inbox — lista de conversas
+  'inbox.subtitle_full': {
+    pt: 'Atenda clientes em tempo real. Atualiza sozinho — sem refresh.',
+    es: 'Atiende clientes en tiempo real. Se actualiza solo — sin refrescar.',
+  },
+  'inbox.tab.all': { pt: 'Todas', es: 'Todas' },
+  'inbox.tab.awaiting': { pt: 'Aguardando', es: 'Esperando' },
+  'inbox.tab.open': { pt: 'Abertas', es: 'Abiertas' },
+  'inbox.tab.unassigned': { pt: 'Sem agente', es: 'Sin agente' },
+  'inbox.tab.pending': { pt: 'Pendentes', es: 'Pendientes' },
+  'inbox.tab.resolved': { pt: 'Resolvidas', es: 'Resueltas' },
+  'inbox.tab.archived': { pt: 'Arquivadas', es: 'Archivadas' },
+  'inbox.search_placeholder': { pt: 'Nome ou telefone…', es: 'Nombre o teléfono…' },
+  'inbox.empty': { pt: 'Nenhuma conversa nesse filtro.', es: 'Ninguna conversación en este filtro.' },
+  'inbox.empty_archived': { pt: 'Nenhuma conversa arquivada.', es: 'Ninguna conversación archivada.' },
+  'inbox.empty_awaiting': {
+    pt: 'Tudo respondido. Nenhum cliente aguardando agora.',
+    es: 'Todo respondido. Ningún cliente esperando ahora.',
+  },
 };
 
 interface I18nContextValue {
   lang: Lang;
   setLang: (l: Lang) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
   ready: boolean;
+}
+
+/** Locale BCP-47 pra Intl (datas, números, moeda) a partir do idioma. */
+export function localeFor(lang: Lang): string {
+  return lang === 'es' ? 'es-419' : 'pt-BR';
+}
+
+/**
+ * Formata valor monetário no locale do idioma.
+ * NOTA: a moeda (currency) idealmente vem das settings do workspace — hoje o
+ * default é BRL. Ao introduzir moeda por workspace, passe-a como 3º argumento.
+ */
+export function formatMoney(value: number, lang: Lang, currency = 'BRL'): string {
+  return value.toLocaleString(localeFor(lang), {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  });
+}
+
+/** Data curta DD/MM/AAAA no locale do idioma. */
+export function formatDateShort(iso: string | Date, lang: Lang): string {
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  return d.toLocaleDateString(localeFor(lang), {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+/** Tempo relativo curto ("agora"/"ahora", "5m atrás"/"hace 5m") no idioma. */
+export function formatRelativeTime(iso: string | null, lang: Lang): string {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60000);
+  const es = lang === 'es';
+  if (minutes < 1) return es ? 'ahora' : 'agora';
+  if (minutes < 60) return es ? `hace ${minutes}m` : `${minutes}m atrás`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return es ? `hace ${hours}h` : `${hours}h atrás`;
+  const days = Math.floor(hours / 24);
+  return es ? `hace ${days}d` : `${days}d atrás`;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -252,8 +358,14 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const t = useCallback(
-    (key: string): string => {
-      return TRANSLATIONS[key]?.[lang] ?? key;
+    (key: string, vars?: Record<string, string | number>): string => {
+      let s = TRANSLATIONS[key]?.[lang] ?? key;
+      if (vars) {
+        for (const [k, v] of Object.entries(vars)) {
+          s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+        }
+      }
+      return s;
     },
     [lang],
   );

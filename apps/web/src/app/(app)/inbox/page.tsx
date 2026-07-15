@@ -118,14 +118,14 @@ const SLA_LABEL: Record<NonNullable<SlaStatus>, string> = {
 
 type Tab = 'ALL' | 'AWAITING' | 'OPEN' | 'UNASSIGNED' | 'PENDING' | 'RESOLVED' | 'ARCHIVED';
 
-const STATUS_TABS: Array<{ value: Tab; label: string }> = [
-  { value: 'ALL', label: 'Todas' },
-  { value: 'AWAITING', label: 'Aguardando' },
-  { value: 'OPEN', label: 'Abertas' },
-  { value: 'UNASSIGNED', label: 'Sem agente' },
-  { value: 'PENDING', label: 'Pendentes' },
-  { value: 'RESOLVED', label: 'Resolvidas' },
-  { value: 'ARCHIVED', label: 'Arquivadas' },
+const STATUS_TABS: Array<{ value: Tab; key: string }> = [
+  { value: 'ALL', key: 'inbox.tab.all' },
+  { value: 'AWAITING', key: 'inbox.tab.awaiting' },
+  { value: 'OPEN', key: 'inbox.tab.open' },
+  { value: 'UNASSIGNED', key: 'inbox.tab.unassigned' },
+  { value: 'PENDING', key: 'inbox.tab.pending' },
+  { value: 'RESOLVED', key: 'inbox.tab.resolved' },
+  { value: 'ARCHIVED', key: 'inbox.tab.archived' },
 ];
 
 const STATUS_BADGE: Record<ConversationStatus, string> = {
@@ -326,25 +326,25 @@ export default function InboxPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
-          {STATUS_TABS.map((t) => {
+          {STATUS_TABS.map((tabOpt) => {
             const badge =
-              t.value === 'AWAITING' && counts && counts.awaiting > 0 ? counts.awaiting : null;
-            const isAwaiting = t.value === 'AWAITING';
+              tabOpt.value === 'AWAITING' && counts && counts.awaiting > 0 ? counts.awaiting : null;
+            const isAwaiting = tabOpt.value === 'AWAITING';
             return (
               <button
-                key={t.value}
+                key={tabOpt.value}
                 type="button"
                 onClick={() => {
-                  setTab(t.value);
+                  setTab(tabOpt.value);
                   setPage(1);
                 }}
                 className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors ${
-                  tab === t.value
+                  tab === tabOpt.value
                     ? 'bg-background shadow-sm font-medium'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {t.label}
+                {t(tabOpt.key)}
                 {badge != null && (
                   <span
                     className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
@@ -383,7 +383,7 @@ export default function InboxPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Nome ou telefone…"
+              placeholder={t('inbox.search_placeholder')}
               className="w-64 pl-8"
             />
           </div>
@@ -571,14 +571,14 @@ export default function InboxPage() {
 
       <div className="rounded-lg border bg-card divide-y">
         {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('action.loading')}</p>
         ) : !data?.items.length ? (
           <p className="p-6 text-sm text-muted-foreground">
             {tab === 'ARCHIVED'
-              ? 'Nenhuma conversa arquivada.'
+              ? t('inbox.empty_archived')
               : tab === 'AWAITING'
-                ? 'Tudo respondido. Nenhum cliente aguardando agora.'
-                : 'Nenhuma conversa nesse filtro.'}
+                ? t('inbox.empty_awaiting')
+                : t('inbox.empty')}
           </p>
         ) : (
           data.items.map((c) => {
@@ -718,7 +718,7 @@ export default function InboxPage() {
                   ) : (
                     <span className="flex items-center gap-0.5 text-amber-600">
                       <UserMinus className="h-3 w-3" />
-                      Sem agente
+                      {t('inbox.tab.unassigned')}
                     </span>
                   )}
                   {tab === 'ARCHIVED' && <ArchiveRestore className="h-3 w-3 opacity-50" />}

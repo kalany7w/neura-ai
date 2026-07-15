@@ -18,7 +18,7 @@ import {
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { DashboardTimeseriesChart } from '@/components/dashboard/timeseries-chart';
-import { useT } from '@/lib/i18n';
+import { useT, formatMoney, formatRelativeTime } from '@/lib/i18n';
 
 interface DashboardStats {
   inbox: {
@@ -52,26 +52,6 @@ interface DashboardStats {
   }>;
 }
 
-function formatBRL(n: number): string {
-  return n.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 0,
-  });
-}
-
-function formatRelative(iso: string | null): string {
-  if (!iso) return '—';
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'agora';
-  if (minutes < 60) return `${minutes}m atrás`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h atrás`;
-  const days = Math.floor(hours / 24);
-  return `${days}d atrás`;
-}
-
 function initialsFrom(s: string | null | undefined): string {
   if (!s) return '?';
   return s
@@ -91,7 +71,7 @@ const STATUS_BADGE: Record<string, string> = {
 
 export default function DashboardPage() {
   const { data: session } = useSession();
-  const { t } = useT();
+  const { t, lang } = useT();
   const { data, isLoading } = useQuery<DashboardStats>({
     queryKey: ['dashboard-stats'],
     queryFn: () => api('/api/dashboard/stats'),
@@ -99,7 +79,7 @@ export default function DashboardPage() {
   });
 
   if (isLoading || !data) {
-    return <p className="text-sm text-muted-foreground">Carregando dashboard…</p>;
+    return <p className="text-sm text-muted-foreground">{t('dashboard.loading')}</p>;
   }
 
   const { inbox, workspace, pipeline, recentConversations } = data;
@@ -117,33 +97,33 @@ export default function DashboardPage() {
       {/* KPIs principais */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Conversas abertas"
+          label={t('dashboard.kpi.open')}
           value={inbox.open + inbox.pending}
-          subtitle={`${inbox.open} abertas · ${inbox.pending} pendentes`}
+          subtitle={t('dashboard.kpi.open_sub', { open: inbox.open, pending: inbox.pending })}
           icon={MessageCircle}
           accent="blue"
           href="/inbox?status=OPEN"
         />
         <KpiCard
-          label="Sem agente"
+          label={t('dashboard.kpi.unassigned')}
           value={inbox.unassigned}
-          subtitle="Aguardando atribuição"
+          subtitle={t('dashboard.kpi.unassigned_sub')}
           icon={UserX}
           accent={inbox.unassigned > 0 ? 'amber' : 'slate'}
           href="/inbox?unassigned=true"
         />
         <KpiCard
-          label="SLA crítico"
+          label={t('dashboard.kpi.sla')}
           value={inbox.slaCritical}
-          subtitle="Cards atrasados ou no limite"
+          subtitle={t('dashboard.kpi.sla_sub')}
           icon={AlertTriangle}
           accent={inbox.slaCritical > 0 ? 'red' : 'slate'}
           href="/kanban"
         />
         <KpiCard
-          label="Minha fila"
+          label={t('dashboard.kpi.mine')}
           value={inbox.mine}
-          subtitle="Conversas atribuídas a você"
+          subtitle={t('dashboard.kpi.mine_sub')}
           icon={User}
           accent="indigo"
           href={session?.user?.id ? `/inbox?assignedAgentId=${session.user.id}` : '/inbox'}
@@ -162,42 +142,42 @@ export default function DashboardPage() {
               Pipeline
             </h2>
             <Link href="/kanban" className="text-xs text-muted-foreground hover:text-foreground">
-              ver kanban →
+              {t('dashboard.see_kanban')}
             </Link>
           </div>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                Em aberto
+                {t('dashboard.pipeline.open')}
               </p>
               <p className="mt-1 text-2xl font-bold">{pipeline.activeCount}</p>
               {pipeline.activeValue > 0 && (
                 <p className="text-xs font-medium text-emerald-600">
-                  {formatBRL(pipeline.activeValue)}
+                  {formatMoney(pipeline.activeValue, lang)}
                 </p>
               )}
             </div>
             <div>
               <p className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <TrendingUp className="h-3 w-3 text-emerald-500" />
-                Positivos (30d)
+                {t('dashboard.pipeline.positive')}
               </p>
               <p className="mt-1 text-2xl font-bold text-emerald-600">{pipeline.positive30d}</p>
               {pipeline.positiveValue30d > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {formatBRL(pipeline.positiveValue30d)}
+                  {formatMoney(pipeline.positiveValue30d, lang)}
                 </p>
               )}
             </div>
             <div>
               <p className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
                 <TrendingDown className="h-3 w-3 text-red-500" />
-                Negativos (30d)
+                {t('dashboard.pipeline.negative')}
               </p>
               <p className="mt-1 text-2xl font-bold text-red-600">{pipeline.negative30d}</p>
               {pipeline.negativeValue30d > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  {formatBRL(pipeline.negativeValue30d)}
+                  {formatMoney(pipeline.negativeValue30d, lang)}
                 </p>
               )}
             </div>
@@ -206,7 +186,7 @@ export default function DashboardPage() {
             <div className="mt-4 rounded-md bg-muted/40 p-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium uppercase tracking-wider text-muted-foreground">
-                  Taxa de conversão (30d)
+                  {t('dashboard.pipeline.conversion')}
                 </span>
                 <span className="text-base font-bold">{pipeline.conversionRate}%</span>
               </div>
@@ -227,13 +207,13 @@ export default function DashboardPage() {
           </h2>
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between border-b pb-2">
-              <span className="text-sm text-muted-foreground">Contatos</span>
+              <span className="text-sm text-muted-foreground">{t('dashboard.contacts')}</span>
               <span className="text-xl font-bold">{workspace.contacts}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                 <Inbox className="h-3.5 w-3.5" />
-                Inboxes ativas
+                {t('dashboard.active_inboxes')}
               </span>
               <span className="text-xl font-bold">{workspace.activeInboxes}</span>
             </div>
@@ -246,15 +226,15 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <MessageCircle className="h-4 w-4" />
-            Conversas recentes
+            {t('dashboard.recent')}
           </h2>
           <Link href="/inbox" className="text-xs text-muted-foreground hover:text-foreground">
-            ver todas →
+            {t('dashboard.see_all')}
           </Link>
         </div>
         {recentConversations.length === 0 ? (
           <p className="mt-3 text-sm text-muted-foreground">
-            Sem conversas em aberto. Conecte uma inbox em /inboxes.
+            {t('dashboard.empty')}
           </p>
         ) : (
           <ul className="mt-3 space-y-1.5">
@@ -293,7 +273,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-[11px] text-muted-foreground">
-                      {formatRelative(conv.lastMessageAt)}
+                      {formatRelativeTime(conv.lastMessageAt, lang)}
                     </p>
                     <p className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
                       <Phone className="h-2.5 w-2.5" />
