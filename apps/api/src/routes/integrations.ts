@@ -7,14 +7,32 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.j
 import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
 import { WEBHOOK_EVENTS } from '../services/webhooks.js';
+import { assertHostnameAllowed, SsrfBlockedError } from '../services/ssrf-guard.js';
 
 export const integrationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
 }>();
 
+// URL de webhook: http(s) + host público (bloqueia SSRF pra localhost/IP privado/metadata).
+const webhookUrl = z
+  .string()
+  .url()
+  .max(500)
+  .refine(
+    (u) => {
+      try {
+        assertHostnameAllowed(u);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: 'URL não permitida (host interno, IP privado ou esquema inválido)' },
+  );
+
 const createSchema = z.object({
   name: z.string().min(1).max(80),
-  url: z.string().url().max(500),
+  url: webhookUrl,
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
   enabled: z.boolean().default(true),
   generateSecret: z.boolean().default(true),
@@ -22,7 +40,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
-  url: z.string().url().max(500).optional(),
+  url: webhookUrl.optional(),
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).optional(),
   enabled: z.boolean().optional(),
   regenerateSecret: z.boolean().optional(),
@@ -322,6 +340,15 @@ integrationsRouter.post(
     if (webhook.secret) {
       headers['X-Neura-Signature'] =
         'sha256=' + createHmac('sha256', webhook.secret).update(body).digest('hex');
+    }
+
+    // Guarda SSRF antes do fetch de teste (mesma proteção do dispatch real).
+    try {
+      const { assertPublicUrl } = await import('../services/ssrf-guard.js');
+      await assertPublicUrl(webhook.url);
+    } catch (err) {
+      const errMsg = err instanceof SsrfBlockedError ? err.message : 'blocked';
+      return c.json({ ok: false, status: 0, error: errMsg }, 400);
     }
 
     const ctrl = new AbortController();

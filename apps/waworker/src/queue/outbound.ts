@@ -23,6 +23,41 @@ async function fetchMediaBuffer(mediaUrl: string): Promise<Buffer> {
   return getMediaBuffer(key);
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Delay aleatório em [min, max) ms — evita padrão robótico de disparo. */
+function jitter(min: number, max: number): number {
+  return Math.floor(min + Math.random() * (max - min));
+}
+
+/**
+ * Anti-ban WhatsApp: simula digitação humana antes de um envio de conteúdo.
+ * Manda presença "composing", espera um tempo proporcional ao tamanho do texto
+ * (com teto), depois "paused". Falhas de presença não bloqueiam o envio.
+ *
+ * Isto é a maior mitigação de banimento do lado do worker: número que dispara
+ * mensagens instantâneas em sequência é sinalizado como bot pelo WhatsApp.
+ */
+async function humanTypingPause(
+  sock: { sendPresenceUpdate: (p: 'composing' | 'paused', jid: string) => Promise<unknown> },
+  jid: string,
+  contentLength: number,
+): Promise<void> {
+  try {
+    await sock.sendPresenceUpdate('composing', jid);
+  } catch {
+    /* presença é best-effort */
+  }
+  const base = jitter(700, 1600);
+  const perChar = Math.min(contentLength * 25, 4000);
+  await sleep(Math.min(base + perChar, 6500));
+  try {
+    await sock.sendPresenceUpdate('paused', jid);
+  } catch {
+    /* idem */
+  }
+}
+
 export const outboundWorker = new Worker<SendMessageJob>(
   QUEUE_OUTBOUND,
   async (job: Job<SendMessageJob>) => {
@@ -240,6 +275,9 @@ export const outboundWorker = new Worker<SendMessageJob>(
       : undefined;
     const sendOpts = quoted ? { quoted } : {};
 
+    // Anti-ban: pausa de digitação humana antes de mandar conteúdo real.
+    await humanTypingPause(handle.sock, jid, (text ?? '').length);
+
     let result: { key: { id?: string | null } } | undefined;
     if (type === 'TEXT') {
       result = await handle.sock.sendMessage(jid, { text: text ?? '' }, sendOpts);
@@ -301,7 +339,14 @@ export const outboundWorker = new Worker<SendMessageJob>(
       sentAt,
     });
   },
-  { connection: bullConnection, concurrency: 5 },
+  {
+    connection: bullConnection,
+    // Concorrência menor + limiter global: teto de segurança anti-ban que soma
+    // ao limiter por-inbox do lado da API (30/min). Números diferentes seguem
+    // paralelos, mas a vazão total do worker fica suave.
+    concurrency: 3,
+    limiter: { max: 8, duration: 1000 },
+  },
 );
 
 outboundWorker.on('completed', (job) => {

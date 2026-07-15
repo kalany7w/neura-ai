@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import { Prisma } from '@neura/database';
 import { prisma } from '../db.js';
@@ -23,6 +23,31 @@ import { env } from '../env.js';
 export const conversationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
 }>();
+
+/**
+ * Guard de escopo do AGENT: um agente só pode acessar conversas atribuídas a ele
+ * (ou sem agente). Retorna uma Response (403/404) se NÃO pode; null se pode seguir.
+ * Faz uma query leve (só assignedAgentId) — chamar ANTES de qualquer trabalho caro
+ * (ex.: chamadas de IA). supervisor/admin sempre passam.
+ */
+async function agentAccessGuard(
+  c: Context,
+  workspaceId: string,
+  conversationId: string,
+): Promise<Response | null> {
+  const role = c.get('role') as string | undefined;
+  if (role !== 'AGENT') return null;
+  const userId = c.get('userId') as string | undefined;
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { assignedAgentId: true },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (conv.assignedAgentId && conv.assignedAgentId !== userId) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  return null;
+}
 
 // GET /api/conversations
 const listQuery = z.object({
@@ -641,6 +666,9 @@ conversationsRouter.post(
     const userId = c.get('userId');
     const id = c.req.param('id');
 
+    const guard = await agentAccessGuard(c, workspaceId, id);
+    if (guard) return guard;
+
     const body = await c.req.json().catch(() => ({}));
     const parsed = suggestBody.safeParse(body ?? {});
     if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
@@ -731,6 +759,8 @@ conversationsRouter.post('/:id/ai/summarize', requireAuth, requireWorkspace, asy
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
+  const guard = await agentAccessGuard(c, workspaceId, id);
+  if (guard) return guard;
   const conv = await prisma.conversation.findFirst({
     where: { id, workspaceId },
     select: {
@@ -772,6 +802,8 @@ conversationsRouter.post('/:id/ai/next-actions', requireAuth, requireWorkspace, 
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
+  const guard = await agentAccessGuard(c, workspaceId, id);
+  if (guard) return guard;
   const conv = await prisma.conversation.findFirst({
     where: { id, workspaceId },
     select: {
@@ -866,6 +898,8 @@ conversationsRouter.post('/:id/ai/classify', requireAuth, requireWorkspace, asyn
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
+  const guard = await agentAccessGuard(c, workspaceId, id);
+  if (guard) return guard;
   const conv = await prisma.conversation.findFirst({
     where: { id, workspaceId },
     select: {
@@ -909,6 +943,8 @@ conversationsRouter.post('/:id/ai/kb-suggest', requireAuth, requireWorkspace, as
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
+  const guard = await agentAccessGuard(c, workspaceId, id);
+  if (guard) return guard;
   const conv = await prisma.conversation.findFirst({
     where: { id, workspaceId },
     select: { id: true },

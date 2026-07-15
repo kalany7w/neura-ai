@@ -27,6 +27,7 @@
  */
 
 import { Hono } from 'hono';
+import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
@@ -40,6 +41,15 @@ import {
 } from '../services/email-client.js';
 
 export const inboundEmailRouter = new Hono();
+
+/** Compara dois secrets em tempo constante (evita timing side-channel). */
+function secretsMatch(provided: string | undefined, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 // Aceita variants comuns (Postmark capitaliza, Resend usa camelCase, AWS uppercase).
 // Esse schema é union-friendly: tenta primeiro lower então cap.
@@ -101,7 +111,12 @@ inboundEmailRouter.post('/:slug', async (c) => {
   const expectedSecret = cfg.inboundSecret as string | undefined;
   const headerSecret =
     c.req.header('X-Neura-Email-Secret') || c.req.header('x-neura-email-secret');
-  if (expectedSecret && headerSecret !== expectedSecret) {
+  // Fail-closed: sem secret configurado no inbox, REJEITA (não aceita sem auth).
+  if (!expectedSecret) {
+    logger.warn({ inboxId: inbox.id }, 'inbound email: inbox sem inboundSecret — reconecte o inbox');
+    return c.json({ ok: false }, 403);
+  }
+  if (!secretsMatch(headerSecret, expectedSecret)) {
     logger.warn({ inboxId: inbox.id }, 'inbound email: invalid secret');
     return c.json({ ok: false }, 403);
   }
