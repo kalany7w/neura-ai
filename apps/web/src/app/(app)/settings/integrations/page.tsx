@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, localeFor } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { InboundWebhooksSection } from '@/components/integrations/inbound-webhooks-section';
 import { Button } from '@/components/ui/button';
@@ -51,34 +51,36 @@ interface WebhooksResponse {
   availableEvents: string[];
 }
 
+// Mapeia o código do evento (enviado à API, não traduzir) → chave i18n do label.
 const EVENT_LABELS: Record<string, string> = {
-  'message.new': 'Mensagem nova',
-  'message.status': 'Status de mensagem',
-  'conversation.created': 'Conversa criada',
-  'conversation.assigned': 'Conversa atribuída',
-  'conversation.status_changed': 'Status da conversa mudou',
-  'card.created': 'Card criado',
-  'card.moved': 'Card movido',
-  'card.updated': 'Card atualizado',
-  'card.snoozed': 'Card adiado',
-  'card.deleted': 'Card excluído',
-  'contact.created': 'Contato criado',
-  'contact.updated': 'Contato atualizado',
-  'inbox.status': 'Status da inbox',
+  'message.new': 'settings_integrations.event.message_new',
+  'message.status': 'settings_integrations.event.message_status',
+  'conversation.created': 'settings_integrations.event.conversation_created',
+  'conversation.assigned': 'settings_integrations.event.conversation_assigned',
+  'conversation.status_changed': 'settings_integrations.event.conversation_status_changed',
+  'card.created': 'settings_integrations.event.card_created',
+  'card.moved': 'settings_integrations.event.card_moved',
+  'card.updated': 'settings_integrations.event.card_updated',
+  'card.snoozed': 'settings_integrations.event.card_snoozed',
+  'card.deleted': 'settings_integrations.event.card_deleted',
+  'contact.created': 'settings_integrations.event.contact_created',
+  'contact.updated': 'settings_integrations.event.contact_updated',
+  'inbox.status': 'settings_integrations.event.inbox_status',
 };
 
 function StatusBadge({ webhook }: { webhook: Webhook }) {
+  const { t } = useT();
   if (!webhook.enabled) {
     return (
       <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-        Desativado
+        {t('settings_integrations.disabled')}
       </span>
     );
   }
   if (!webhook.lastFiredAt) {
     return (
       <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-medium text-blue-700">
-        Aguardando primeiro disparo
+        {t('settings_integrations.status.awaiting_first')}
       </span>
     );
   }
@@ -100,7 +102,7 @@ function StatusBadge({ webhook }: { webhook: Webhook }) {
 export default function IntegrationsPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Webhook | null>(null);
 
@@ -115,34 +117,34 @@ export default function IntegrationsPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !w.enabled }),
       });
-      toast.success(w.enabled ? 'Desativado' : 'Ativado');
+      toast.success(w.enabled ? t('settings_integrations.disabled') : t('settings_integrations.enabled'));
       await qc.invalidateQueries({ queryKey: ['webhooks'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove(w: Webhook) {
     if (
       !(await confirm({
-        title: `Excluir webhook "${w.name}"?`,
-        description: 'Eventos do workspace deixam de ser enviados pra esta URL.',
-        confirmLabel: 'Excluir',
+        title: t('settings_integrations.delete_confirm_title', { name: w.name }),
+        description: t('settings_integrations.delete_confirm_desc'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/integrations/webhooks/${w.id}`, { method: 'DELETE' });
-      toast.success('Webhook excluído');
+      toast.success(t('settings_integrations.toast.deleted'));
       await qc.invalidateQueries({ queryKey: ['webhooks'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function test(w: Webhook) {
-    toast.loading('Disparando teste…', { id: 'test-' + w.id });
+    toast.loading(t('settings_integrations.toast.testing'), { id: 'test-' + w.id });
     try {
       const res = await api<{ ok: boolean; status: number; error?: string }>(
         `/api/integrations/webhooks/${w.id}/test`,
@@ -150,18 +152,24 @@ export default function IntegrationsPage() {
       );
       toast.dismiss('test-' + w.id);
       if (res.ok) {
-        toast.success(`Teste OK — HTTP ${res.status}`);
+        toast.success(t('settings_integrations.toast.test_ok', { status: res.status }));
       } else {
-        toast.error(`Teste falhou: ${res.error ?? 'HTTP ' + res.status}`);
+        toast.error(
+          t('settings_integrations.toast.test_failed', {
+            detail: res.error ?? 'HTTP ' + res.status,
+          }),
+        );
       }
       await qc.invalidateQueries({ queryKey: ['webhooks'] });
     } catch (err) {
       toast.dismiss('test-' + w.id);
       if (err instanceof ApiError) {
         const body = err.body as { error?: string; status?: number } | undefined;
-        toast.error(`Teste falhou: ${body?.error ?? err.code}`);
+        toast.error(
+          t('settings_integrations.toast.test_failed', { detail: body?.error ?? err.code }),
+        );
       } else {
-        toast.error('Falha ao testar');
+        toast.error(t('settings_integrations.toast.test_error'));
       }
     }
   }
@@ -178,40 +186,41 @@ export default function IntegrationsPage() {
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
-          Novo webhook
+          {t('settings_integrations.new_webhook')}
         </Button>
       </div>
 
       <div className="rounded-lg border bg-muted/30 p-4 text-sm">
-        <h3 className="mb-2 font-semibold">Como funciona</h3>
+        <h3 className="mb-2 font-semibold">{t('settings_integrations.how.title')}</h3>
         <ul className="space-y-1 text-muted-foreground">
           <li>
-            Cada evento dispara um <code className="rounded bg-background px-1 py-0.5">POST</code>{' '}
-            com payload JSON pra URL configurada.
+            {t('settings_integrations.how.post_before')}{' '}
+            <code className="rounded bg-background px-1 py-0.5">POST</code>{' '}
+            {t('settings_integrations.how.post_after')}
           </li>
           <li>
-            Headers enviados:{' '}
+            {t('settings_integrations.how.headers_label')}{' '}
             <code className="rounded bg-background px-1 py-0.5">X-Neura-Event</code>,{' '}
             <code className="rounded bg-background px-1 py-0.5">X-Neura-Delivery</code>,{' '}
             <code className="rounded bg-background px-1 py-0.5">X-Neura-Signature</code>{' '}
-            (HMAC-SHA256 do body).
+            {t('settings_integrations.how.headers_hmac')}
           </li>
-          <li>Timeout 10s. Falhas são registradas mas não interrompem o sistema.</li>
+          <li>{t('settings_integrations.how.timeout')}</li>
         </ul>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.webhooks.length ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-12 text-center">
           <WebhookIcon className="mx-auto h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">Nenhum webhook ainda</h3>
+          <h3 className="mt-3 font-semibold">{t('settings_integrations.empty.title')}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Crie seu primeiro webhook pra começar a integrar com n8n, Zapier, etc.
+            {t('settings_integrations.empty.subtitle')}
           </p>
           <Button className="mt-4" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
-            Criar webhook
+            {t('settings_integrations.create_webhook')}
           </Button>
         </div>
       ) : (
@@ -234,7 +243,7 @@ export default function IntegrationsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => test(w)}
-                    title="Disparar teste"
+                    title={t('settings_integrations.action.test')}
                   >
                     <Play className="h-4 w-4" />
                   </Button>
@@ -242,7 +251,11 @@ export default function IntegrationsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => toggle(w)}
-                    title={w.enabled ? 'Desativar' : 'Ativar'}
+                    title={
+                      w.enabled
+                        ? t('settings_integrations.action.deactivate')
+                        : t('settings_integrations.action.activate')
+                    }
                   >
                     <Power className={w.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'} />
                   </Button>
@@ -250,7 +263,7 @@ export default function IntegrationsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => setEditing(w)}
-                    title="Editar"
+                    title={t('action.edit')}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -258,7 +271,7 @@ export default function IntegrationsPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => remove(w)}
-                    title="Excluir"
+                    title={t('action.delete')}
                     className="text-muted-foreground hover:text-destructive"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -271,14 +284,16 @@ export default function IntegrationsPage() {
                     key={ev}
                     className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium"
                   >
-                    {EVENT_LABELS[ev] ?? ev}
+                    {EVENT_LABELS[ev] ? t(EVENT_LABELS[ev]) : ev}
                   </span>
                 ))}
               </div>
               {w.secret && <SecretBlock secret={w.secret} />}
               {w.lastFiredAt && (
                 <p className="mt-2 text-[11px] text-muted-foreground">
-                  Último disparo: {new Date(w.lastFiredAt).toLocaleString('pt-BR')}
+                  {t('settings_integrations.last_fired', {
+                    date: new Date(w.lastFiredAt).toLocaleString(localeFor(lang)),
+                  })}
                 </p>
               )}
             </div>
@@ -306,12 +321,13 @@ export default function IntegrationsPage() {
 }
 
 function SecretBlock({ secret }: { secret: string }) {
+  const { t } = useT();
   const [show, setShow] = useState(false);
   const [copied, setCopied] = useState(false);
   if (secret === '***') {
     return (
       <p className="mt-2 text-[11px] text-muted-foreground">
-        Apenas administradores podem ver o secret.
+        {t('settings_integrations.secret.admin_only')}
       </p>
     );
   }
@@ -319,7 +335,7 @@ function SecretBlock({ secret }: { secret: string }) {
     <div className="mt-3 rounded-md border bg-muted/40 p-2.5">
       <div className="flex items-center gap-2">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Secret HMAC
+          {t('settings_integrations.secret.label')}
         </span>
         <code className="flex-1 truncate font-mono text-xs">
           {show ? secret : '•'.repeat(Math.min(secret.length, 32))}
@@ -328,7 +344,7 @@ function SecretBlock({ secret }: { secret: string }) {
           type="button"
           onClick={() => setShow((v) => !v)}
           className="rounded p-1 hover:bg-background"
-          title={show ? 'Esconder' : 'Mostrar'}
+          title={show ? t('settings_integrations.secret.hide') : t('settings_integrations.secret.show')}
         >
           {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
         </button>
@@ -337,11 +353,11 @@ function SecretBlock({ secret }: { secret: string }) {
           onClick={async () => {
             await navigator.clipboard.writeText(secret);
             setCopied(true);
-            toast.success('Secret copiado');
+            toast.success(t('settings_integrations.secret.copied'));
             setTimeout(() => setCopied(false), 1500);
           }}
           className="rounded p-1 hover:bg-background"
-          title="Copiar"
+          title={t('action.copy')}
         >
           {copied ? (
             <ClipboardCheck className="h-3.5 w-3.5 text-emerald-500" />
@@ -366,6 +382,7 @@ function WebhookFormDialog({
   editing?: Webhook | null;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -403,7 +420,7 @@ function WebhookFormDialog({
             regenerateSecret,
           }),
         });
-        toast.success('Webhook atualizado');
+        toast.success(t('settings_integrations.toast.updated'));
       } else {
         await api('/api/integrations/webhooks', {
           method: 'POST',
@@ -413,12 +430,12 @@ function WebhookFormDialog({
             events: Array.from(selected),
           }),
         });
-        toast.success('Webhook criado');
+        toast.success(t('settings_integrations.toast.created'));
       }
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['webhooks'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -428,34 +445,36 @@ function WebhookFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Editar webhook' : 'Novo webhook'}</DialogTitle>
-          <DialogDescription>
-            Escolha os eventos que disparam o webhook. Use URL HTTPS pra n8n.
-          </DialogDescription>
+          <DialogTitle>
+            {editing
+              ? t('settings_integrations.edit_webhook')
+              : t('settings_integrations.new_webhook')}
+          </DialogTitle>
+          <DialogDescription>{t('settings_integrations.form.description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="wh-name">Nome</Label>
+            <Label htmlFor="wh-name">{t('common.name')}</Label>
             <Input
               id="wh-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: n8n produção"
+              placeholder={t('settings_integrations.form.name_placeholder')}
               maxLength={80}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="wh-url">URL do endpoint</Label>
+            <Label htmlFor="wh-url">{t('settings_integrations.form.url_label')}</Label>
             <Input
               id="wh-url"
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://n8n.exemplo.com/webhook/abc123"
+              placeholder={t('settings_integrations.form.url_placeholder')}
             />
           </div>
           <div className="space-y-2">
-            <Label>Eventos</Label>
+            <Label>{t('settings_integrations.form.events_label')}</Label>
             <div className="grid grid-cols-1 gap-1 rounded-md border p-1.5 sm:grid-cols-2 max-h-72 overflow-y-auto">
               {availableEvents.map((ev) => (
                 <label
@@ -469,7 +488,7 @@ function WebhookFormDialog({
                     className="mt-1"
                   />
                   <div className="min-w-0 flex-1 leading-tight">
-                    <p className="text-sm font-medium">{EVENT_LABELS[ev] ?? ev}</p>
+                    <p className="text-sm font-medium">{EVENT_LABELS[ev] ? t(EVENT_LABELS[ev]) : ev}</p>
                     <code className="block font-mono text-[10px] text-muted-foreground truncate">
                       {ev}
                     </code>
@@ -478,7 +497,7 @@ function WebhookFormDialog({
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {selected.size} evento(s) selecionado(s)
+              {t('settings_integrations.form.selected_count', { n: selected.size })}
             </p>
           </div>
           {editing && (
@@ -488,7 +507,7 @@ function WebhookFormDialog({
                 checked={regenerateSecret}
                 onChange={(e) => setRegenerateSecret(e.target.checked)}
               />
-              Gerar novo secret HMAC (vai invalidar a assinatura no destino)
+              {t('settings_integrations.form.regenerate')}
             </label>
           )}
           <Button
@@ -496,7 +515,11 @@ function WebhookFormDialog({
             className="w-full"
             disabled={submitting || !name.trim() || !url.trim() || selected.size === 0}
           >
-            {submitting ? 'Salvando…' : editing ? 'Salvar alterações' : 'Criar webhook'}
+            {submitting
+              ? t('action.saving')
+              : editing
+                ? t('settings_integrations.form.save_changes')
+                : t('settings_integrations.create_webhook')}
           </Button>
         </div>
       </DialogContent>

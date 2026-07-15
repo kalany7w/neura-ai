@@ -6,7 +6,7 @@ import Papa from 'papaparse';
 import { Upload, FileText, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, localeFor } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,25 +44,26 @@ interface FunnelOpt {
 
 // Lista de campos Neura por tipo. Cada um aceita 0+ colunas do CSV. Auto-suggest
 // procura nessas patterns (lowercase substring) no header.
+// `label` guarda a CHAVE de i18n — resolvida via t(f.label) no render.
 const CONTACT_FIELDS = [
-  { key: 'externalId', label: 'ID externo', patterns: ['id'], required: false },
-  { key: 'name', label: 'Nome', patterns: ['nome', 'name', 'nombre'], required: false },
-  { key: 'phone', label: 'Telefone', patterns: ['telefone', 'phone', 'tel', 'celular', 'whatsapp'], required: false },
-  { key: 'email', label: 'Email', patterns: ['email', 'correo', 'e-mail'], required: false },
-  { key: 'tags', label: 'Etiquetas (vírgula/ponto-e-vírgula)', patterns: ['tag', 'etiqueta'], required: false },
+  { key: 'externalId', label: 'settings_import.field.external_id', patterns: ['id'], required: false },
+  { key: 'name', label: 'common.name', patterns: ['nome', 'name', 'nombre'], required: false },
+  { key: 'phone', label: 'common.phone', patterns: ['telefone', 'phone', 'tel', 'celular', 'whatsapp'], required: false },
+  { key: 'email', label: 'common.email', patterns: ['email', 'correo', 'e-mail'], required: false },
+  { key: 'tags', label: 'settings_import.field.tags_contact', patterns: ['tag', 'etiqueta'], required: false },
 ] as const;
 
 const LEAD_FIELDS = [
-  { key: 'externalId', label: 'ID externo do lead', patterns: ['id'], required: false },
-  { key: 'title', label: 'Título do lead', patterns: ['title', 'titulo', 'name', 'nome', 'lead', 'oportunidade'], required: true },
-  { key: 'value', label: 'Valor', patterns: ['valor', 'price', 'preço', 'precio', 'amount'], required: false },
-  { key: 'stageName', label: 'Etapa', patterns: ['stage', 'status', 'etapa', 'fase'], required: false },
-  { key: 'responsibleEmail', label: 'Email do responsável', patterns: ['responsible email', 'responsável email', 'owner email', 'agente email'], required: false },
-  { key: 'responsibleName', label: 'Nome do responsável', patterns: ['responsável', 'responsable', 'responsible', 'owner', 'agente', 'sale'], required: false },
-  { key: 'contactPhone', label: 'Telefone do contato', patterns: ['contact phone', 'telefone', 'phone', 'tel', 'celular'], required: false },
-  { key: 'contactEmail', label: 'Email do contato', patterns: ['contact email', 'email do contato', 'cliente email'], required: false },
-  { key: 'contactExternalId', label: 'ID externo do contato', patterns: ['contact id', 'contato id'], required: false },
-  { key: 'tags', label: 'Etiquetas', patterns: ['tag', 'etiqueta'], required: false },
+  { key: 'externalId', label: 'settings_import.field.external_id_lead', patterns: ['id'], required: false },
+  { key: 'title', label: 'settings_import.field.title', patterns: ['title', 'titulo', 'name', 'nome', 'lead', 'oportunidade'], required: true },
+  { key: 'value', label: 'settings_import.field.value', patterns: ['valor', 'price', 'preço', 'precio', 'amount'], required: false },
+  { key: 'stageName', label: 'settings_import.field.stage', patterns: ['stage', 'status', 'etapa', 'fase'], required: false },
+  { key: 'responsibleEmail', label: 'settings_import.field.responsible_email', patterns: ['responsible email', 'responsável email', 'owner email', 'agente email'], required: false },
+  { key: 'responsibleName', label: 'settings_import.field.responsible_name', patterns: ['responsável', 'responsable', 'responsible', 'owner', 'agente', 'sale'], required: false },
+  { key: 'contactPhone', label: 'settings_import.field.contact_phone', patterns: ['contact phone', 'telefone', 'phone', 'tel', 'celular'], required: false },
+  { key: 'contactEmail', label: 'settings_import.field.contact_email', patterns: ['contact email', 'email do contato', 'cliente email'], required: false },
+  { key: 'contactExternalId', label: 'settings_import.field.contact_external_id', patterns: ['contact id', 'contato id'], required: false },
+  { key: 'tags', label: 'settings_import.field.tags', patterns: ['tag', 'etiqueta'], required: false },
 ] as const;
 
 type FieldKey = (typeof CONTACT_FIELDS)[number]['key'] | (typeof LEAD_FIELDS)[number]['key'];
@@ -85,7 +86,7 @@ function suggestMapping(
 // ============================ Page ============================
 
 export default function ImportPage() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [kind, setKind] = useState<ImportKind>('contacts');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -129,13 +130,11 @@ export default function ImportPage() {
         setRows(data);
         setMapping(suggestMapping(headerList, fields));
         if (res.errors.length > 0) {
-          toast.warning(
-            `${res.errors.length} linha(s) com erro de parse — verifique as primeiras 5 abaixo.`,
-          );
+          toast.warning(t('settings_import.toast_parse_errors', { n: res.errors.length }));
         }
       },
       error: (err) => {
-        toast.error(`Erro ao ler CSV: ${err.message}`);
+        toast.error(t('settings_import.toast_read_error', { msg: err.message }));
       },
     });
   }
@@ -215,17 +214,17 @@ export default function ImportPage() {
     const required = fields.filter((f) => f.required);
     for (const r of required) {
       if (!mapping[r.key]) {
-        toast.error(`Mapeie o campo obrigatório "${r.label}" antes de importar.`);
+        toast.error(t('settings_import.toast_map_required', { field: t(r.label) }));
         return;
       }
     }
     if (kind === 'leads') {
       if (!funnelId) {
-        toast.error('Escolha um funil destino.');
+        toast.error(t('settings_import.toast_choose_funnel'));
         return;
       }
       if (!defaultStageId) {
-        toast.error('Escolha uma etapa padrão.');
+        toast.error(t('settings_import.toast_choose_stage'));
         return;
       }
     }
@@ -268,15 +267,22 @@ export default function ImportPage() {
           totalStats.errors.push({ row: e.row + start, reason: e.reason });
         }
         toast.message(
-          `Lote ${Math.floor(start / BATCH_SIZE) + 1} — ${res.stats.created + res.stats.updated}/${batch.length} processados.`,
+          t('settings_import.toast_batch', {
+            n: Math.floor(start / BATCH_SIZE) + 1,
+            done: res.stats.created + res.stats.updated,
+            total: batch.length,
+          }),
         );
       }
       setResult(totalStats);
       toast.success(
-        `Importação concluída: ${totalStats.created} criados, ${totalStats.updated} atualizados.`,
+        t('settings_import.toast_done', {
+          created: totalStats.created,
+          updated: totalStats.updated,
+        }),
       );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao importar');
+      toast.error(err instanceof Error ? err.message : t('settings_import.toast_error'));
     } finally {
       setImporting(false);
     }
@@ -294,7 +300,7 @@ export default function ImportPage() {
       {/* Kind selector */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <div className="space-y-2">
-          <Label>O que você está importando?</Label>
+          <Label>{t('settings_import.what_importing')}</Label>
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
@@ -308,9 +314,9 @@ export default function ImportPage() {
                   : 'hover:border-foreground/30'
               }`}
             >
-              <p className="font-semibold">Contatos</p>
+              <p className="font-semibold">{t('settings_import.kind_contacts_title')}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Pessoas/empresas. Nome, telefone, email, etiquetas, atributos customizados.
+                {t('settings_import.kind_contacts_desc')}
               </p>
             </button>
             <button
@@ -325,9 +331,9 @@ export default function ImportPage() {
                   : 'hover:border-foreground/30'
               }`}
             >
-              <p className="font-semibold">Leads / Cards</p>
+              <p className="font-semibold">{t('settings_import.kind_leads_title')}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Negócios/oportunidades. Vão pro funil que você escolher, na etapa que indicar.
+                {t('settings_import.kind_leads_desc')}
               </p>
             </button>
           </div>
@@ -337,7 +343,7 @@ export default function ImportPage() {
         {kind === 'leads' && (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Funil destino *</Label>
+              <Label>{t('settings_import.funnel_dest')} *</Label>
               <Select
                 value={funnelId}
                 onValueChange={(v) => {
@@ -346,7 +352,7 @@ export default function ImportPage() {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Escolha o funil" />
+                  <SelectValue placeholder={t('settings_import.funnel_placeholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {funnelsData?.funnels.map((f) => (
@@ -358,14 +364,20 @@ export default function ImportPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Etapa padrão *</Label>
+              <Label>{t('settings_import.default_stage')} *</Label>
               <Select
                 value={defaultStageId}
                 onValueChange={setDefaultStageId}
                 disabled={!funnelId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={funnelId ? 'Escolha' : 'Funil antes'} />
+                  <SelectValue
+                    placeholder={
+                      funnelId
+                        ? t('settings_import.stage_placeholder_choose')
+                        : t('settings_import.stage_placeholder_funnel_first')
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {funnelStages.map((s) => (
@@ -376,7 +388,7 @@ export default function ImportPage() {
                 </SelectContent>
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                Pra leads cujo &quot;stageName&quot; do CSV não casar com nenhuma etapa do funil.
+                {t('settings_import.default_stage_hint')}
               </p>
             </div>
           </div>
@@ -391,10 +403,9 @@ export default function ImportPage() {
         >
           <Upload className="h-10 w-10 text-muted-foreground" />
           <div>
-            <p className="font-semibold">Clique para enviar ou arraste o CSV aqui</p>
+            <p className="font-semibold">{t('settings_import.upload_cta')}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Aceita .csv exportado do Kommo (com codificação ASCII). Pra arquivos grandes,
-              processa em lotes de 500 linhas.
+              {t('settings_import.upload_hint')}
             </p>
           </div>
           <input
@@ -420,29 +431,31 @@ export default function ImportPage() {
                 <div>
                   <p className="font-semibold">{file.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {rows.length.toLocaleString('pt-BR')} linhas · {headers.length} colunas
+                    {t('settings_import.file_meta', {
+                      rows: rows.length.toLocaleString(localeFor(lang)),
+                      cols: headers.length,
+                    })}
                   </p>
                 </div>
               </div>
               <Button variant="ghost" size="sm" onClick={reset} disabled={importing}>
-                Trocar arquivo
+                {t('settings_import.change_file')}
               </Button>
             </div>
           </div>
 
           <div className="rounded-lg border bg-card p-5 space-y-4">
             <div>
-              <h2 className="font-semibold">Mapeamento</h2>
+              <h2 className="font-semibold">{t('settings_import.mapping_title')}</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Confirme qual coluna do CSV alimenta cada campo do Neura. Auto-sugerido pelo
-                nome da coluna. Colunas não mapeadas viram atributos customizados.
+                {t('settings_import.mapping_hint')}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {fields.map((f) => (
                 <div key={f.key} className="space-y-1.5">
                   <Label className="text-xs flex items-center gap-1">
-                    {f.label}
+                    {t(f.label)}
                     {f.required && <span className="text-destructive">*</span>}
                     {mapping[f.key] && <CheckCircle2 className="h-3 w-3 text-emerald-600" />}
                   </Label>
@@ -461,7 +474,7 @@ export default function ImportPage() {
                       <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">— Não mapear —</SelectItem>
+                      <SelectItem value="none">{t('settings_import.dont_map')}</SelectItem>
                       {headers.map((h) => (
                         <SelectItem key={h} value={h}>
                           {h}
@@ -476,7 +489,7 @@ export default function ImportPage() {
 
           {/* Preview table */}
           <div className="rounded-lg border bg-card p-5 space-y-3">
-            <h2 className="font-semibold">Pré-visualização (primeiras 5 linhas)</h2>
+            <h2 className="font-semibold">{t('settings_import.preview_title')}</h2>
             <div className="overflow-x-auto rounded-md border">
               <table className="text-xs w-full">
                 <thead className="bg-muted/40">
@@ -516,14 +529,16 @@ export default function ImportPage() {
           {/* Commit */}
           <div className="flex items-center justify-end gap-3">
             <p className="text-xs text-muted-foreground">
-              Vai importar {rows.length.toLocaleString('pt-BR')} linha(s) em lotes de 500.
+              {t('settings_import.will_import', {
+                rows: rows.length.toLocaleString(localeFor(lang)),
+              })}
             </p>
             <Button onClick={commit} disabled={importing || rows.length === 0}>
               {importing ? (
-                'Importando...'
+                t('settings_import.importing')
               ) : (
                 <>
-                  Importar agora
+                  {t('settings_import.import_now')}
                   <ChevronRight className="ml-1 h-4 w-4" />
                 </>
               )}
@@ -537,43 +552,41 @@ export default function ImportPage() {
         <div className="rounded-lg border bg-card p-5 space-y-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            <h2 className="font-semibold">Importação concluída</h2>
+            <h2 className="font-semibold">{t('settings_import.done_title')}</h2>
           </div>
           <div className="grid grid-cols-4 gap-3 text-center">
             <div className="rounded-md border p-3">
               <p className="text-2xl font-bold text-emerald-600">{result.created}</p>
-              <p className="text-xs text-muted-foreground">Criados</p>
+              <p className="text-xs text-muted-foreground">{t('settings_import.stat_created')}</p>
             </div>
             <div className="rounded-md border p-3">
               <p className="text-2xl font-bold text-blue-600">{result.updated}</p>
-              <p className="text-xs text-muted-foreground">Atualizados</p>
+              <p className="text-xs text-muted-foreground">{t('settings_import.stat_updated')}</p>
             </div>
             <div className="rounded-md border p-3">
               <p className="text-2xl font-bold text-amber-600">{result.skipped}</p>
-              <p className="text-xs text-muted-foreground">Pulados</p>
+              <p className="text-xs text-muted-foreground">{t('settings_import.stat_skipped')}</p>
             </div>
             <div className="rounded-md border p-3">
               <p className="text-2xl font-bold">{result.labelsCreated}</p>
-              <p className="text-xs text-muted-foreground">Etiquetas novas</p>
+              <p className="text-xs text-muted-foreground">{t('settings_import.stat_labels')}</p>
             </div>
           </div>
           {result.errors.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <AlertCircle className="h-4 w-4 text-amber-600" />
-                {result.errors.length} erro(s) — primeiros 20:
+                {t('settings_import.errors_header', { n: result.errors.length })}
               </div>
               <ul className="space-y-1 text-xs text-muted-foreground max-h-48 overflow-y-auto">
                 {result.errors.slice(0, 20).map((e, i) => (
-                  <li key={i}>
-                    Linha {e.row}: {e.reason}
-                  </li>
+                  <li key={i}>{t('settings_import.error_row', { row: e.row, reason: e.reason })}</li>
                 ))}
               </ul>
             </div>
           )}
           <Button variant="outline" size="sm" onClick={reset}>
-            Importar outro arquivo
+            {t('settings_import.import_another')}
           </Button>
         </div>
       )}

@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT, localeFor } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +42,7 @@ export function ScheduleMessageDialog({
   initialText: string;
   onScheduled: () => void;
 }) {
+  const { t, lang } = useT();
   const qc = useQueryClient();
   const [text, setText] = useState(initialText);
   const [when, setWhen] = useState(() => {
@@ -68,7 +70,7 @@ export function ScheduleMessageDialog({
     if (!text.trim() || submitting) return;
     const scheduled = new Date(when);
     if (scheduled.getTime() < Date.now() + 30_000) {
-      toast.error('Escolha um horário pelo menos 30 segundos no futuro');
+      toast.error(t('c_inbox_schedule_message_dialog.err_future'));
       return;
     }
     setSubmitting(true);
@@ -82,12 +84,16 @@ export function ScheduleMessageDialog({
           content: text.trim(),
         }),
       });
-      toast.success(`Agendada pra ${scheduled.toLocaleString('pt-BR')}`);
+      toast.success(
+        t('c_inbox_schedule_message_dialog.toast_scheduled', {
+          when: scheduled.toLocaleString(localeFor(lang)),
+        }),
+      );
       onScheduled();
       await qc.invalidateQueries({ queryKey: ['scheduled-messages', conversationId] });
       setText('');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -96,10 +102,10 @@ export function ScheduleMessageDialog({
   async function cancel(id: string) {
     try {
       await api(`/api/scheduled-messages/${id}`, { method: 'DELETE' });
-      toast.success('Agendamento cancelado');
+      toast.success(t('c_inbox_schedule_message_dialog.toast_cancelled'));
       await qc.invalidateQueries({ queryKey: ['scheduled-messages', conversationId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -115,30 +121,29 @@ export function ScheduleMessageDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarClock className="h-5 w-5" />
-            Agendar mensagem
+            {t('c_inbox_schedule_message_dialog.title')}
           </DialogTitle>
           <DialogDescription>
-            A mensagem fica em fila e é enviada no horário escolhido (se a inbox estiver
-            conectada). Você pode cancelar a qualquer momento antes do envio.
+            {t('c_inbox_schedule_message_dialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="sch-text">Mensagem</Label>
+            <Label htmlFor="sch-text">{t('c_inbox_schedule_message_dialog.message_label')}</Label>
             <textarea
               id="sch-text"
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={4}
               maxLength={4096}
-              placeholder="O que enviar?"
+              placeholder={t('c_inbox_schedule_message_dialog.message_placeholder')}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="sch-when">Quando enviar</Label>
+            <Label htmlFor="sch-when">{t('c_inbox_schedule_message_dialog.when_label')}</Label>
             <Input
               id="sch-when"
               type="datetime-local"
@@ -147,13 +152,13 @@ export function ScheduleMessageDialog({
             />
             <div className="flex flex-wrap gap-1">
               {[
-                { label: 'em 1h', min: 60 },
-                { label: 'em 4h', min: 240 },
-                { label: 'amanhã 9h', min: -1 },
-                { label: 'segunda 9h', min: -2 },
+                { id: '1h', label: t('c_inbox_schedule_message_dialog.shortcut_1h'), min: 60 },
+                { id: '4h', label: t('c_inbox_schedule_message_dialog.shortcut_4h'), min: 240 },
+                { id: 'tomorrow', label: t('c_inbox_schedule_message_dialog.shortcut_tomorrow_9'), min: -1 },
+                { id: 'monday', label: t('c_inbox_schedule_message_dialog.shortcut_monday_9'), min: -2 },
               ].map((s) => (
                 <Button
-                  key={s.label}
+                  key={s.id}
                   size="sm"
                   variant="outline"
                   onClick={() => {
@@ -181,13 +186,15 @@ export function ScheduleMessageDialog({
           </div>
 
           <Button onClick={submit} disabled={submitting || !text.trim()} className="w-full">
-            {submitting ? 'Agendando…' : 'Agendar envio'}
+            {submitting
+              ? t('c_inbox_schedule_message_dialog.submitting')
+              : t('c_inbox_schedule_message_dialog.submit')}
           </Button>
 
           {data && data.items.length > 0 && (
             <div className="rounded-md border bg-muted/30 p-3">
               <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Pendentes nesta conversa ({data.items.length})
+                {t('c_inbox_schedule_message_dialog.pending_heading', { n: data.items.length })}
               </h3>
               <ul className="space-y-1.5">
                 {data.items.map((it) => (
@@ -198,14 +205,16 @@ export function ScheduleMessageDialog({
                     <CalendarClock className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] font-medium text-muted-foreground">
-                        {new Date(it.scheduledFor).toLocaleString('pt-BR')}
+                        {new Date(it.scheduledFor).toLocaleString(localeFor(lang))}
                       </p>
-                      <p className="line-clamp-2 text-xs">{it.content ?? '[mídia]'}</p>
+                      <p className="line-clamp-2 text-xs">
+                        {it.content ?? t('c_inbox_schedule_message_dialog.media')}
+                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => cancel(it.id)}
-                      title="Cancelar"
+                      title={t('action.cancel')}
                       className="rounded p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
                     >
                       <Trash2 className="h-3 w-3" />

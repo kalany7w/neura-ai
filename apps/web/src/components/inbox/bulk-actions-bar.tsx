@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,10 +47,10 @@ interface Props {
   onClear: () => void;
 }
 
-const STATUS_OPTS: Array<{ value: 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED'; label: string }> = [
-  { value: 'OPEN', label: 'Aberta' },
-  { value: 'PENDING', label: 'Pendente' },
-  { value: 'RESOLVED', label: 'Resolvida' },
+const STATUS_OPTS: Array<{ value: 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED'; labelKey: string }> = [
+  { value: 'OPEN', labelKey: 'c_inbox_bulk_actions_bar.status_open' },
+  { value: 'PENDING', labelKey: 'c_inbox_bulk_actions_bar.status_pending' },
+  { value: 'RESOLVED', labelKey: 'c_inbox_bulk_actions_bar.status_resolved' },
 ];
 
 export function InboxBulkActionsBar({
@@ -62,6 +63,7 @@ export function InboxBulkActionsBar({
 }: Props) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
   const canManageStatus = role !== 'AGENT';
 
   async function run(payload: Record<string, unknown>, successMsg?: string) {
@@ -70,29 +72,29 @@ export function InboxBulkActionsBar({
         method: 'POST',
         body: JSON.stringify({ ...payload, conversationIds: selectedIds }),
       });
-      toast.success(successMsg ?? `${res.affected} conversa(s) atualizada(s)`);
+      toast.success(successMsg ?? t('c_inbox_bulk_actions_bar.updated_toast', { n: res.affected }));
       onClear();
       await qc.invalidateQueries({ queryKey: ['conversations'] });
       await qc.invalidateQueries({ queryKey: ['conversations-counts'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function archive() {
     if (
       !(await confirm({
-        title: `Arquivar ${selectedIds.length} conversa(s)?`,
-        description: 'As conversas saem da lista padrão. Mensagens novas auto-desarquivam.',
-        confirmLabel: 'Arquivar',
+        title: t('c_inbox_bulk_actions_bar.archive_confirm_title', { n: selectedIds.length }),
+        description: t('c_inbox_bulk_actions_bar.archive_confirm_desc'),
+        confirmLabel: t('c_inbox_bulk_actions_bar.archive'),
       }))
     )
       return;
-    run({ action: 'archive' }, `${selectedIds.length} arquivada(s)`);
+    run({ action: 'archive' }, t('c_inbox_bulk_actions_bar.archived_toast', { n: selectedIds.length }));
   }
 
   function unarchive() {
-    run({ action: 'unarchive' }, `${selectedIds.length} desarquivada(s)`);
+    run({ action: 'unarchive' }, t('c_inbox_bulk_actions_bar.unarchived_toast', { n: selectedIds.length }));
   }
 
   if (selectedIds.length === 0) return null;
@@ -102,7 +104,7 @@ export function InboxBulkActionsBar({
       <span className="rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
         {selectedIds.length}
       </span>
-      <span className="text-sm font-medium">selecionada(s)</span>
+      <span className="text-sm font-medium">{t('c_inbox_bulk_actions_bar.selected')}</span>
       <div className="ml-2 h-5 w-px bg-border" />
 
       {/* Atribuir agente */}
@@ -110,17 +112,17 @@ export function InboxBulkActionsBar({
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline">
             <UserCheck className="h-3.5 w-3.5" />
-            Atribuir agente
+            {t('c_inbox_bulk_actions_bar.assign_agent')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           <DropdownMenuItem onSelect={() => run({ action: 'assign_agent', agentId: null })}>
             <UserMinus className="h-3.5 w-3.5" />
-            Sem agente
+            {t('c_inbox_bulk_actions_bar.no_agent')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {agents.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum agente.</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('c_inbox_bulk_actions_bar.no_agents')}</p>
           ) : (
             agents.map((a) => (
               <DropdownMenuItem
@@ -140,13 +142,13 @@ export function InboxBulkActionsBar({
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline">
             <Tag className="h-3.5 w-3.5" />
-            Etiqueta
+            {t('c_inbox_bulk_actions_bar.label')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-          <DropdownMenuLabel>Aplicar</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('c_inbox_bulk_actions_bar.apply')}</DropdownMenuLabel>
           {labels.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma etiqueta.</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('c_inbox_bulk_actions_bar.no_labels')}</p>
           ) : (
             labels.map((l) => (
               <DropdownMenuItem
@@ -159,7 +161,7 @@ export function InboxBulkActionsBar({
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Remover</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('c_inbox_bulk_actions_bar.remove')}</DropdownMenuLabel>
           {labels.map((l) => (
             <DropdownMenuItem
               key={`u-${l.id}`}
@@ -169,7 +171,7 @@ export function InboxBulkActionsBar({
                 className="h-3 w-3 rounded-full opacity-50"
                 style={{ backgroundColor: l.color }}
               />
-              Remover {l.name}
+              {t('c_inbox_bulk_actions_bar.remove_label', { name: l.name })}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -181,7 +183,7 @@ export function InboxBulkActionsBar({
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline">
               <CircleDot className="h-3.5 w-3.5" />
-              Status
+              {t('common.status')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -190,7 +192,7 @@ export function InboxBulkActionsBar({
                 key={s.value}
                 onSelect={() => run({ action: 'set_status', status: s.value })}
               >
-                {s.label}
+                {t(s.labelKey)}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -202,17 +204,17 @@ export function InboxBulkActionsBar({
         (tab === 'ARCHIVED' ? (
           <Button size="sm" variant="outline" onClick={unarchive}>
             <ArchiveRestore className="h-3.5 w-3.5" />
-            Desarquivar
+            {t('c_inbox_bulk_actions_bar.unarchive')}
           </Button>
         ) : (
           <Button size="sm" variant="outline" onClick={archive}>
             <Archive className="h-3.5 w-3.5" />
-            Arquivar
+            {t('c_inbox_bulk_actions_bar.archive')}
           </Button>
         ))}
 
       <div className="ml-2 h-5 w-px bg-border" />
-      <Button size="sm" variant="ghost" onClick={onClear} title="Limpar seleção">
+      <Button size="sm" variant="ghost" onClick={onClear} title={t('c_inbox_bulk_actions_bar.clear_selection')}>
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

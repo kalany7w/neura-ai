@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { CalendarPlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +62,7 @@ export function ScheduleEventDialog({
   const setOpen = onOpenChange ?? setInternalOpen;
   const [submitting, setSubmitting] = useState(false);
   const qc = useQueryClient();
+  const { t } = useT();
 
   const {
     register,
@@ -91,12 +93,12 @@ export function ScheduleEventDialog({
           contactId,
         }),
       });
-      toast.success('Evento agendado');
+      toast.success(t('c_calendar_schedule_event_dialog.toast_success'));
       reset();
       setOpen(false);
       qc.invalidateQueries({ queryKey: ['calendar'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao agendar');
+      toast.error(err instanceof Error ? err.message : t('c_calendar_schedule_event_dialog.toast_error'));
     } finally {
       setSubmitting(false);
     }
@@ -108,46 +110,46 @@ export function ScheduleEventDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CalendarPlus className="h-5 w-5" /> Agendar evento
+            <CalendarPlus className="h-5 w-5" /> {t('c_calendar_schedule_event_dialog.title')}
           </DialogTitle>
           <DialogDescription>
-            Cria um evento no calendário da equipe vinculado a esta conversa.
+            {t('c_calendar_schedule_event_dialog.description')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="title">Título</Label>
-            <Input id="title" {...register('title')} placeholder="Ex: Aplicação de produto" />
+            <Label htmlFor="title">{t('c_calendar_schedule_event_dialog.field_title')}</Label>
+            <Input id="title" {...register('title')} placeholder={t('c_calendar_schedule_event_dialog.title_placeholder')} />
             {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="eventDate">Data e hora</Label>
+            <Label htmlFor="eventDate">{t('c_calendar_schedule_event_dialog.field_date')}</Label>
             <Input id="eventDate" type="datetime-local" {...register('eventDate')} />
             {errors.eventDate && (
               <p className="text-xs text-destructive">{errors.eventDate.message}</p>
             )}
           </div>
           <div className="space-y-1">
-            <Label>Tipo</Label>
+            <Label>{t('c_calendar_schedule_event_dialog.field_type')}</Label>
             <Select value={watch('type')} onValueChange={(v) => setValue('type', v as Input['type'])}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="APPLICATION">Aplicação</SelectItem>
-                <SelectItem value="MAINTENANCE">Manutenção</SelectItem>
-                <SelectItem value="REPAIR">Reparação</SelectItem>
-                <SelectItem value="SALE_FOLLOWUP">Follow-up de venda</SelectItem>
-                <SelectItem value="OTHER">Outro</SelectItem>
+                <SelectItem value="APPLICATION">{t('c_calendar_schedule_event_dialog.type_application')}</SelectItem>
+                <SelectItem value="MAINTENANCE">{t('c_calendar_schedule_event_dialog.type_maintenance')}</SelectItem>
+                <SelectItem value="REPAIR">{t('c_calendar_schedule_event_dialog.type_repair')}</SelectItem>
+                <SelectItem value="SALE_FOLLOWUP">{t('c_calendar_schedule_event_dialog.type_sale_followup')}</SelectItem>
+                <SelectItem value="OTHER">{t('c_calendar_schedule_event_dialog.type_other')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Agendando…' : 'Agendar'}
+              {submitting ? t('c_calendar_schedule_event_dialog.submitting') : t('c_calendar_schedule_event_dialog.submit')}
             </Button>
           </DialogFooter>
         </form>

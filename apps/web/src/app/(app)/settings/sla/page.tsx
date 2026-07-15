@@ -73,9 +73,11 @@ export default function SlaPage() {
   );
 
   function scopeLabel(p: SlaPolicy): string {
-    if (p.scope === 'default') return 'Padrão (workspace)';
-    if (p.scope === 'inbox') return `Inbox: ${inboxMap.get(p.scopeId ?? '') ?? p.scopeId}`;
-    if (p.scope === 'label') return `Etiqueta: ${labelMap.get(p.scopeId ?? '')?.name ?? p.scopeId}`;
+    if (p.scope === 'default') return t('settings_sla.scope_default');
+    if (p.scope === 'inbox')
+      return t('settings_sla.scope_inbox', { name: inboxMap.get(p.scopeId ?? '') ?? p.scopeId ?? '' });
+    if (p.scope === 'label')
+      return t('settings_sla.scope_label', { name: labelMap.get(p.scopeId ?? '')?.name ?? p.scopeId ?? '' });
     return p.scope;
   }
 
@@ -87,28 +89,28 @@ export default function SlaPage() {
       });
       await qc.invalidateQueries({ queryKey: ['sla-policies'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove(p: SlaPolicy) {
     if (p.scope === 'default') {
-      toast.error('Não dá pra excluir a policy padrão');
+      toast.error(t('settings_sla.delete_default_error'));
       return;
     }
     const ok = await confirm({
-      title: `Excluir policy "${p.name}"?`,
-      description: 'Conversas voltam a usar a policy padrão.',
-      confirmLabel: 'Excluir',
+      title: t('settings_sla.delete_confirm_title', { name: p.name }),
+      description: t('settings_sla.delete_confirm_desc'),
+      confirmLabel: t('action.delete'),
       destructive: true,
     });
     if (!ok) return;
     try {
       await api(`/api/sla-policies/${p.id}`, { method: 'DELETE' });
-      toast.success('Policy excluída');
+      toast.success(t('settings_sla.deleted'));
       await qc.invalidateQueries({ queryKey: ['sla-policies'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -129,15 +131,15 @@ export default function SlaPage() {
           }}
         >
           <Plus className="h-4 w-4" />
-          Nova policy
+          {t('settings_sla.new_policy')}
         </Button>
       </div>
 
       <div className="rounded-lg border bg-card divide-y">
         {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('action.loading')}</p>
         ) : !policiesData?.policies.length ? (
-          <p className="p-6 text-sm text-muted-foreground">Nenhuma policy.</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('settings_sla.empty')}</p>
         ) : (
           policiesData.policies.map((p) => (
             <div key={p.id} className="flex items-center gap-4 p-4">
@@ -157,24 +159,24 @@ export default function SlaPage() {
                   </span>
                   {!p.enabled && (
                     <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                      Desativada
+                      {t('settings_sla.disabled_badge')}
                     </span>
                   )}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  FRT alvo:{' '}
+                  {t('settings_sla.frt_target_label')}{' '}
                   <span className="font-semibold text-foreground">
                     {formatMinutes(p.firstResponseThresholdMin)}
                   </span>
                   {' · '}
-                  RT alvo:{' '}
+                  {t('settings_sla.rt_target_label')}{' '}
                   <span className="font-semibold text-foreground">
                     {formatMinutes(p.resolutionThresholdMin)}
                   </span>
                 </p>
               </div>
               <Button size="sm" variant="outline" onClick={() => toggle(p)}>
-                {p.enabled ? 'Desativar' : 'Ativar'}
+                {p.enabled ? t('settings_sla.deactivate') : t('settings_sla.activate')}
               </Button>
               <Button
                 size="sm"
@@ -184,7 +186,7 @@ export default function SlaPage() {
                   setDialogOpen(true);
                 }}
               >
-                Editar
+                {t('action.edit')}
               </Button>
               {p.scope !== 'default' && (
                 <Button size="icon" variant="ghost" onClick={() => remove(p)}>
@@ -221,6 +223,7 @@ function SlaPolicyDialog({
   labels: LabelItem[];
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [scope, setScope] = useState<'default' | 'inbox' | 'label'>('inbox');
   const [scopeId, setScopeId] = useState<string>('');
@@ -250,7 +253,11 @@ function SlaPolicyDialog({
   async function submit() {
     if (!name.trim() || submitting) return;
     if (scope !== 'default' && !scopeId) {
-      toast.error(`Selecione ${scope === 'inbox' ? 'a inbox' : 'a etiqueta'}`);
+      toast.error(
+        scope === 'inbox'
+          ? t('settings_sla.select_inbox_error')
+          : t('settings_sla.select_label_error'),
+      );
       return;
     }
     setSubmitting(true);
@@ -265,7 +272,7 @@ function SlaPolicyDialog({
             enabled,
           }),
         });
-        toast.success('Policy atualizada');
+        toast.success(t('settings_sla.updated'));
       } else {
         await api('/api/sla-policies', {
           method: 'POST',
@@ -278,15 +285,15 @@ function SlaPolicyDialog({
             enabled,
           }),
         });
-        toast.success('Policy criada');
+        toast.success(t('settings_sla.created'));
       }
       await qc.invalidateQueries({ queryKey: ['sla-policies'] });
       onOpenChange(false);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'policy_exists') {
-        toast.error('Já existe policy pra esse escopo');
+        toast.error(t('settings_sla.exists_error'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -297,21 +304,24 @@ function SlaPolicyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Editar policy' : 'Nova policy SLA'}</DialogTitle>
-          <DialogDescription>
-            Define o tempo-alvo de resposta e resolução. Mais específico (etiqueta) ganha
-            do mais genérico (inbox / padrão).
-          </DialogDescription>
+          <DialogTitle>
+            {editing ? t('settings_sla.dialog_edit_title') : t('settings_sla.dialog_new_title')}
+          </DialogTitle>
+          <DialogDescription>{t('settings_sla.dialog_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Nome</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="VIP — resposta rápida" />
+            <Label>{t('common.name')}</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('settings_sla.name_placeholder')}
+            />
           </div>
           {!editing && (
             <>
               <div className="space-y-2">
-                <Label>Escopo</Label>
+                <Label>{t('settings_sla.scope_field')}</Label>
                 <select
                   value={scope}
                   onChange={(e) => {
@@ -320,20 +330,20 @@ function SlaPolicyDialog({
                   }}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="inbox">Por inbox</option>
-                  <option value="label">Por etiqueta</option>
-                  <option value="default">Padrão (workspace)</option>
+                  <option value="inbox">{t('settings_sla.scope_option_inbox')}</option>
+                  <option value="label">{t('settings_sla.scope_option_label')}</option>
+                  <option value="default">{t('settings_sla.scope_default')}</option>
                 </select>
               </div>
               {scope === 'inbox' && (
                 <div className="space-y-2">
-                  <Label>Inbox</Label>
+                  <Label>{t('settings_sla.inbox_field')}</Label>
                   <select
                     value={scopeId}
                     onChange={(e) => setScopeId(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">Selecione…</option>
+                    <option value="">{t('settings_sla.select_placeholder')}</option>
                     {inboxes.map((i) => (
                       <option key={i.id} value={i.id}>
                         {i.name}
@@ -344,13 +354,13 @@ function SlaPolicyDialog({
               )}
               {scope === 'label' && (
                 <div className="space-y-2">
-                  <Label>Etiqueta</Label>
+                  <Label>{t('settings_sla.label_field')}</Label>
                   <select
                     value={scopeId}
                     onChange={(e) => setScopeId(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   >
-                    <option value="">Selecione…</option>
+                    <option value="">{t('settings_sla.select_placeholder')}</option>
                     {labels.map((l) => (
                       <option key={l.id} value={l.id}>
                         {l.name}
@@ -363,7 +373,7 @@ function SlaPolicyDialog({
           )}
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>FRT alvo (minutos)</Label>
+              <Label>{t('settings_sla.frt_field')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -374,7 +384,7 @@ function SlaPolicyDialog({
               <p className="text-[10px] text-muted-foreground">{formatMinutes(frtMin)}</p>
             </div>
             <div className="space-y-2">
-              <Label>RT alvo (minutos)</Label>
+              <Label>{t('settings_sla.rt_field')}</Label>
               <Input
                 type="number"
                 min={1}
@@ -391,14 +401,14 @@ function SlaPolicyDialog({
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
             />
-            Ativada
+            {t('settings_sla.enabled_checkbox')}
           </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button onClick={submit} disabled={submitting || !name.trim()}>
-              {submitting ? 'Salvando…' : editing ? 'Salvar' : 'Criar policy'}
+              {submitting ? t('action.saving') : editing ? t('action.save') : t('settings_sla.create_policy')}
             </Button>
           </div>
         </div>

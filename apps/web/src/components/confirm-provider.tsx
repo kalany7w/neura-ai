@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
+import { useT } from '@/lib/i18n';
 
 export interface ConfirmOptions {
   title: string;
@@ -42,6 +43,7 @@ interface ConfirmContextValue {
 const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [opts, setOpts] = useState<ConfirmOptions | null>(null);
   const resolverRef = useRef<Resolver | null>(null);
@@ -76,14 +78,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{opts?.title ?? 'Confirmar'}</AlertDialogTitle>
+            <AlertDialogTitle>{opts?.title ?? t('action.confirm')}</AlertDialogTitle>
             {opts?.description && (
               <AlertDialogDescription>{opts.description}</AlertDialogDescription>
             )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => settle(false)}>
-              {opts?.cancelLabel ?? 'Cancelar'}
+              {opts?.cancelLabel ?? t('action.cancel')}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => settle(true)}
@@ -91,7 +93,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 opts?.destructive && buttonVariants({ variant: 'destructive' }),
               )}
             >
-              {opts?.confirmLabel ?? 'Confirmar'}
+              {opts?.confirmLabel ?? t('action.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

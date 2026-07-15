@@ -83,14 +83,14 @@ export default function LabelsPage() {
     setSubmitting(true);
     try {
       await api('/api/labels', { method: 'POST', body: JSON.stringify(values) });
-      toast.success('Etiqueta criada');
+      toast.success(t('settings_labels.toast_created'));
       reset({ color: '#94a3b8', scope: 'BOTH', routesToFunnelId: null, routesToStageId: null });
       await qc.invalidateQueries({ queryKey: ['labels'] });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'name_taken') {
-        toast.error('Já existe etiqueta com esse nome');
+        toast.error(t('settings_labels.toast_name_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -100,19 +100,19 @@ export default function LabelsPage() {
   async function remove(id: string) {
     if (
       !(await confirm({
-        title: 'Remover etiqueta?',
-        description: 'Será removida de todos os contatos e conversas que a tinham.',
-        confirmLabel: 'Remover',
+        title: t('settings_labels.confirm_remove_title'),
+        description: t('settings_labels.confirm_remove_desc'),
+        confirmLabel: t('settings_labels.remove'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/labels/${id}`, { method: 'DELETE' });
-      toast.success('Removida');
+      toast.success(t('settings_labels.toast_removed'));
       await qc.invalidateQueries({ queryKey: ['labels'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -127,33 +127,33 @@ export default function LabelsPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="rounded-lg border bg-card p-5">
-          <h2 className="mb-4 font-semibold">Nova etiqueta</h2>
+          <h2 className="mb-4 font-semibold">{t('settings_labels.new_label')}</h2>
           <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nome</Label>
-              <Input id="name" placeholder="Ex: VIP" {...register('name')} />
+              <Label htmlFor="name">{t('common.name')}</Label>
+              <Input id="name" placeholder={t('settings_labels.name_placeholder')} {...register('name')} />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="color">Cor</Label>
+                <Label htmlFor="color">{t('settings_labels.color')}</Label>
                 <Input id="color" type="color" {...register('color')} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="scope">Aplicar em</Label>
+                <Label htmlFor="scope">{t('settings_labels.apply_to')}</Label>
                 <select
                   id="scope"
                   {...register('scope')}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="BOTH">Contatos e conversas</option>
-                  <option value="CONTACT">Só contatos</option>
-                  <option value="CONVERSATION">Só conversas</option>
+                  <option value="BOTH">{t('settings_labels.scope_both')}</option>
+                  <option value="CONTACT">{t('settings_labels.scope_contact')}</option>
+                  <option value="CONVERSATION">{t('settings_labels.scope_conversation')}</option>
                 </select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Funil destino</Label>
+              <Label>{t('settings_labels.target_funnel')}</Label>
               <Select
                 value={watch('routesToFunnelId') ?? 'none'}
                 onValueChange={(v) => {
@@ -162,30 +162,29 @@ export default function LabelsPage() {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Global (todos os funis)" />
+                  <SelectValue placeholder={t('settings_labels.global_placeholder')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Global — todos os funis</SelectItem>
+                  <SelectItem value="none">{t('settings_labels.global_all_funnels')}</SelectItem>
                   {funnelsData?.funnels.map((f) => (
                     <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Vinculada a um funil: só aparece em cards desse funil + auto-rotear inbound pro
-                stage abaixo. Sem funil: aparece em todos.
+                {t('settings_labels.funnel_hint')}
               </p>
             </div>
 
             {watch('routesToFunnelId') && (
               <div className="space-y-2">
-                <Label>Etapa inicial</Label>
+                <Label>{t('settings_labels.initial_stage')}</Label>
                 <Select
                   value={watch('routesToStageId') ?? 'none'}
                   onValueChange={(v) => setValue('routesToStageId', v === 'none' ? null : v)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Escolha a etapa" />
+                    <SelectValue placeholder={t('settings_labels.choose_stage')} />
                   </SelectTrigger>
                   <SelectContent>
                     {(funnelsData?.funnels.find((f) => f.id === watch('routesToFunnelId'))?.stages ?? []).map(
@@ -198,17 +197,17 @@ export default function LabelsPage() {
               </div>
             )}
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? 'Criando...' : 'Criar etiqueta'}
+              {submitting ? t('settings_labels.creating') : t('settings_labels.create_label')}
             </Button>
           </form>
         </div>
 
         <div className="rounded-lg border bg-card p-5">
-          <h2 className="mb-4 font-semibold">Existentes</h2>
+          <h2 className="mb-4 font-semibold">{t('settings_labels.existing')}</h2>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : !data?.labels.length ? (
-            <p className="text-sm text-muted-foreground">Nenhuma etiqueta.</p>
+            <p className="text-sm text-muted-foreground">{t('settings_labels.empty')}</p>
           ) : (
             <ul className="space-y-2">
               {data.labels.map((l) => (
@@ -226,20 +225,20 @@ export default function LabelsPage() {
                         <p className="font-medium truncate">{l.name}</p>
                         {l.routesToFunnelId ? (
                           <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            → {funnelNameById.get(l.routesToFunnelId) ?? 'Funil'}
+                            → {funnelNameById.get(l.routesToFunnelId) ?? t('settings_labels.funnel_fallback')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                            Global
+                            {t('settings_labels.global')}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {l.scope === 'BOTH'
-                          ? 'Contatos e conversas'
+                          ? t('settings_labels.scope_both')
                           : l.scope === 'CONTACT'
-                            ? 'Contatos'
-                            : 'Conversas'}
+                            ? t('settings_labels.scope_contact_label')
+                            : t('settings_labels.scope_conversation_label')}
                       </p>
                     </div>
                   </div>
@@ -248,7 +247,7 @@ export default function LabelsPage() {
                       size="icon"
                       variant="ghost"
                       onClick={() => setEditing(l)}
-                      title="Editar"
+                      title={t('action.edit')}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -256,7 +255,7 @@ export default function LabelsPage() {
                       size="icon"
                       variant="ghost"
                       onClick={() => remove(l.id)}
-                      title="Remover"
+                      title={t('settings_labels.remove')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -292,6 +291,7 @@ function EditLabelDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#94a3b8');
   const [scope, setScope] = useState<'CONTACT' | 'CONVERSATION' | 'BOTH'>('BOTH');
@@ -323,15 +323,15 @@ function EditLabelDialog({
           routesToStageId: funnelId ? stageId : null,
         }),
       });
-      toast.success('Etiqueta atualizada');
+      toast.success(t('settings_labels.toast_updated'));
       onSaved();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'name_taken') {
-        toast.error('Já existe etiqueta com esse nome');
+        toast.error(t('settings_labels.toast_name_taken'));
       } else if (err instanceof ApiError && err.code === 'invalid_stage_for_funnel') {
-        toast.error('Etapa não pertence ao funil escolhido');
+        toast.error(t('settings_labels.toast_invalid_stage'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -344,15 +344,14 @@ function EditLabelDialog({
     <Dialog open={!!label} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Editar etiqueta</DialogTitle>
+          <DialogTitle>{t('settings_labels.edit_label')}</DialogTitle>
           <DialogDescription>
-            Vincular a um funil oculta a etiqueta de cards de outros funis. Use pra separar
-            etiquetas por empresa.
+            {t('settings_labels.edit_desc')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="edit-name">Nome</Label>
+            <Label htmlFor="edit-name">{t('common.name')}</Label>
             <Input
               id="edit-name"
               value={name}
@@ -362,7 +361,7 @@ function EditLabelDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="edit-color">Cor</Label>
+              <Label htmlFor="edit-color">{t('settings_labels.color')}</Label>
               <Input
                 id="edit-color"
                 type="color"
@@ -371,21 +370,21 @@ function EditLabelDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-scope">Aplicar em</Label>
+              <Label htmlFor="edit-scope">{t('settings_labels.apply_to')}</Label>
               <select
                 id="edit-scope"
                 value={scope}
                 onChange={(e) => setScope(e.target.value as 'CONTACT' | 'CONVERSATION' | 'BOTH')}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="BOTH">Contatos e conversas</option>
-                <option value="CONTACT">Só contatos</option>
-                <option value="CONVERSATION">Só conversas</option>
+                <option value="BOTH">{t('settings_labels.scope_both')}</option>
+                <option value="CONTACT">{t('settings_labels.scope_contact')}</option>
+                <option value="CONVERSATION">{t('settings_labels.scope_conversation')}</option>
               </select>
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Funil destino</Label>
+            <Label>{t('settings_labels.target_funnel')}</Label>
             <Select
               value={funnelId ?? 'none'}
               onValueChange={(v) => {
@@ -398,7 +397,7 @@ function EditLabelDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Global — todos os funis</SelectItem>
+                <SelectItem value="none">{t('settings_labels.global_all_funnels')}</SelectItem>
                 {funnels.map((f) => (
                   <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
                 ))}
@@ -407,13 +406,13 @@ function EditLabelDialog({
           </div>
           {funnelId && (
             <div className="space-y-2">
-              <Label>Etapa inicial</Label>
+              <Label>{t('settings_labels.initial_stage')}</Label>
               <Select
                 value={stageId ?? 'none'}
                 onValueChange={(v) => setStageId(v === 'none' ? null : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Escolha a etapa" />
+                  <SelectValue placeholder={t('settings_labels.choose_stage')} />
                 </SelectTrigger>
                 <SelectContent>
                   {stages.map((s) => (
@@ -423,18 +422,17 @@ function EditLabelDialog({
               </Select>
               {!stageId && (
                 <p className="text-[11px] text-amber-600">
-                  Sem etapa: a etiqueta fica vinculada ao funil pra visibilidade, mas não cria
-                  cards automaticamente. Para auto-routing, escolha uma etapa.
+                  {t('settings_labels.no_stage_hint')}
                 </p>
               )}
             </div>
           )}
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button onClick={save} disabled={!name.trim() || submitting}>
-              {submitting ? 'Salvando…' : 'Salvar'}
+              {submitting ? t('action.saving') : t('action.save')}
             </Button>
           </div>
         </div>

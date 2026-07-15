@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -92,6 +93,7 @@ export function ImportContactsDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const fileRef = useRef<HTMLInputElement>(null);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [filename, setFilename] = useState('');
@@ -115,7 +117,7 @@ export function ImportContactsDialog({
       const text = String(e.target?.result ?? '');
       const { headers, rows } = parseCsv(text);
       if (rows.length === 0) {
-        toast.error('Arquivo vazio ou inválido');
+        toast.error(t('c_contacts_import_contacts_dialog.toast_empty_file'));
         return;
       }
 
@@ -130,9 +132,7 @@ export function ImportContactsDialog({
       );
 
       if (phoneIdx === -1) {
-        toast.error(
-          'Coluna de telefone não encontrada. Use "phone", "phoneNumber", "telefone" ou similar como cabeçalho.',
-        );
+        toast.error(t('c_contacts_import_contacts_dialog.toast_no_phone_column'));
         return;
       }
 
@@ -145,7 +145,7 @@ export function ImportContactsDialog({
           phoneNumber: phone,
           name: name ? name.trim() : undefined,
           raw: rawPhone,
-          error: valid ? undefined : 'Telefone inválido (esperado E.164)',
+          error: valid ? undefined : t('c_contacts_import_contacts_dialog.invalid_phone'),
         };
       });
       setParsedRows(parsed);
@@ -166,10 +166,10 @@ export function ImportContactsDialog({
         }),
       });
       setResult(res);
-      toast.success(`${res.imported} contato(s) importado(s)`);
+      toast.success(t('c_contacts_import_contacts_dialog.toast_imported', { n: res.imported }));
       await qc.invalidateQueries({ queryKey: ['contacts'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao importar');
+      toast.error(err instanceof Error ? err.message : t('c_contacts_import_contacts_dialog.toast_import_error'));
     } finally {
       setSubmitting(false);
     }
@@ -181,7 +181,7 @@ export function ImportContactsDialog({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'modelo-contatos.csv';
+    a.download = t('c_contacts_import_contacts_dialog.template_filename');
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -193,10 +193,9 @@ export function ImportContactsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Importar contatos</DialogTitle>
+          <DialogTitle>{t('c_contacts_import_contacts_dialog.title')}</DialogTitle>
           <DialogDescription>
-            Suba um arquivo CSV. Cabeçalho aceita “phoneNumber/phone/telefone/celular” e
-            “name/nome”. Telefones sem prefixo internacional são normalizados pra +55.
+            {t('c_contacts_import_contacts_dialog.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -206,17 +205,17 @@ export function ImportContactsDialog({
             <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                <h3 className="font-semibold">Importação concluída</h3>
+                <h3 className="font-semibold">{t('c_contacts_import_contacts_dialog.import_done')}</h3>
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <Stat label="Importados" value={result.imported} color="text-emerald-700" />
-                <Stat label="Ignorados (dup.)" value={result.skipped} color="text-slate-600" />
-                <Stat label="Total no arquivo" value={result.total} color="text-foreground" />
+                <Stat label={t('c_contacts_import_contacts_dialog.stat_imported')} value={result.imported} color="text-emerald-700" />
+                <Stat label={t('c_contacts_import_contacts_dialog.stat_skipped')} value={result.skipped} color="text-slate-600" />
+                <Stat label={t('c_contacts_import_contacts_dialog.stat_total')} value={result.total} color="text-foreground" />
               </div>
               {result.errors.length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs text-destructive">
-                    {result.errors.length} erro(s) — clique pra ver
+                    {t('c_contacts_import_contacts_dialog.errors_summary', { n: result.errors.length })}
                   </summary>
                   <ul className="mt-2 max-h-32 overflow-y-auto rounded-md border bg-background p-2 text-[11px]">
                     {result.errors.map((e, i) => (
@@ -229,7 +228,7 @@ export function ImportContactsDialog({
               )}
               <div className="flex justify-end pt-2">
                 <Button size="sm" onClick={() => onOpenChange(false)}>
-                  Fechar
+                  {t('action.close')}
                 </Button>
               </div>
             </div>
@@ -252,9 +251,9 @@ export function ImportContactsDialog({
                 className="cursor-pointer rounded-lg border-2 border-dashed bg-muted/20 px-6 py-10 text-center hover:bg-muted/40"
               >
                 <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground" />
-                <p className="mt-3 font-semibold">Arraste o CSV aqui ou clique pra selecionar</p>
+                <p className="mt-3 font-semibold">{t('c_contacts_import_contacts_dialog.dropzone')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tamanho máximo recomendado: 5.000 linhas
+                  {t('c_contacts_import_contacts_dialog.max_rows')}
                 </p>
                 <input
                   ref={fileRef}
@@ -268,10 +267,10 @@ export function ImportContactsDialog({
                 />
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Precisa de um exemplo?</span>
+                <span>{t('c_contacts_import_contacts_dialog.need_example')}</span>
                 <Button size="sm" variant="ghost" onClick={downloadTemplate}>
                   <Download className="h-3 w-3" />
-                  Baixar modelo CSV
+                  {t('c_contacts_import_contacts_dialog.download_template')}
                 </Button>
               </div>
             </>
@@ -298,11 +297,11 @@ export function ImportContactsDialog({
                 </div>
                 <div className="flex gap-2 text-xs">
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-700">
-                    {validCount} válidos
+                    {t('c_contacts_import_contacts_dialog.valid_count', { n: validCount })}
                   </span>
                   {invalidCount > 0 && (
                     <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-700">
-                      {invalidCount} com erro
+                      {t('c_contacts_import_contacts_dialog.invalid_count', { n: invalidCount })}
                     </span>
                   )}
                 </div>
@@ -312,9 +311,9 @@ export function ImportContactsDialog({
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-muted/50">
                     <tr className="text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                      <th className="px-2 py-1.5">Telefone</th>
-                      <th className="px-2 py-1.5">Nome</th>
-                      <th className="px-2 py-1.5">Status</th>
+                      <th className="px-2 py-1.5">{t('common.phone')}</th>
+                      <th className="px-2 py-1.5">{t('common.name')}</th>
+                      <th className="px-2 py-1.5">{t('common.status')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -331,7 +330,7 @@ export function ImportContactsDialog({
                           ) : (
                             <span className="inline-flex items-center gap-1 text-emerald-700">
                               <CheckCircle2 className="h-3 w-3" />
-                              ok
+                              {t('c_contacts_import_contacts_dialog.status_ok')}
                             </span>
                           )}
                         </td>
@@ -341,7 +340,7 @@ export function ImportContactsDialog({
                 </table>
                 {parsedRows.length > 100 && (
                   <p className="border-t bg-muted/30 p-2 text-center text-[11px] text-muted-foreground">
-                    Mostrando primeiras 100 linhas de {parsedRows.length}.
+                    {t('c_contacts_import_contacts_dialog.showing_first', { total: parsedRows.length })}
                   </p>
                 )}
               </div>
@@ -352,15 +351,17 @@ export function ImportContactsDialog({
                   checked={skipDuplicates}
                   onChange={(e) => setSkipDuplicates(e.target.checked)}
                 />
-                Ignorar telefones que já existem no workspace
+                {t('c_contacts_import_contacts_dialog.skip_duplicates')}
               </label>
 
               <div className="flex justify-end gap-2 border-t pt-3">
                 <Button variant="ghost" onClick={() => onOpenChange(false)}>
-                  Cancelar
+                  {t('action.cancel')}
                 </Button>
                 <Button onClick={submit} disabled={submitting || validCount === 0}>
-                  {submitting ? 'Importando…' : `Importar ${validCount} contato(s)`}
+                  {submitting
+                    ? t('c_contacts_import_contacts_dialog.importing')
+                    : t('c_contacts_import_contacts_dialog.import_count', { n: validCount })}
                 </Button>
               </div>
             </>

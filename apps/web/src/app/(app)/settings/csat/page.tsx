@@ -46,10 +46,11 @@ interface Survey {
   createdAt: string;
 }
 
+// Valores = chaves i18n; traduzidas no ponto de uso com t().
 const SCORE_TYPE_LABEL: Record<ScoreType, string> = {
-  CSAT: 'CSAT (1-5 estrelas)',
-  NPS: 'NPS (0-10 likelihood)',
-  THUMBS: 'Thumbs (positivo/negativo)',
+  CSAT: 'settings_csat.score_csat',
+  NPS: 'settings_csat.score_nps',
+  THUMBS: 'settings_csat.score_thumbs',
 };
 
 const SCORE_TYPE_ICON: Record<ScoreType, React.ComponentType<{ className?: string }>> = {
@@ -59,19 +60,12 @@ const SCORE_TYPE_ICON: Record<ScoreType, React.ComponentType<{ className?: strin
 };
 
 const CHANNEL_LABEL: Record<ChannelScope, string> = {
-  ALL: 'Todos os canais',
-  WHATSAPP: 'WhatsApp',
-  TELEGRAM: 'Telegram',
-  EMAIL: 'Email',
-  WEBCHAT: 'Webchat',
+  ALL: 'settings_csat.channel_all',
+  WHATSAPP: 'settings_csat.channel_whatsapp',
+  TELEGRAM: 'settings_csat.channel_telegram',
+  EMAIL: 'settings_csat.channel_email',
+  WEBCHAT: 'settings_csat.channel_webchat',
 };
-
-const DEFAULT_BODY_CSAT =
-  'Olá {{contact.firstName | default "tudo bem"}}! Como foi nosso atendimento?\n\nResponda com uma nota de 1 a 5:\n1 — péssimo · 2 — ruim · 3 — ok · 4 — bom · 5 — excelente';
-const DEFAULT_BODY_NPS =
-  'Olá {{contact.firstName | default "tudo bem"}}! De 0 a 10, qual a chance de você recomendar nosso atendimento pra um amigo?';
-const DEFAULT_BODY_THUMBS =
-  'Olá {{contact.firstName | default "tudo bem"}}! Você gostou do nosso atendimento? Responda 👍 ou 👎';
 
 export default function CsatPage() {
   const qc = useQueryClient();
@@ -91,10 +85,10 @@ export default function CsatPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !s.enabled }),
       });
-      toast.success(s.enabled ? 'Survey desativado' : 'Survey ativado');
+      toast.success(s.enabled ? t('settings_csat.toast_deactivated') : t('settings_csat.toast_activated'));
       await qc.invalidateQueries({ queryKey: ['csat-surveys'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -104,29 +98,29 @@ export default function CsatPage() {
         method: 'PATCH',
         body: JSON.stringify({ isDefault: true }),
       });
-      toast.success('Definido como padrão');
+      toast.success(t('settings_csat.toast_set_default'));
       await qc.invalidateQueries({ queryKey: ['csat-surveys'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove(s: Survey) {
     if (
       !(await confirm({
-        title: `Excluir "${s.name}"?`,
-        description: 'Respostas já coletadas continuarão em /reports, mas o survey não disparará mais.',
-        confirmLabel: 'Excluir',
+        title: t('settings_csat.delete_confirm_title', { name: s.name }),
+        description: t('settings_csat.delete_confirm_desc'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/csat-surveys/${s.id}`, { method: 'DELETE' });
-      toast.success('Excluído');
+      toast.success(t('settings_csat.toast_deleted'));
       await qc.invalidateQueries({ queryKey: ['csat-surveys'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -152,23 +146,24 @@ export default function CsatPage() {
         </div>
         <Button onClick={openNew}>
           <Plus className="mr-2 h-4 w-4" />
-          Novo survey
+          {t('settings_csat.new_survey')}
         </Button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.surveys.length ? (
         <div className="rounded-lg border-2 border-dashed py-12 text-center">
           <Smile className="mx-auto h-10 w-10 text-muted-foreground/40" />
-          <p className="mt-3 font-medium">Nenhum survey configurado</p>
+          <p className="mt-3 font-medium">{t('settings_csat.empty_title')}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Quando você criar um survey ativo e marcado como padrão, ele dispara automaticamente
-            assim que uma conversa virar <strong>Resolvida</strong>.
+            {t('settings_csat.empty_desc_before')}
+            <strong>{t('settings_csat.status_resolved')}</strong>
+            {t('settings_csat.empty_desc_after')}
           </p>
           <Button onClick={openNew} className="mt-4">
             <Plus className="mr-2 h-4 w-4" />
-            Criar primeiro survey
+            {t('settings_csat.create_first')}
           </Button>
         </div>
       ) : (
@@ -206,27 +201,27 @@ export default function CsatPage() {
                       <p className="font-medium">{s.name}</p>
                       {s.isDefault && (
                         <span className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
-                          padrão
+                          {t('settings_csat.default_badge')}
                         </span>
                       )}
                       {!s.enabled && (
                         <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                          desativado
+                          {t('settings_csat.disabled_badge')}
                         </span>
                       )}
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {SCORE_TYPE_LABEL[s.scoreType]} · {CHANNEL_LABEL[s.channelScope]} ·{' '}
-                      disparo {s.delayMinutes}min após resolver
+                      {t(SCORE_TYPE_LABEL[s.scoreType])} · {t(CHANNEL_LABEL[s.channelScope])} ·{' '}
+                      {t('settings_csat.trigger_after', { n: s.delayMinutes })}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       <SendIcon className="inline h-3 w-3 mr-0.5" />
-                      Enviados: <strong>{s.sentCount}</strong> · respondidos:{' '}
-                      <strong>{s.responseCount}</strong>
+                      {t('settings_csat.sent_label')} <strong>{s.sentCount}</strong> ·{' '}
+                      {t('settings_csat.responded_label')} <strong>{s.responseCount}</strong>
                       {respRate !== null && (
                         <>
                           {' · '}
-                          taxa de resposta:{' '}
+                          {t('settings_csat.response_rate')}{' '}
                           <strong
                             className={
                               respRate >= 30
@@ -250,9 +245,9 @@ export default function CsatPage() {
                           variant="ghost"
                           onClick={() => setAsDefault(s)}
                           className="h-7 text-[11px]"
-                          title="Usar como padrão quando nenhum canal específico casar"
+                          title={t('settings_csat.make_default_tooltip')}
                         >
-                          Tornar padrão
+                          {t('settings_csat.make_default')}
                         </Button>
                       )}
                       <Button
@@ -264,12 +259,12 @@ export default function CsatPage() {
                         {s.enabled ? (
                           <>
                             <XCircle className="h-3.5 w-3.5" />
-                            Desativar
+                            {t('settings_csat.deactivate')}
                           </>
                         ) : (
                           <>
                             <CheckCircle2 className="h-3.5 w-3.5" />
-                            Ativar
+                            {t('settings_csat.activate')}
                           </>
                         )}
                       </Button>
@@ -277,7 +272,7 @@ export default function CsatPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => remove(s)}
-                        title="Excluir"
+                        title={t('action.delete')}
                         className="h-7 w-7"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -317,12 +312,17 @@ function CsatDialog({
   onClose: () => void;
   onSaved: () => Promise<unknown> | unknown;
 }) {
+  const { t } = useT();
+  const DEFAULT_BODY_CSAT = t('settings_csat.default_body_csat');
+  const DEFAULT_BODY_NPS = t('settings_csat.default_body_nps');
+  const DEFAULT_BODY_THUMBS = t('settings_csat.default_body_thumbs');
+  const DEFAULT_THANKS = t('settings_csat.default_thanks');
   const [name, setName] = useState('');
   const [scoreType, setScoreType] = useState<ScoreType>('CSAT');
   const [channelScope, setChannelScope] = useState<ChannelScope>('ALL');
   const [delayMinutes, setDelayMinutes] = useState(5);
   const [messageBody, setMessageBody] = useState(DEFAULT_BODY_CSAT);
-  const [thankYouMessage, setThankYouMessage] = useState('Obrigado pela resposta! 🙏');
+  const [thankYouMessage, setThankYouMessage] = useState(DEFAULT_THANKS);
   const [enabled, setEnabled] = useState(true);
   const [isDefault, setIsDefault] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -346,14 +346,14 @@ function CsatDialog({
       setChannelScope('ALL');
       setDelayMinutes(5);
       setMessageBody(DEFAULT_BODY_CSAT);
-      setThankYouMessage('Obrigado pela resposta! 🙏');
+      setThankYouMessage(DEFAULT_THANKS);
       setEnabled(true);
       setIsDefault(false);
     }
   }, [open, survey]);
 
-  function applyDefaultBody(t: ScoreType) {
-    setScoreType(t);
+  function applyDefaultBody(st: ScoreType) {
+    setScoreType(st);
     // Só sobrescreve se o body atual ainda é um dos defaults — preserva edits do user.
     if (
       messageBody === DEFAULT_BODY_CSAT ||
@@ -361,19 +361,19 @@ function CsatDialog({
       messageBody === DEFAULT_BODY_THUMBS ||
       messageBody.trim() === ''
     ) {
-      if (t === 'CSAT') setMessageBody(DEFAULT_BODY_CSAT);
-      else if (t === 'NPS') setMessageBody(DEFAULT_BODY_NPS);
+      if (st === 'CSAT') setMessageBody(DEFAULT_BODY_CSAT);
+      else if (st === 'NPS') setMessageBody(DEFAULT_BODY_NPS);
       else setMessageBody(DEFAULT_BODY_THUMBS);
     }
   }
 
   async function save() {
     if (!name.trim()) {
-      toast.error('Nome obrigatório');
+      toast.error(t('settings_csat.name_required'));
       return;
     }
     if (!messageBody.trim()) {
-      toast.error('Mensagem obrigatória');
+      toast.error(t('settings_csat.message_required'));
       return;
     }
     setSubmitting(true);
@@ -393,21 +393,21 @@ function CsatDialog({
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        toast.success('Survey atualizado');
+        toast.success(t('settings_csat.toast_updated'));
       } else {
         await api('/api/csat-surveys', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        toast.success('Survey criado');
+        toast.success(t('settings_csat.toast_created'));
       }
       await onSaved();
       onClose();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'name_taken') {
-        toast.error('Já existe survey com esse nome');
+        toast.error(t('settings_csat.name_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -426,26 +426,25 @@ function CsatDialog({
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{survey ? 'Editar survey' : 'Novo survey CSAT/NPS'}</DialogTitle>
+          <DialogTitle>{survey ? t('settings_csat.dialog_edit_title') : t('settings_csat.dialog_new_title')}</DialogTitle>
           <DialogDescription>
-            Dispara automaticamente quando uma conversa do canal configurado vira Resolvida.
-            Cliente responde com nota; Neura captura + envia agradecimento.
+            {t('settings_csat.dialog_desc')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="csat-name">Nome interno</Label>
+              <Label htmlFor="csat-name">{t('settings_csat.name_internal')}</Label>
               <Input
                 id="csat-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Pós-atendimento padrão"
+                placeholder={t('settings_csat.name_placeholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="csat-channel">Canal</Label>
+              <Label htmlFor="csat-channel">{t('settings_csat.channel_label')}</Label>
               <select
                 id="csat-channel"
                 value={channelScope}
@@ -454,7 +453,7 @@ function CsatDialog({
               >
                 {(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL', 'WEBCHAT'] as ChannelScope[]).map((c) => (
                   <option key={c} value={c}>
-                    {CHANNEL_LABEL[c]}
+                    {t(CHANNEL_LABEL[c])}
                   </option>
                 ))}
               </select>
@@ -462,27 +461,27 @@ function CsatDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label>Tipo de pontuação</Label>
+            <Label>{t('settings_csat.score_type')}</Label>
             <div className="grid gap-2 sm:grid-cols-3">
-              {(['CSAT', 'NPS', 'THUMBS'] as ScoreType[]).map((t) => {
-                const Icon = SCORE_TYPE_ICON[t];
+              {(['CSAT', 'NPS', 'THUMBS'] as ScoreType[]).map((st) => {
+                const Icon = SCORE_TYPE_ICON[st];
                 return (
                   <button
-                    key={t}
+                    key={st}
                     type="button"
-                    onClick={() => applyDefaultBody(t)}
+                    onClick={() => applyDefaultBody(st)}
                     className={`flex items-center gap-2 rounded-md border p-2.5 text-left text-sm transition-colors ${
-                      scoreType === t
+                      scoreType === st
                         ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30'
                         : 'hover:border-foreground/30'
                     }`}
                   >
                     <Icon
                       className={`h-4 w-4 shrink-0 ${
-                        scoreType === t ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'
+                        scoreType === st ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'
                       }`}
                     />
-                    <span className="text-xs">{SCORE_TYPE_LABEL[t]}</span>
+                    <span className="text-xs">{t(SCORE_TYPE_LABEL[st])}</span>
                   </button>
                 );
               })}
@@ -490,7 +489,7 @@ function CsatDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="csat-delay">Delay até envio (minutos após resolver)</Label>
+            <Label htmlFor="csat-delay">{t('settings_csat.delay_label')}</Label>
             <Input
               id="csat-delay"
               type="number"
@@ -500,14 +499,13 @@ function CsatDialog({
               onChange={(e) => setDelayMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
             />
             <p className="text-[11px] text-muted-foreground">
-              Default 5min — dá tempo do agente fechar tickets em surto sem que o cliente
-              receba pesquisa em cima da conversa.
+              {t('settings_csat.delay_hint')}
             </p>
           </div>
 
           <div className="space-y-1.5">
             <div className="flex items-end justify-between">
-              <Label htmlFor="csat-body">Mensagem do survey</Label>
+              <Label htmlFor="csat-body">{t('settings_csat.message_label')}</Label>
               <p className="text-[10px] text-muted-foreground">{messageBody.length}/2000</p>
             </div>
             <textarea
@@ -516,12 +514,12 @@ function CsatDialog({
               onChange={(e) => setMessageBody(e.target.value)}
               rows={4}
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-              placeholder="Olá! Como foi nosso atendimento?"
+              placeholder={t('settings_csat.message_placeholder')}
             />
             {preview && (
               <div className="rounded-md border border-dashed bg-muted/20 p-2.5 text-xs">
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Preview (Maria Silva)
+                  {t('settings_csat.preview', { name: PREVIEW_VARS.contact.name })}
                 </p>
                 <p className="whitespace-pre-wrap">{preview}</p>
               </div>
@@ -529,14 +527,14 @@ function CsatDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="csat-thanks">Mensagem de agradecimento (opcional)</Label>
+            <Label htmlFor="csat-thanks">{t('settings_csat.thanks_label')}</Label>
             <textarea
               id="csat-thanks"
               value={thankYouMessage}
               onChange={(e) => setThankYouMessage(e.target.value)}
               rows={2}
               className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
-              placeholder="Obrigado pela resposta! 🙏"
+              placeholder={t('settings_csat.default_thanks')}
             />
             {previewThanks && (
               <p className="text-[11px] text-muted-foreground">→ {previewThanks}</p>
@@ -551,7 +549,7 @@ function CsatDialog({
                 onChange={(e) => setEnabled(e.target.checked)}
                 className="h-4 w-4 rounded border"
               />
-              Survey ativo
+              {t('settings_csat.survey_active')}
             </label>
             <label className="flex cursor-pointer items-center gap-2 text-sm">
               <input
@@ -560,17 +558,17 @@ function CsatDialog({
                 onChange={(e) => setIsDefault(e.target.checked)}
                 className="h-4 w-4 rounded border"
               />
-              Usar como padrão (fallback)
+              {t('settings_csat.use_default')}
             </label>
           </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={onClose}>
-            Cancelar
+            {t('action.cancel')}
           </Button>
           <Button onClick={save} disabled={submitting}>
-            {submitting ? 'Salvando…' : survey ? 'Salvar' : 'Criar survey'}
+            {submitting ? t('action.saving') : survey ? t('action.save') : t('settings_csat.create_survey')}
           </Button>
         </div>
       </DialogContent>

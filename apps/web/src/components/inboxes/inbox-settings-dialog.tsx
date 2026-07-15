@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Clock, MessageSquare, RotateCcw, Users } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,13 +46,13 @@ const DEFAULT_BUSINESS_HOURS: BusinessHours = {
 };
 
 const DAYS = [
-  { value: 0, label: 'Dom' },
-  { value: 1, label: 'Seg' },
-  { value: 2, label: 'Ter' },
-  { value: 3, label: 'Qua' },
-  { value: 4, label: 'Qui' },
-  { value: 5, label: 'Sex' },
-  { value: 6, label: 'Sáb' },
+  { value: 0, key: 'c_inboxes_inbox_settings_dialog.day_sun' },
+  { value: 1, key: 'c_inboxes_inbox_settings_dialog.day_mon' },
+  { value: 2, key: 'c_inboxes_inbox_settings_dialog.day_tue' },
+  { value: 3, key: 'c_inboxes_inbox_settings_dialog.day_wed' },
+  { value: 4, key: 'c_inboxes_inbox_settings_dialog.day_thu' },
+  { value: 5, key: 'c_inboxes_inbox_settings_dialog.day_fri' },
+  { value: 6, key: 'c_inboxes_inbox_settings_dialog.day_sat' },
 ];
 
 export function InboxSettingsDialog({
@@ -63,6 +64,7 @@ export function InboxSettingsDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [name, setName] = useState(inbox.name);
   const [roundRobin, setRoundRobin] = useState(inbox.settings?.roundRobinEnabled ?? false);
@@ -113,11 +115,11 @@ export function InboxSettingsDialog({
           },
         }),
       });
-      toast.success('Configurações salvas');
+      toast.success(t('c_inboxes_inbox_settings_dialog.toast_saved'));
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -127,16 +129,16 @@ export function InboxSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Configurações da inbox</DialogTitle>
+          <DialogTitle>{t('c_inboxes_inbox_settings_dialog.title')}</DialogTitle>
           <DialogDescription>
-            Regras de atendimento aplicadas a esta inbox.
+            {t('c_inboxes_inbox_settings_dialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           {/* Nome */}
           <section className="space-y-2">
-            <Label htmlFor="inbox-name">Nome</Label>
+            <Label htmlFor="inbox-name">{t('common.name')}</Label>
             <Input
               id="inbox-name"
               value={name}
@@ -157,11 +159,10 @@ export function InboxSettingsDialog({
               <div className="flex-1">
                 <p className="flex items-center gap-2 text-sm font-medium">
                   <Users className="h-3.5 w-3.5" />
-                  Atribuição automática (round-robin)
+                  {t('c_inboxes_inbox_settings_dialog.round_robin_label')}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Quando uma conversa nova chega, distribui automaticamente entre os agentes do
-                  workspace, alternando a cada nova conversa.
+                  {t('c_inboxes_inbox_settings_dialog.round_robin_hint')}
                 </p>
               </div>
             </label>
@@ -179,10 +180,10 @@ export function InboxSettingsDialog({
               <div className="flex-1">
                 <p className="flex items-center gap-2 text-sm font-medium">
                   <Clock className="h-3.5 w-3.5" />
-                  Horário comercial
+                  {t('c_inboxes_inbox_settings_dialog.business_hours_label')}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Mensagens fora do horário recebem resposta automática se configurada abaixo.
+                  {t('c_inboxes_inbox_settings_dialog.business_hours_hint')}
                 </p>
               </div>
             </label>
@@ -192,7 +193,7 @@ export function InboxSettingsDialog({
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="bh-start" className="text-xs">
-                      Abre às
+                      {t('c_inboxes_inbox_settings_dialog.opens_at')}
                     </Label>
                     <Input
                       id="bh-start"
@@ -205,7 +206,7 @@ export function InboxSettingsDialog({
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="bh-end" className="text-xs">
-                      Fecha às
+                      {t('c_inboxes_inbox_settings_dialog.closes_at')}
                     </Label>
                     <Input
                       id="bh-end"
@@ -216,7 +217,7 @@ export function InboxSettingsDialog({
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Dias da semana</Label>
+                  <Label className="text-xs">{t('c_inboxes_inbox_settings_dialog.week_days')}</Label>
                   <div className="flex flex-wrap gap-1">
                     {DAYS.map((d) => {
                       const active = bizHours.days.includes(d.value);
@@ -231,7 +232,7 @@ export function InboxSettingsDialog({
                               : 'border-input bg-background hover:bg-muted/50'
                           }`}
                         >
-                          {d.label}
+                          {t(d.key)}
                         </button>
                       );
                     })}
@@ -245,7 +246,7 @@ export function InboxSettingsDialog({
           <section className="space-y-2">
             <Label htmlFor="greeting" className="flex items-center gap-1.5 text-sm">
               <MessageSquare className="h-3.5 w-3.5" />
-              Saudação automática (1ª mensagem recebida)
+              {t('c_inboxes_inbox_settings_dialog.greeting_label')}
             </Label>
             <textarea
               id="greeting"
@@ -253,11 +254,11 @@ export function InboxSettingsDialog({
               onChange={(e) => setGreeting(e.target.value)}
               rows={2}
               maxLength={2000}
-              placeholder="Olá! Recebemos sua mensagem e em breve um agente vai te responder."
+              placeholder={t('c_inboxes_inbox_settings_dialog.greeting_placeholder')}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
             <p className="text-[11px] text-muted-foreground">
-              Enviada apenas na primeira mensagem de uma conversa nova. Deixe vazio pra desativar.
+              {t('c_inboxes_inbox_settings_dialog.greeting_hint')}
             </p>
           </section>
 
@@ -265,7 +266,7 @@ export function InboxSettingsDialog({
           {bizHours.enabled && (
             <section className="space-y-2">
               <Label htmlFor="oof" className="text-sm">
-                Mensagem fora do horário comercial
+                {t('c_inboxes_inbox_settings_dialog.oof_label')}
               </Label>
               <textarea
                 id="oof"
@@ -273,11 +274,11 @@ export function InboxSettingsDialog({
                 onChange={(e) => setOutOfHours(e.target.value)}
                 rows={2}
                 maxLength={2000}
-                placeholder="Estamos fora do horário de atendimento. Retornaremos no próximo dia útil."
+                placeholder={t('c_inboxes_inbox_settings_dialog.oof_placeholder')}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Enviada quando uma mensagem chega fora do horário. Sobrescreve a saudação.
+                {t('c_inboxes_inbox_settings_dialog.oof_hint')}
               </p>
             </section>
           )}
@@ -286,7 +287,7 @@ export function InboxSettingsDialog({
           <section className="space-y-2">
             <Label htmlFor="auto-resolve" className="flex items-center gap-1.5 text-sm">
               <RotateCcw className="h-3.5 w-3.5" />
-              Resolver conversas após inatividade
+              {t('c_inboxes_inbox_settings_dialog.auto_resolve_label')}
             </Label>
             <div className="flex items-center gap-2">
               <Input
@@ -296,23 +297,24 @@ export function InboxSettingsDialog({
                 max={365}
                 value={autoResolve}
                 onChange={(e) => setAutoResolve(e.target.value)}
-                placeholder="Não resolver"
+                placeholder={t('c_inboxes_inbox_settings_dialog.auto_resolve_placeholder')}
                 className="w-32"
               />
-              <span className="text-sm text-muted-foreground">dias sem mensagem</span>
+              <span className="text-sm text-muted-foreground">
+                {t('c_inboxes_inbox_settings_dialog.days_without_message')}
+              </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Conversas sem novas mensagens nesse período mudam pra status “Resolvida”
-              automaticamente. Vazio = desativado.
+              {t('c_inboxes_inbox_settings_dialog.auto_resolve_hint')}
             </p>
           </section>
 
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button onClick={submit} disabled={submitting || !name.trim()}>
-              {submitting ? 'Salvando…' : 'Salvar configurações'}
+              {submitting ? t('action.saving') : t('c_inboxes_inbox_settings_dialog.save_settings')}
             </Button>
           </div>
         </div>

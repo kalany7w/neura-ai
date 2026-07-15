@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +19,7 @@ const schema = z.object({
 type Input = z.infer<typeof schema>;
 
 export function CreateInboxForm({ onDone }: { onDone: () => void }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [wizardInbox, setWizardInbox] = useState<{ id: string; name: string } | null>(null);
@@ -35,13 +37,13 @@ export function CreateInboxForm({ onDone }: { onDone: () => void }) {
         method: 'POST',
         body: JSON.stringify(data),
       });
-      toast.success('Inbox criada — clique em Conectar pra começar');
+      toast.success(t('c_forms_create_inbox_form.toast_created'));
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
       reset();
       onDone();
       setWizardInbox({ id: response.inbox.id, name: response.inbox.name });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar inbox');
+      toast.error(err instanceof Error ? err.message : t('c_forms_create_inbox_form.toast_error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -51,12 +53,12 @@ export function CreateInboxForm({ onDone }: { onDone: () => void }) {
     <>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="name">Nome da inbox</Label>
-          <Input id="name" placeholder="Ex: Atendimento Vendas" {...register('name')} />
+          <Label htmlFor="name">{t('c_forms_create_inbox_form.name_label')}</Label>
+          <Input id="name" placeholder={t('c_forms_create_inbox_form.name_placeholder')} {...register('name')} />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
         <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? 'Criando...' : 'Criar inbox'}
+          {isSubmitting ? t('c_forms_create_inbox_form.creating') : t('c_forms_create_inbox_form.submit')}
         </Button>
       </form>
       {wizardInbox && (

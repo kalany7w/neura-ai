@@ -7,24 +7,34 @@ import { Clock, Phone, QrCode, PlugZap, Power, RefreshCw, Settings2, Trash2 } fr
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
+import { useT, localeFor } from '@/lib/i18n';
 import { InboxSettingsDialog } from './inbox-settings-dialog';
 
-function formatRelativeAgo(iso: string | null): string | null {
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+function formatRelativeAgo(iso: string | null, t: TFn): string | null {
   if (!iso) return null;
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 0) return null;
   const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return 'agora há pouco';
+  if (seconds < 60) return t('c_inboxes_inbox_card.ago_now');
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `há ${minutes} min`;
+  if (minutes < 60) return t('c_inboxes_inbox_card.ago_minutes', { n: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours}h`;
+  if (hours < 24) return t('c_inboxes_inbox_card.ago_hours', { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `há ${days}d`;
+  if (days < 30) return t('c_inboxes_inbox_card.ago_days', { n: days });
   const months = Math.floor(days / 30);
-  if (months < 12) return `há ${months} mês${months > 1 ? 'es' : ''}`;
+  if (months < 12)
+    return t(
+      months === 1 ? 'c_inboxes_inbox_card.ago_month_one' : 'c_inboxes_inbox_card.ago_month_other',
+      { n: months },
+    );
   const years = Math.floor(months / 12);
-  return `há ${years} ano${years > 1 ? 's' : ''}`;
+  return t(
+    years === 1 ? 'c_inboxes_inbox_card.ago_year_one' : 'c_inboxes_inbox_card.ago_year_other',
+    { n: years },
+  );
 }
 
 export interface InboxItem {
@@ -46,15 +56,6 @@ export interface InboxItem {
   } | null;
 }
 
-const STATUS_LABEL: Record<InboxItem['status'], string> = {
-  DISCONNECTED: 'Desconectado',
-  CONNECTING: 'Conectando…',
-  AWAITING_QR: 'Aguardando QR',
-  CONNECTED: 'Conectado',
-  BANNED: 'Banido',
-  ERROR: 'Erro',
-};
-
 const STATUS_COLOR: Record<InboxItem['status'], string> = {
   DISCONNECTED: 'bg-muted text-muted-foreground',
   CONNECTING: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
@@ -67,6 +68,15 @@ const STATUS_COLOR: Record<InboxItem['status'], string> = {
 export function InboxCard({ inbox }: { inbox: InboxItem }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t, lang } = useT();
+  const STATUS_LABEL: Record<InboxItem['status'], string> = {
+    DISCONNECTED: t('c_inboxes_inbox_card.status_disconnected'),
+    CONNECTING: t('c_inboxes_inbox_card.status_connecting'),
+    AWAITING_QR: t('c_inboxes_inbox_card.status_awaiting_qr'),
+    CONNECTED: t('c_inboxes_inbox_card.status_connected'),
+    BANNED: t('c_inboxes_inbox_card.status_banned'),
+    ERROR: t('common.error'),
+  };
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Tick a cada 30s pra refrescar o "conectado há X"
@@ -101,10 +111,10 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
     setBusy(true);
     try {
       await api(`/api/inboxes/${inbox.id}/connect`, { method: 'POST' });
-      toast.success('Conectando — aguarde o QR Code aparecer');
+      toast.success(t('c_inboxes_inbox_card.toast_connecting'));
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao conectar');
+      toast.error(err instanceof Error ? err.message : t('c_inboxes_inbox_card.error_connect'));
     } finally {
       setBusy(false);
     }
@@ -114,10 +124,10 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
     setBusy(true);
     try {
       await api(`/api/inboxes/${inbox.id}/disconnect`, { method: 'POST' });
-      toast.success('Desconectando…');
+      toast.success(t('c_inboxes_inbox_card.toast_disconnecting'));
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao desconectar');
+      toast.error(err instanceof Error ? err.message : t('c_inboxes_inbox_card.error_disconnect'));
     } finally {
       setBusy(false);
     }
@@ -127,10 +137,10 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
     setBusy(true);
     try {
       await api(`/api/inboxes/${inbox.id}/reconnect`, { method: 'POST' });
-      toast.success('Reconectando — pode demorar uns segundos');
+      toast.success(t('c_inboxes_inbox_card.toast_reconnecting'));
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setBusy(false);
     }
@@ -139,9 +149,9 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
   async function remove() {
     if (
       !(await confirm({
-        title: `Remover inbox "${inbox.name}"?`,
-        description: 'A sessão WhatsApp é encerrada e as conversas vinculadas perdem a origem.',
-        confirmLabel: 'Remover',
+        title: t('c_inboxes_inbox_card.confirm_remove_title', { name: inbox.name }),
+        description: t('c_inboxes_inbox_card.confirm_remove_desc'),
+        confirmLabel: t('c_inboxes_inbox_card.remove'),
         destructive: true,
       }))
     )
@@ -149,10 +159,10 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
     setBusy(true);
     try {
       await api(`/api/inboxes/${inbox.id}`, { method: 'DELETE' });
-      toast.success('Inbox removida');
+      toast.success(t('c_inboxes_inbox_card.toast_removed'));
       await qc.invalidateQueries({ queryKey: ['inboxes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao remover');
+      toast.error(err instanceof Error ? err.message : t('c_inboxes_inbox_card.error_remove'));
     } finally {
       setBusy(false);
     }
@@ -172,10 +182,12 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
           {inbox.status === 'CONNECTED' && inbox.waSession?.lastConnectedAt && (
             <p
               className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground"
-              title={new Date(inbox.waSession.lastConnectedAt).toLocaleString('pt-BR')}
+              title={new Date(inbox.waSession.lastConnectedAt).toLocaleString(localeFor(lang))}
             >
               <Clock className="h-3 w-3" />
-              Conectado {formatRelativeAgo(inbox.waSession.lastConnectedAt)}
+              {t('c_inboxes_inbox_card.connected_ago', {
+                ago: formatRelativeAgo(inbox.waSession.lastConnectedAt, t) ?? '',
+              })}
             </p>
           )}
           {inbox.status !== 'CONNECTED' &&
@@ -183,10 +195,12 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
             inbox.waSession?.lastConnectedAt && (
               <p
                 className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                title={new Date(inbox.waSession.lastConnectedAt).toLocaleString('pt-BR')}
+                title={new Date(inbox.waSession.lastConnectedAt).toLocaleString(localeFor(lang))}
               >
                 <Clock className="h-3 w-3" />
-                Última conexão {formatRelativeAgo(inbox.waSession.lastConnectedAt)}
+                {t('c_inboxes_inbox_card.last_connection_ago', {
+                  ago: formatRelativeAgo(inbox.waSession.lastConnectedAt, t) ?? '',
+                })}
               </p>
             )}
         </div>
@@ -202,12 +216,12 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={inbox.waSession.qrCode}
-            alt="QR Code WhatsApp"
+            alt={t('c_inboxes_inbox_card.qr_alt')}
             className="h-48 w-48"
           />
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <QrCode className="h-3.5 w-3.5" />
-            Escaneie no WhatsApp do seu celular (Aparelhos conectados)
+            {t('c_inboxes_inbox_card.qr_hint')}
           </p>
           {inbox.waSession.qrExpiresAt &&
             (() => {
@@ -215,13 +229,13 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
               if (ms <= 0) {
                 return (
                   <p className="text-[11px] italic text-muted-foreground">
-                    QR expirado — gerando novo…
+                    {t('c_inboxes_inbox_card.qr_expired')}
                   </p>
                 );
               }
               return (
                 <p className="text-[11px] text-muted-foreground">
-                  Expira em {Math.max(1, Math.round(ms / 1000))}s · renova sozinho
+                  {t('c_inboxes_inbox_card.qr_expires_in', { n: Math.max(1, Math.round(ms / 1000)) })}
                 </p>
               );
             })()}
@@ -232,18 +246,24 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
         {(inbox.status === 'DISCONNECTED' || inbox.status === 'ERROR' || inbox.status === 'BANNED') && (
           <Button size="sm" onClick={connect} disabled={busy}>
             <PlugZap className="h-4 w-4" />
-            Conectar
+            {t('c_inboxes_inbox_card.connect')}
           </Button>
         )}
         {(inbox.status === 'CONNECTED' || inbox.status === 'CONNECTING' || inbox.status === 'AWAITING_QR') && (
           <>
-            <Button size="sm" variant="outline" onClick={reconnect} disabled={busy} title="Reconectar">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={reconnect}
+              disabled={busy}
+              title={t('c_inboxes_inbox_card.reconnect')}
+            >
               <RefreshCw className="h-4 w-4" />
-              Reconectar
+              {t('c_inboxes_inbox_card.reconnect')}
             </Button>
             <Button size="sm" variant="outline" onClick={disconnect} disabled={busy}>
               <Power className="h-4 w-4" />
-              Desconectar
+              {t('c_inboxes_inbox_card.disconnect')}
             </Button>
           </>
         )}
@@ -252,10 +272,10 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
           variant="outline"
           onClick={() => setSettingsOpen(true)}
           disabled={busy}
-          title="Configurações"
+          title={t('c_inboxes_inbox_card.settings_title')}
         >
           <Settings2 className="h-4 w-4" />
-          Config
+          {t('c_inboxes_inbox_card.config')}
         </Button>
         <Button size="sm" variant="ghost" onClick={remove} disabled={busy}>
           <Trash2 className="h-4 w-4" />

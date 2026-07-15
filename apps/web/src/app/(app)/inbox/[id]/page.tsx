@@ -44,9 +44,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, isToday, isYesterday } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { ptBR, es } from 'date-fns/locale';
 import { renderTemplate } from '@neura/shared/template-render';
 import { api, ApiError } from '@/lib/api';
+import { useT, localeFor, type Lang } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { realtimeClient } from '@/lib/ws-client';
@@ -90,10 +91,10 @@ const STATUS_OPTIONS: Array<{
   Icon: React.ComponentType<{ className?: string }>;
   className: string;
 }> = [
-  { value: 'OPEN', label: 'Aberta', Icon: PlayCircle, className: 'text-blue-600' },
-  { value: 'PENDING', label: 'Pendente', Icon: Clock, className: 'text-amber-600' },
-  { value: 'RESOLVED', label: 'Resolvida', Icon: CheckCircle2, className: 'text-emerald-600' },
-  { value: 'SNOOZED', label: 'Adiada', Icon: PauseCircle, className: 'text-slate-600' },
+  { value: 'OPEN', label: 'inbox_id.status.open', Icon: PlayCircle, className: 'text-blue-600' },
+  { value: 'PENDING', label: 'inbox_id.status.pending', Icon: Clock, className: 'text-amber-600' },
+  { value: 'RESOLVED', label: 'inbox_id.status.resolved', Icon: CheckCircle2, className: 'text-emerald-600' },
+  { value: 'SNOOZED', label: 'inbox_id.status.snoozed', Icon: PauseCircle, className: 'text-slate-600' },
 ];
 
 const STATUS_BADGE_CLASS: Record<ConvStatus, string> = {
@@ -179,11 +180,11 @@ type AiSuggestedAction =
   | { kind: 'move_card_stage'; stageName: string; reason: string; confidence: number };
 
 const AI_INTENT_LABEL: Record<AiClassification['intent'], string> = {
-  sale: 'Venda',
-  support: 'Suporte',
-  complaint: 'Reclamação',
-  info: 'Info',
-  other: 'Outro',
+  sale: 'inbox_id.ai.intent.sale',
+  support: 'inbox_id.ai.intent.support',
+  complaint: 'inbox_id.ai.intent.complaint',
+  info: 'inbox_id.ai.intent.info',
+  other: 'inbox_id.ai.intent.other',
 };
 
 const AI_INTENT_CLS: Record<AiClassification['intent'], string> = {
@@ -195,10 +196,10 @@ const AI_INTENT_CLS: Record<AiClassification['intent'], string> = {
 };
 
 const AI_URGENCY_LABEL: Record<AiClassification['urgency'], string> = {
-  low: 'Baixa',
-  medium: 'Média',
-  high: 'Alta',
-  critical: 'Crítica',
+  low: 'inbox_id.ai.urgency.low',
+  medium: 'inbox_id.ai.urgency.medium',
+  high: 'inbox_id.ai.urgency.high',
+  critical: 'inbox_id.ai.urgency.critical',
 };
 
 const AI_URGENCY_CLS: Record<AiClassification['urgency'], string> = {
@@ -268,14 +269,15 @@ function applyTemplate(body: string, contact: ConversationDetail['contact']): st
   });
 }
 
-function dayLabel(d: Date): string {
-  if (isToday(d)) return 'Hoje';
-  if (isYesterday(d)) return 'Ontem';
-  return format(d, "EEEE, dd 'de' MMMM", { locale: ptBR });
+function dayLabel(d: Date, t: (key: string) => string, lang: Lang): string {
+  if (isToday(d)) return t('action.today');
+  if (isYesterday(d)) return t('inbox_id.yesterday');
+  return format(d, "EEEE, dd 'de' MMMM", { locale: lang === 'es' ? es : ptBR });
 }
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { t, lang } = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -364,19 +366,19 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         },
       );
       if (res.suggestions.length === 0) {
-        toast.error('Nenhuma sugestão retornada');
+        toast.error(t('inbox_id.toast.no_suggestions'));
       } else {
         setSuggestions(res.suggestions);
       }
     } catch (err) {
       if (err instanceof ApiError && err.code === 'ai_disabled') {
-        toast.error('IA desativada — configure OPENAI_API_KEY no Coolify');
+        toast.error(t('inbox_id.toast.ai_disabled_coolify'));
       } else if (err instanceof ApiError && err.code === 'no_inbound') {
-        toast.error('Sem mensagem do cliente pra responder');
+        toast.error(t('inbox_id.toast.no_inbound'));
       } else if (err instanceof ApiError && err.code === 'empty_conversation') {
-        toast.error('Conversa vazia');
+        toast.error(t('inbox_id.toast.empty_conversation'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro ao gerar sugestões');
+        toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_suggestions'));
       }
     } finally {
       setSuggesting(false);
@@ -400,7 +402,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       const next = new Set(prev);
       if (next.has(messageId)) next.delete(messageId);
       else if (next.size < 20) next.add(messageId);
-      else toast.error('Máximo 20 mensagens por encaminhamento');
+      else toast.error(t('inbox_id.toast.max_forward'));
       return next;
     });
   }
@@ -434,7 +436,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         headers: { 'Content-Type': contentType },
         body: file,
       });
-      if (!putRes.ok) throw new Error(`Upload falhou: HTTP ${putRes.status}`);
+      if (!putRes.ok) throw new Error(t('inbox_id.toast.upload_failed', { status: putRes.status }));
       await api(`/api/conversations/${id}/messages`, {
         method: 'POST',
         body: JSON.stringify({
@@ -448,7 +450,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       setReplyTo(null);
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao enviar mídia');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_send_media'));
     }
   }
 
@@ -491,7 +493,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       setRecordingMs(0);
       recordTimerRef.current = setInterval(() => setRecordingMs((v) => v + 100), 100);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Microfone bloqueado');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.mic_blocked'));
     }
   }
 
@@ -690,47 +692,49 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       });
       toast.success(
         payload.status
-          ? `Status: ${STATUS_OPTIONS.find((s) => s.value === payload.status)?.label}`
+          ? t('inbox_id.toast.status_changed', {
+              status: t(STATUS_OPTIONS.find((s) => s.value === payload.status)?.label ?? ''),
+            })
           : payload.assignedAgentId === null
-            ? 'Atribuição removida'
-            : 'Atribuído',
+            ? t('inbox_id.toast.assign_removed')
+            : t('inbox_id.toast.assigned'),
       );
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function markUnread() {
     try {
       await api(`/api/conversations/${id}/unread`, { method: 'POST' });
-      toast.success('Marcada como não lida');
+      toast.success(t('inbox_id.toast.marked_unread'));
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
       await qc.invalidateQueries({ queryKey: ['conversations'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function archive() {
     try {
       await api(`/api/conversations/${id}/archive`, { method: 'POST' });
-      toast.success('Conversa arquivada');
+      toast.success(t('inbox_id.toast.archived'));
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
       await qc.invalidateQueries({ queryKey: ['conversations'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function unarchive() {
     try {
       await api(`/api/conversations/${id}/unarchive`, { method: 'POST' });
-      toast.success('Conversa desarquivada');
+      toast.success(t('inbox_id.toast.unarchived'));
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
       await qc.invalidateQueries({ queryKey: ['conversations'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -773,7 +777,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         await qc.invalidateQueries({ queryKey: ['conversation', id] });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSending(false);
     }
@@ -795,7 +799,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       });
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao reagir');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_react'));
     }
   }
 
@@ -814,10 +818,10 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     } catch (err) {
       const msg =
         err instanceof ApiError && err.code === 'ai_disabled'
-          ? 'Configure OPENAI_API_KEY pra ativar IA'
+          ? t('inbox_id.toast.ai_disabled_configure')
           : err instanceof Error
             ? err.message
-            : 'Erro ao gerar resumo';
+            : t('inbox_id.toast.err_summary');
       toast.error(msg);
     } finally {
       setSummarizing(false);
@@ -833,14 +837,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         { method: 'POST' },
       );
       setAiActions(res.actions);
-      if (res.actions.length === 0) toast.info('IA não encontrou ações claras pra sugerir agora.');
+      if (res.actions.length === 0) toast.info(t('inbox_id.toast.no_actions'));
     } catch (err) {
       const msg =
         err instanceof ApiError && err.code === 'ai_disabled'
-          ? 'Configure OPENAI_API_KEY pra ativar IA'
+          ? t('inbox_id.toast.ai_disabled_configure')
           : err instanceof Error
             ? err.message
-            : 'Erro ao sugerir ações';
+            : t('inbox_id.toast.err_suggest_actions');
       toast.error(msg);
     } finally {
       setSuggestingActions(false);
@@ -857,9 +861,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         const targets = await api<{ targets: Array<{ userId: string; slug: string }> }>(
           '/api/workspaces/me/mention-targets',
         );
-        const found = targets.targets.find((t) => t.slug === action.agentSlug);
+        const found = targets.targets.find((tg) => tg.slug === action.agentSlug);
         if (!found) {
-          toast.error('Agente sugerido não encontrado');
+          toast.error(t('inbox_id.toast.agent_not_found'));
           return;
         }
         await updateConversation({ assignedAgentId: found.userId });
@@ -868,7 +872,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           (l) => l.name.toLowerCase() === action.labelName.toLowerCase(),
         );
         if (!label) {
-          toast.error('Etiqueta sugerida não encontrada');
+          toast.error(t('inbox_id.toast.label_not_found'));
           return;
         }
         await api('/api/labels/apply', {
@@ -879,25 +883,25 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             targetId: id,
           }),
         });
-        toast.success(`Etiqueta "${label.name}" aplicada`);
+        toast.success(t('inbox_id.toast.label_applied', { name: label.name }));
         await qc.invalidateQueries({ queryKey: ['conversation', id] });
       } else if (action.kind === 'send_template') {
         const tpl = (templatesData?.templates ?? []).find(
-          (t) => t.name.toLowerCase() === action.templateName.toLowerCase(),
+          (tp) => tp.name.toLowerCase() === action.templateName.toLowerCase(),
         );
         if (!tpl) {
-          toast.error('Template sugerido não encontrado');
+          toast.error(t('inbox_id.toast.template_not_found'));
           return;
         }
         pickTemplate(tpl);
-        toast.success('Template aplicado no composer — edite e envie');
+        toast.success(t('inbox_id.toast.template_applied'));
       } else if (action.kind === 'move_card_stage') {
-        toast.info('Mover card no kanban — abra o card pra confirmar');
+        toast.info(t('inbox_id.toast.move_card'));
       }
       // Remove ação executada da lista
       setAiActions((prev) => (prev ?? []).filter((_, i) => i !== idx));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao executar ação');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_execute_action'));
     } finally {
       setExecutingActionIdx(null);
     }
@@ -920,12 +924,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       // Marca métrica de aceito + invalida pra esconder o card.
       await api(`/api/conversations/${id}/ai/kb-suggest/accept`, { method: 'POST' });
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
-      toast.success(`"${res.article.title}" inserido no composer`);
+      toast.success(t('inbox_id.toast.article_inserted', { title: res.article.title }));
       // Incrementa view counter em background.
       api(`/api/kb/articles/${sug.articleId}/view`, { method: 'POST' }).catch(() => {});
       requestAnimationFrame(() => inputRef.current?.focus());
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao inserir artigo');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_insert_article'));
     } finally {
       setKbSuggestInserting(false);
     }
@@ -936,7 +940,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       await api(`/api/conversations/${id}/ai/kb-suggest/dismiss`, { method: 'POST' });
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -945,14 +949,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     setKbSuggestRefreshing(true);
     try {
       await api(`/api/conversations/${id}/ai/kb-suggest`, { method: 'POST' });
-      toast.success('Busca em fila — atualiza em alguns segundos');
+      toast.success(t('inbox_id.toast.search_queued'));
     } catch (err) {
       const msg =
         err instanceof ApiError && err.code === 'ai_disabled'
-          ? 'Configure OPENAI_API_KEY pra ativar IA'
+          ? t('inbox_id.toast.ai_disabled_configure')
           : err instanceof Error
             ? err.message
-            : 'Erro';
+            : t('common.error');
       toast.error(msg);
     } finally {
       setKbSuggestRefreshing(false);
@@ -971,15 +975,20 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         body: JSON.stringify({ conversationId: id }),
       });
       if (res.status === 'MATCHED') {
-        toast.success(`Macro "${macroName}" executada`);
+        toast.success(t('inbox_id.toast.macro_executed', { name: macroName }));
       } else if (res.status === 'PARTIAL') {
-        toast.warning(`Macro "${macroName}" rodou parcialmente`);
+        toast.warning(t('inbox_id.toast.macro_partial', { name: macroName }));
       } else if (res.status === 'FAILED') {
-        toast.error(`Macro "${macroName}" falhou: ${res.errorMessage ?? 'erro'}`);
+        toast.error(
+          t('inbox_id.toast.macro_failed', {
+            name: macroName,
+            error: res.errorMessage ?? t('inbox_id.error_generic_lc'),
+          }),
+        );
       }
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao executar macro');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_execute_macro'));
     } finally {
       setExecutingMacroId(null);
     }
@@ -1002,58 +1011,57 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         method: 'POST',
         body: JSON.stringify({ text: editingText.trim() }),
       });
-      toast.success('Mensagem editada');
+      toast.success(t('inbox_id.toast.message_edited'));
       cancelEdit();
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao editar');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_edit'));
       setEditingBusy(false);
     }
   }
   async function pinMessage(msg: MessageItem) {
     try {
       await api(`/api/messages/${msg.id}/pin`, { method: 'POST' });
-      toast.success('Mensagem fixada');
+      toast.success(t('inbox_id.toast.message_pinned'));
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
   async function unpinMessage(msg: MessageItem) {
     try {
       await api(`/api/messages/${msg.id}/unpin`, { method: 'POST' });
-      toast.success('Mensagem desafixada');
+      toast.success(t('inbox_id.toast.message_unpinned'));
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function revokeMessage(msg: MessageItem) {
     if (
       !(await confirm({
-        title: 'Apagar mensagem pra todos?',
-        description:
-          'A mensagem some pra você e pro contato. Só funciona até ~7 minutos após o envio.',
-        confirmLabel: 'Apagar',
+        title: t('inbox_id.confirm.revoke_title'),
+        description: t('inbox_id.confirm.revoke_desc'),
+        confirmLabel: t('inbox_id.confirm.revoke_label'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/messages/${msg.id}/delete`, { method: 'POST' });
-      toast.success('Mensagem apagada');
+      toast.success(t('inbox_id.message_deleted'));
       await qc.invalidateQueries({ queryKey: ['conversation', id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao apagar');
+      toast.error(err instanceof Error ? err.message : t('inbox_id.toast.err_delete'));
     }
   }
 
   async function removeNote(noteId: string) {
     if (
       !(await confirm({
-        title: 'Remover esta nota?',
-        confirmLabel: 'Remover',
+        title: t('inbox_id.confirm.remove_note_title'),
+        confirmLabel: t('inbox_id.confirm.remove_note_label'),
         destructive: true,
       }))
     )
@@ -1062,7 +1070,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
       await api(`/api/notes/${noteId}`, { method: 'DELETE' });
       await qc.invalidateQueries({ queryKey: ['conversation', id, 'notes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -1079,8 +1087,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
     return items;
   }, [data, notesData]);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
-  if (!data?.conversation) return <p className="text-sm text-destructive">Conversa não encontrada.</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">{t('action.loading')}</p>;
+  if (!data?.conversation) return <p className="text-sm text-destructive">{t('inbox_id.not_found')}</p>;
 
   const conv = data.conversation;
   const currentUserId = session?.user?.id;
@@ -1111,9 +1119,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         <div className="absolute inset-0 z-50 flex items-center justify-center rounded-lg border-4 border-dashed border-primary bg-primary/10 backdrop-blur-sm">
           <div className="text-center">
             <Paperclip className="mx-auto h-10 w-10 text-primary" />
-            <p className="mt-2 font-semibold">Solte pra anexar</p>
+            <p className="mt-2 font-semibold">{t('inbox_id.drop_to_attach')}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Imagens, vídeos, áudios e PDFs até 100 MB
+              {t('inbox_id.drop_hint')}
             </p>
           </div>
         </div>
@@ -1142,12 +1150,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium hover:opacity-90 ${STATUS_BADGE_CLASS[conv.status]}`}
               >
                 <CurStatusIcon className="h-3.5 w-3.5" />
-                {currentStatusOpt.label}
+                {t(currentStatusOpt.label)}
                 <ChevronDown className="h-3 w-3" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Mudar status</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('inbox_id.change_status')}</DropdownMenuLabel>
               {STATUS_OPTIONS.map((opt) => {
                 const Icon = opt.Icon;
                 return (
@@ -1157,7 +1165,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     disabled={opt.value === conv.status}
                   >
                     <Icon className={`h-3.5 w-3.5 ${opt.className}`} />
-                    {opt.label}
+                    {t(opt.label)}
                   </DropdownMenuItem>
                 );
               })}
@@ -1171,16 +1179,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 rounded-md border border-indigo-300 bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-900/40"
-                  title="Executar macro nessa conversa"
+                  title={t('inbox_id.macro_run_title')}
                   disabled={executingMacroId !== null}
                 >
                   <Wand2 className="h-3.5 w-3.5" />
-                  {executingMacroId ? 'Executando…' : 'Macros'}
+                  {executingMacroId ? t('inbox_id.executing') : t('inbox_id.macros')}
                   <ChevronDown className="h-3 w-3" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 max-h-72 overflow-y-auto">
-                <DropdownMenuLabel>Macros disponíveis</DropdownMenuLabel>
+                <DropdownMenuLabel>{t('inbox_id.macros_available')}</DropdownMenuLabel>
                 {macrosData.macros.map((m) => (
                   <DropdownMenuItem
                     key={m.id}
@@ -1207,30 +1215,30 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               <button
                 type="button"
                 className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs hover:bg-accent"
-                title="Mais ações"
+                title={t('inbox_id.more_actions')}
               >
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Ações</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('inbox_id.actions')}</DropdownMenuLabel>
               <DropdownMenuItem onSelect={markUnread} disabled={conv.unreadCount > 0}>
                 <Mail className="h-3.5 w-3.5" />
-                Marcar como não lida
+                {t('inbox_id.mark_unread')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={enterSelectionMode}>
                 <CheckSquare className="h-3.5 w-3.5" />
-                Selecionar mensagens
+                {t('inbox_id.select_messages')}
               </DropdownMenuItem>
               {conv.archivedAt ? (
                 <DropdownMenuItem onSelect={unarchive}>
                   <ArchiveRestore className="h-3.5 w-3.5" />
-                  Desarquivar
+                  {t('inbox_id.unarchive')}
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuItem onSelect={archive}>
                   <Archive className="h-3.5 w-3.5" />
-                  Arquivar conversa
+                  {t('inbox_id.archive_conv')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -1255,17 +1263,17 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 ) : (
                   <>
                     <UserX className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-muted-foreground">Sem agente</span>
+                    <span className="text-muted-foreground">{t('inbox_id.no_agent')}</span>
                   </>
                 )}
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-              <DropdownMenuLabel>Atribuir conversa</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('inbox_id.assign_conv')}</DropdownMenuLabel>
               <DropdownMenuItem onSelect={() => updateConversation({ assignedAgentId: null })}>
                 <UserX className="h-3.5 w-3.5" />
-                Remover atribuição
+                {t('inbox_id.remove_assignment')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {members.map((m) => (
@@ -1294,10 +1302,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <CheckSquare className="h-4 w-4" />
             <span className="font-medium">
               {selectedMessageIds.size === 0
-                ? 'Selecionar mensagens — clique nas mensagens'
-                : `${selectedMessageIds.size} selecionada${selectedMessageIds.size > 1 ? 's' : ''}`}
+                ? t('inbox_id.select_hint')
+                : selectedMessageIds.size === 1
+                  ? t('inbox_id.selected_one')
+                  : t('inbox_id.selected_many', { n: selectedMessageIds.size })}
             </span>
-            <span className="text-[11px] opacity-80">máx 20</span>
+            <span className="text-[11px] opacity-80">{t('inbox_id.max_20')}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <button
@@ -1307,7 +1317,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-900 transition hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Forward className="h-3.5 w-3.5" />
-              Encaminhar
+              {t('inbox_id.forward')}
             </button>
             <button
               type="button"
@@ -1315,7 +1325,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               className="inline-flex items-center gap-1.5 rounded-md border border-indigo-200/40 px-2.5 py-1 text-xs font-medium hover:bg-indigo-400"
             >
               <X className="h-3.5 w-3.5" />
-              Cancelar
+              {t('action.cancel')}
             </button>
           </div>
         </div>
@@ -1333,7 +1343,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             >
               <Pin className="h-3 w-3" />
               <span className="font-medium">
-                {pinned.length} mensagem{pinned.length > 1 ? 's' : ''} fixada{pinned.length > 1 ? 's' : ''}
+                {pinned.length === 1
+                  ? t('inbox_id.pinned_one')
+                  : t('inbox_id.pinned_many', { n: pinned.length })}
               </span>
               {pinnedExpanded ? (
                 <ChevronUp className="ml-auto h-3 w-3" />
@@ -1352,7 +1364,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <span className="min-w-0 flex-1 truncate">
                       <span className="font-semibold opacity-70">
                         {m.direction === 'OUTBOUND'
-                          ? 'Você'
+                          ? t('inbox_id.you')
                           : conv.contact.name ?? conv.contact.phoneNumber}
                         :
                       </span>{' '}
@@ -1361,7 +1373,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <button
                       type="button"
                       onClick={() => unpinMessage(m)}
-                      title="Desafixar"
+                      title={t('inbox_id.unpin')}
                       className="shrink-0 rounded p-0.5 hover:bg-amber-200 dark:hover:bg-amber-900"
                     >
                       <PinOff className="h-3 w-3" />
@@ -1385,18 +1397,18 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <>
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${AI_INTENT_CLS[conv.aiClassification.intent]}`}
-                title={`Confiança ${Math.round(conv.aiClassification.confidence * 100)}%`}
+                title={t('inbox_id.confidence', { n: Math.round(conv.aiClassification.confidence * 100) })}
               >
-                {AI_INTENT_LABEL[conv.aiClassification.intent]}
+                {t(AI_INTENT_LABEL[conv.aiClassification.intent])}
               </span>
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${AI_URGENCY_CLS[conv.aiClassification.urgency]}`}
               >
-                Urgência: {AI_URGENCY_LABEL[conv.aiClassification.urgency]}
+                {t('inbox_id.ai.urgency_label')}: {t(AI_URGENCY_LABEL[conv.aiClassification.urgency])}
               </span>
               <span
                 className="text-base leading-none"
-                title={`Sentimento: ${conv.aiClassification.sentiment}`}
+                title={t('inbox_id.sentiment_title', { s: conv.aiClassification.sentiment })}
               >
                 {AI_SENTIMENT_EMOJI[conv.aiClassification.sentiment]}
               </span>
@@ -1411,7 +1423,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             </>
           ) : (
             <span className="text-[11px] text-muted-foreground italic">
-              Sem análise ainda — classificação automática roda 30s após nova mensagem
+              {t('inbox_id.no_analysis')}
             </span>
           )}
           <div className="ml-auto flex items-center gap-1.5">
@@ -1421,10 +1433,10 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               onClick={summarizeAi}
               disabled={summarizing}
               className="h-7 text-xs"
-              title="Resumir conversa em 1-2 frases"
+              title={t('inbox_id.summarize_title')}
             >
               <Sparkles className={`h-3 w-3 ${summarizing ? 'animate-pulse' : ''}`} />
-              {summarizing ? 'Resumindo…' : summary ? 'Refazer resumo' : 'Resumir'}
+              {summarizing ? t('inbox_id.summarizing') : summary ? t('inbox_id.redo_summary') : t('inbox_id.summarize')}
             </Button>
             <Button
               size="sm"
@@ -1432,16 +1444,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               onClick={suggestNextAi}
               disabled={suggestingActions}
               className="h-7 text-xs"
-              title="Sugerir próximas ações com IA"
+              title={t('inbox_id.suggest_actions_title')}
             >
               <Sparkles className={`h-3 w-3 ${suggestingActions ? 'animate-pulse' : ''}`} />
-              {suggestingActions ? 'Pensando…' : 'Sugerir ações'}
+              {suggestingActions ? t('inbox_id.thinking') : t('inbox_id.suggest_actions')}
             </Button>
           </div>
         </div>
         {summary && (
           <p className="rounded-md bg-card/60 p-2 text-xs leading-relaxed text-foreground/90 border">
-            <span className="font-semibold">Resumo: </span>
+            <span className="font-semibold">{t('inbox_id.summary_label')}</span>
             {summary}
           </p>
         )}
@@ -1450,9 +1462,9 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-400" />
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
-                Base de conhecimento sugere
+                {t('inbox_id.kb_suggests')}
                 <span className="rounded bg-indigo-500/15 px-1.5 py-0 normal-case text-[10px]">
-                  {Math.round(conv.aiKbSuggestion.score * 100)}% match
+                  {t('inbox_id.match', { n: Math.round(conv.aiKbSuggestion.score * 100) })}
                 </span>
               </p>
               <p className="mt-0.5 text-sm font-medium">{conv.aiKbSuggestion.articleTitle}</p>
@@ -1463,7 +1475,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   disabled={kbSuggestInserting}
                   className="h-6 text-[11px]"
                 >
-                  {kbSuggestInserting ? '…' : 'Inserir resposta'}
+                  {kbSuggestInserting ? '…' : t('inbox_id.insert_reply')}
                 </Button>
                 <Button
                   size="sm"
@@ -1471,16 +1483,16 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   onClick={refreshKbSuggestion}
                   disabled={kbSuggestRefreshing}
                   className="h-6 text-[11px]"
-                  title="Buscar de novo"
+                  title={t('inbox_id.search_again')}
                 >
-                  {kbSuggestRefreshing ? '…' : 'Refazer'}
+                  {kbSuggestRefreshing ? '…' : t('inbox_id.redo')}
                 </Button>
                 <Button
                   size="icon"
                   variant="ghost"
                   onClick={dismissKbSuggestion}
                   className="h-6 w-6"
-                  title="Dispensar sugestão"
+                  title={t('inbox_id.dismiss_suggestion')}
                 >
                   <X className="h-3 w-3" />
                 </Button>
@@ -1491,20 +1503,20 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         {aiActions && aiActions.length > 0 && (
           <div className="space-y-1.5">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
-              Próximas ações sugeridas
+              {t('inbox_id.next_actions_suggested')}
             </p>
             {aiActions.map((a, idx) => {
               const isExecuting = executingActionIdx === idx;
               const label =
                 a.kind === 'assign_agent'
-                  ? `Atribuir pra @${a.agentSlug}`
+                  ? t('inbox_id.action_assign', { slug: a.agentSlug })
                   : a.kind === 'apply_label'
-                    ? `Aplicar etiqueta "${a.labelName}"`
+                    ? t('inbox_id.action_apply_label', { name: a.labelName })
                     : a.kind === 'set_status'
-                      ? `Mudar status pra ${a.status}`
+                      ? t('inbox_id.action_set_status', { status: a.status })
                       : a.kind === 'send_template'
-                        ? `Usar template "${a.templateName}"`
-                        : `Mover card pra "${a.stageName}"`;
+                        ? t('inbox_id.action_send_template', { name: a.templateName })
+                        : t('inbox_id.action_move_card', { name: a.stageName });
               return (
                 <div
                   key={idx}
@@ -1514,7 +1526,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <p className="text-xs font-medium">{label}</p>
                     <p className="mt-0.5 text-[11px] text-muted-foreground">{a.reason}</p>
                     <p className="mt-0.5 text-[10px] text-indigo-600 dark:text-indigo-400">
-                      Confiança {Math.round(a.confidence * 100)}%
+                      {t('inbox_id.confidence', { n: Math.round(a.confidence * 100) })}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -1525,14 +1537,14 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                       disabled={isExecuting}
                       className="h-6 text-[11px]"
                     >
-                      {isExecuting ? '…' : 'Aceitar'}
+                      {isExecuting ? '…' : t('inbox_id.accept')}
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={() => dismissAiAction(idx)}
                       className="h-6 w-6"
-                      title="Dispensar"
+                      title={t('inbox_id.dismiss')}
                     >
                       <X className="h-3 w-3" />
                     </Button>
@@ -1567,7 +1579,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 {showSeparator && (
                   <div className="flex items-center justify-center py-3">
                     <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      {dayLabel(itemDate)}
+                      {dayLabel(itemDate, t, lang)}
                     </span>
                   </div>
                 )}
@@ -1575,7 +1587,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <div className="flex items-center gap-2 py-2">
                     <div className="h-px flex-1 bg-primary" />
                     <span className="text-[10px] font-medium uppercase tracking-wider text-primary">
-                      Novas mensagens
+                      {t('inbox_id.new_messages')}
                     </span>
                     <div className="h-px flex-1 bg-primary" />
                   </div>
@@ -1585,13 +1597,13 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               <div className="group relative max-w-[80%] rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100 dark:border-amber-700">
                 <div className="mb-1 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider opacity-70">
                   <StickyNote className="h-3 w-3" />
-                  Nota interna
+                  {t('inbox_id.internal_note')}
                 </div>
                 <p className="whitespace-pre-wrap break-words">
                   {renderMentions(item.body, mentionSlugs)}
                 </p>
                 <p className="mt-1 text-[10px] opacity-60">
-                  {new Date(item.createdAt).toLocaleString('pt-BR')}
+                  {new Date(item.createdAt).toLocaleString(localeFor(lang))}
                 </p>
                 {item.authorId === currentUserId && (
                   <button
@@ -1620,11 +1632,11 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                       const target = e.target as HTMLElement;
                       if (target.closest('a, audio, video, button, input, textarea')) return;
                       if (item.deletedAt) {
-                        toast.error('Mensagem apagada não pode ser encaminhada');
+                        toast.error(t('inbox_id.toast.deleted_no_forward'));
                         return;
                       }
                       if (!isForwardableType(item.type)) {
-                        toast.error(`Tipo ${item.type} não pode ser encaminhado`);
+                        toast.error(t('inbox_id.toast.type_no_forward', { type: item.type }));
                         return;
                       }
                       toggleSelectMessage(item.id);
@@ -1662,7 +1674,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                       key={emoji}
                       type="button"
                       onClick={() => react(item.id, emoji)}
-                      title={`Reagir ${emoji}`}
+                      title={t('inbox_id.react', { emoji })}
                       className="rounded-full px-1 py-0.5 text-sm transition hover:scale-125 hover:bg-muted"
                     >
                       {emoji}
@@ -1676,7 +1688,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                       setMode('reply');
                       inputRef.current?.focus();
                     }}
-                    title="Responder"
+                    title={t('inbox_id.reply')}
                     className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <Reply className="h-3.5 w-3.5" />
@@ -1689,7 +1701,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <button
                       type="button"
                       onClick={() => setForwardingMessageId(item.id)}
-                      title="Encaminhar"
+                      title={t('inbox_id.forward')}
                       className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       <Forward className="h-3.5 w-3.5" />
@@ -1699,7 +1711,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <button
                     type="button"
                     onClick={() => (item.pinnedAt ? unpinMessage(item) : pinMessage(item))}
-                    title={item.pinnedAt ? 'Desafixar' : 'Fixar mensagem'}
+                    title={item.pinnedAt ? t('inbox_id.unpin') : t('inbox_id.pin_message')}
                     className={`rounded-full p-1 hover:bg-muted ${
                       item.pinnedAt
                         ? 'text-amber-600'
@@ -1720,7 +1732,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <button
                       type="button"
                       onClick={() => startEdit(item)}
-                      title="Editar (até 15min)"
+                      title={t('inbox_id.edit_title')}
                       className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -1730,7 +1742,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <button
                     type="button"
                     onClick={() => setHistoryMessageId(item.id)}
-                    title="Ver histórico de edições"
+                    title={t('inbox_id.view_history')}
                     className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <History className="h-3.5 w-3.5" />
@@ -1742,7 +1754,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <button
                       type="button"
                       onClick={() => revokeMessage(item)}
-                      title="Apagar pra todos (até 7min)"
+                      title={t('inbox_id.delete_all_title')}
                       className="rounded-full p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -1759,7 +1771,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 {item.senderType === 'AI_AGENT' && (
                   <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
                     <Sparkles className="h-2.5 w-2.5" />
-                    Agente IA
+                    {t('inbox_id.ai_agent')}
                   </div>
                 )}
                 {item.type === 'IMAGE' && item.mediaUrl && (
@@ -1767,7 +1779,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <a href={item.mediaUrl} target="_blank" rel="noreferrer" className="block">
                     <img
                       src={item.thumbnailUrl ?? item.mediaUrl}
-                      alt="imagem"
+                      alt={t('inbox_id.image_alt')}
                       className="mb-1 max-h-64 rounded-md cursor-zoom-in hover:opacity-90"
                       loading="lazy"
                     />
@@ -1779,11 +1791,11 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     {item.transcriptionStatus === 'PENDING' && (
                       <p className="flex items-center gap-1 text-[10px] italic opacity-70">
                         <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-                        Transcrevendo…
+                        {t('inbox_id.transcribing')}
                       </p>
                     )}
                     {item.transcriptionStatus === 'FAILED' && (
-                      <p className="text-[10px] italic opacity-60">Transcrição falhou</p>
+                      <p className="text-[10px] italic opacity-60">{t('inbox_id.transcription_failed')}</p>
                     )}
                     {item.transcriptionStatus === 'COMPLETED' && item.transcription && (
                       <button
@@ -1796,7 +1808,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                         }`}
                       >
                         <FileText className="h-3 w-3" />
-                        {showTranscription[item.id] ? 'Ocultar transcrição' : 'Ver transcrição'}
+                        {showTranscription[item.id] ? t('inbox_id.hide_transcription') : t('inbox_id.view_transcription')}
                       </button>
                     )}
                     {item.transcriptionStatus === 'COMPLETED' &&
@@ -1824,7 +1836,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     rel="noreferrer"
                     className="mb-1 block underline"
                   >
-                    Documento ({item.mediaMimeType})
+                    {t('inbox_id.document', { mime: item.mediaMimeType ?? '' })}
                   </a>
                 )}
                 {item.type === 'STICKER' && item.mediaUrl && (
@@ -1858,7 +1870,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                           <p className="truncate text-xs opacity-80">{item.locationAddress}</p>
                         )}
                         <p className="mt-0.5 text-[10px] opacity-70">
-                          Abrir no Google Maps · {item.locationLat.toFixed(5)},{' '}
+                          {t('inbox_id.open_google_maps')} · {item.locationLat.toFixed(5)},{' '}
                           {item.locationLon.toFixed(5)}
                         </p>
                       </div>
@@ -1867,7 +1879,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 {item.forwardedFromId && !item.deletedAt && (
                   <p className="mb-1 flex items-center gap-1 text-[10px] italic opacity-60">
                     <Forward className="h-2.5 w-2.5" />
-                    Encaminhada
+                    {t('inbox_id.forwarded')}
                   </p>
                 )}
                 {item.replyTo && !item.deletedAt && (
@@ -1882,11 +1894,11 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold opacity-70">
                         {item.replyTo.direction === 'OUTBOUND'
-                          ? 'Você'
+                          ? t('inbox_id.you')
                           : conv.contact.name ?? conv.contact.phoneNumber}
                       </p>
                       {item.replyTo.deletedAt ? (
-                        <p className="italic opacity-60">Mensagem apagada</p>
+                        <p className="italic opacity-60">{t('inbox_id.message_deleted')}</p>
                       ) : (
                         <p className="line-clamp-2 opacity-80">
                           {item.replyTo.content ?? `[${item.replyTo.type.toLowerCase()}]`}
@@ -1898,7 +1910,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 {item.deletedAt ? (
                   <p className="flex items-center gap-1.5 italic opacity-60">
                     <Ban className="h-3 w-3" />
-                    Esta mensagem foi apagada
+                    {t('inbox_id.message_was_deleted')}
                   </p>
                 ) : editingMessageId === item.id ? (
                   <form
@@ -1931,7 +1943,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                         disabled={editingBusy}
                         className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
                       >
-                        Cancelar
+                        {t('action.cancel')}
                       </button>
                       <button
                         type="submit"
@@ -1939,7 +1951,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                         className="flex items-center gap-1 rounded bg-foreground px-2 py-0.5 text-xs font-medium text-background hover:opacity-90 disabled:opacity-50"
                       >
                         <Check className="h-3 w-3" />
-                        {editingBusy ? 'Salvando…' : 'Salvar'}
+                        {editingBusy ? t('action.saving') : t('action.save')}
                       </button>
                     </div>
                   </form>
@@ -1949,12 +1961,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   )
                 )}
                 <p className="mt-1 text-[10px] opacity-70">
-                  {new Date(item.createdAt).toLocaleTimeString('pt-BR', {
+                  {new Date(item.createdAt).toLocaleTimeString(localeFor(lang), {
                     hour: '2-digit',
                     minute: '2-digit',
                   })}{' '}
                   {item.editedAt && !item.deletedAt && (
-                    <span className="italic">(editada)</span>
+                    <span className="italic">{t('inbox_id.edited')}</span>
                   )}{' '}
                   {item.direction === 'OUTBOUND' && !item.deletedAt && STATUS_ICON[item.status]}
                 </p>
@@ -1965,7 +1977,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                         key={r.id}
                         type="button"
                         onClick={() => r.fromMe && react(item.id, '')}
-                        title={r.fromMe ? 'Clique pra remover' : 'Reagiu'}
+                        title={r.fromMe ? t('inbox_id.click_remove') : t('inbox_id.reacted')}
                         className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0 text-xs ${
                           r.fromMe ? 'border-foreground/20 bg-background/40' : 'bg-background/40'
                         } ${item.direction === 'OUTBOUND' ? 'border-primary-foreground/20' : ''}`}
@@ -1989,7 +2001,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           type="button"
           onClick={scrollToBottom}
           className="absolute bottom-24 right-6 z-10 rounded-full border bg-card p-2 shadow-lg hover:bg-accent"
-          aria-label="Ir para última mensagem"
+          aria-label={t('inbox_id.go_last_message')}
         >
           <ChevronDown className="h-4 w-4" />
         </button>
@@ -2013,13 +2025,13 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               />
             </span>
             <span className="italic">
-              {conv.contact.name ?? conv.contact.phoneNumber} está digitando…
+              {t('inbox_id.is_typing', { name: conv.contact.name ?? conv.contact.phoneNumber })}
             </span>
           </div>
         )}
         {conv.inbox.status !== 'CONNECTED' && mode === 'reply' && (
           <p className="text-xs text-amber-600">
-            Inbox não conectada — conecte em /inboxes antes de responder.
+            {t('inbox_id.inbox_not_connected')}
           </p>
         )}
 
@@ -2029,7 +2041,12 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <CornerDownRight className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Respondendo {replyTo.direction === 'OUTBOUND' ? 'você' : conv.contact.name ?? 'contato'}
+                {t('inbox_id.replying_to', {
+                  who:
+                    replyTo.direction === 'OUTBOUND'
+                      ? t('inbox_id.you_lc')
+                      : conv.contact.name ?? t('inbox_id.contact'),
+                })}
               </p>
               <p className="line-clamp-2 text-xs text-muted-foreground">
                 {replyTo.content ?? `[${replyTo.type}]`}
@@ -2049,7 +2066,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
           <div className="rounded-md border bg-popover p-2 max-h-48 overflow-y-auto">
             {templatesData.templates.length === 0 ? (
               <p className="px-2 py-1 text-xs text-muted-foreground">
-                Sem templates. Crie em Configurações → Templates.
+                {t('inbox_id.no_templates')}
               </p>
             ) : (
               templatesData.templates.map((tpl) => (
@@ -2076,7 +2093,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
         {mode === 'reply' && pinnedTemplates.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Atalhos
+              {t('inbox_id.shortcuts')}
             </span>
             {pinnedTemplates.map((tpl) => (
               <button
@@ -2103,7 +2120,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               }`}
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              Responder
+              {t('inbox_id.reply')}
             </button>
             <button
               type="button"
@@ -2113,7 +2130,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
               }`}
             >
               <StickyNote className="h-3.5 w-3.5" />
-              Nota interna
+              {t('inbox_id.internal_note')}
             </button>
           </div>
 
@@ -2124,7 +2141,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 size="sm"
                 variant="ghost"
                 onClick={() => setShowTemplates((v) => !v)}
-                title="Templates de resposta"
+                title={t('inbox_id.templates_title')}
               >
                 <FileText className="h-4 w-4" />
               </Button>
@@ -2134,7 +2151,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 variant="ghost"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={conv.inbox.status !== 'CONNECTED'}
-                title="Anexar arquivo"
+                title={t('inbox_id.attach_file')}
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
@@ -2155,7 +2172,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 size="sm"
                 variant="ghost"
                 onClick={() => setScheduleOpen(true)}
-                title="Agendar mensagem"
+                title={t('inbox_id.schedule_message')}
               >
                 <CalendarClock className="h-4 w-4" />
               </Button>
@@ -2166,7 +2183,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   variant="ghost"
                   onClick={startRecording}
                   disabled={conv.inbox.status !== 'CONNECTED'}
-                  title="Gravar áudio"
+                  title={t('inbox_id.record_audio')}
                 >
                   <Mic className="h-4 w-4" />
                 </Button>
@@ -2179,7 +2196,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <button
                     type="button"
                     onClick={() => stopRecording(false)}
-                    title="Cancelar"
+                    title={t('action.cancel')}
                     className="ml-1 rounded p-0.5 hover:bg-red-100"
                   >
                     <X className="h-3 w-3" />
@@ -2187,7 +2204,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                   <button
                     type="button"
                     onClick={() => stopRecording(true)}
-                    title="Enviar áudio"
+                    title={t('inbox_id.send_audio')}
                     className="rounded p-0.5 hover:bg-red-100"
                   >
                     <Square className="h-3 w-3 fill-current" />
@@ -2203,13 +2220,13 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             <div className="flex items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               <span className="inline-flex items-center gap-1">
                 <Sparkles className="h-3 w-3 text-indigo-500" />
-                Sugestões com IA — clique pra usar
+                {t('inbox_id.ai_suggestions')}
               </span>
               <button
                 type="button"
                 onClick={() => setSuggestions([])}
                 className="rounded p-0.5 hover:bg-muted"
-                title="Fechar"
+                title={t('action.close')}
               >
                 <X className="h-3 w-3" />
               </button>
@@ -2246,8 +2263,8 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
             onChange={(e) => onComposerChange(e.target.value)}
             placeholder={
               mode === 'note'
-                ? 'Nota interna (só agentes veem)…'
-                : 'Mensagem… (digite /atalho pra expandir template)'
+                ? t('inbox_id.note_placeholder')
+                : t('inbox_id.message_placeholder')
             }
             disabled={sending || (mode === 'reply' && conv.inbox.status !== 'CONNECTED')}
             className={mode === 'note' ? 'border-amber-400 bg-amber-50/50 dark:bg-amber-950/30' : ''}
@@ -2259,7 +2276,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 variant="outline"
                 size="icon"
                 onClick={() => setKbSearchOpen(true)}
-                title="Buscar na base de conhecimento"
+                title={t('inbox_id.search_kb_title')}
               >
                 <BookOpen className="h-4 w-4" />
               </Button>
@@ -2269,7 +2286,7 @@ export default function ConversationPage({ params }: { params: Promise<{ id: str
                 size="icon"
                 onClick={fetchSuggestions}
                 disabled={suggesting || conv.inbox.status !== 'CONNECTED'}
-                title="Sugerir respostas com IA"
+                title={t('inbox_id.suggest_replies_title')}
                 className={suggesting ? 'animate-pulse' : ''}
               >
                 <Sparkles className={`h-4 w-4 ${suggesting ? 'text-indigo-500' : ''}`} />
@@ -2372,6 +2389,7 @@ function MessageEditHistoryDialog({
   messageId: string | null;
   onClose: () => void;
 }) {
+  const { t, lang } = useT();
   const open = !!messageId;
   const { data, isLoading } = useQuery<MessageEditHistoryResponse>({
     queryKey: ['message-history', messageId],
@@ -2387,43 +2405,51 @@ function MessageEditHistoryDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-4 w-4 text-indigo-500" />
-            Histórico de edições
+            {t('inbox_id.edit_history')}
           </DialogTitle>
           <DialogDescription>
             {isLoading
-              ? 'Carregando…'
-              : `${totalVersions} versão${totalVersions > 1 ? 'ões' : ''} (a atual e ${data?.edits.length ?? 0} anterior${(data?.edits.length ?? 0) === 1 ? '' : 'es'})`}
+              ? t('action.loading')
+              : `${
+                  totalVersions === 1
+                    ? t('inbox_id.versions_one')
+                    : t('inbox_id.versions_many', { total: totalVersions })
+                } (${
+                  (data?.edits.length ?? 0) === 1
+                    ? t('inbox_id.prev_one')
+                    : t('inbox_id.prev_many', { prev: data?.edits.length ?? 0 })
+                })`}
           </DialogDescription>
         </DialogHeader>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Carregando…</p>
+          <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
         ) : !data ? (
-          <p className="text-sm text-destructive">Erro ao carregar histórico</p>
+          <p className="text-sm text-destructive">{t('inbox_id.err_load_history')}</p>
         ) : (
           <ol className="space-y-3">
             <li className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-700 dark:bg-emerald-950/40">
               <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                 <Check className="h-3 w-3" />
-                Versão atual
+                {t('inbox_id.current_version')}
                 {data.current.editedAt && (
                   <span className="ml-auto text-[10px] font-normal text-emerald-700/80 dark:text-emerald-300/80">
-                    {new Date(data.current.editedAt).toLocaleString('pt-BR')}
+                    {new Date(data.current.editedAt).toLocaleString(localeFor(lang))}
                   </span>
                 )}
               </div>
               <p className="whitespace-pre-wrap break-words text-sm">
-                {data.current.content ?? <span className="italic opacity-70">(vazia)</span>}
+                {data.current.content ?? <span className="italic opacity-70">{t('inbox_id.empty_content')}</span>}
               </p>
             </li>
             {data.edits.map((ed, idx) => {
               const authorName =
-                ed.author?.name?.trim() || ed.author?.email || 'Agente removido';
+                ed.author?.name?.trim() || ed.author?.email || t('inbox_id.agent_removed');
               return (
                 <li key={ed.id} className="rounded-lg border bg-card p-3">
                   <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Versão anterior #{data.edits.length - idx}
+                    {t('inbox_id.prev_version', { n: data.edits.length - idx })}
                     <span className="ml-auto font-normal">
-                      {new Date(ed.editedAt).toLocaleString('pt-BR')}
+                      {new Date(ed.editedAt).toLocaleString(localeFor(lang))}
                     </span>
                   </div>
                   <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
@@ -2431,7 +2457,7 @@ function MessageEditHistoryDialog({
                   </p>
                   {ed.editedBy && (
                     <p className="mt-1.5 text-[11px] text-muted-foreground">
-                      Editada por <span className="font-medium">{authorName}</span>
+                      {t('inbox_id.edited_by')} <span className="font-medium">{authorName}</span>
                     </p>
                   )}
                 </li>
@@ -2439,8 +2465,7 @@ function MessageEditHistoryDialog({
             })}
             {data.edits.length === 0 && (
               <li className="rounded-md border border-dashed bg-muted/20 p-4 text-center text-xs text-muted-foreground">
-                Nenhuma versão anterior registrada — primeira edição foi antes desse histórico
-                existir.
+                {t('inbox_id.no_prev_versions')}
               </li>
             )}
           </ol>

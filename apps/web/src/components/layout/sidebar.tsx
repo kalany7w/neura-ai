@@ -124,14 +124,15 @@ interface SidebarProps {
 }
 
 function RealtimeDot({ state }: { state: string }) {
+  const { t } = useT();
   return (
     <div
       title={
         state === 'open'
-          ? 'Tempo real conectado'
+          ? t('c_layout_sidebar.realtime_connected')
           : state === 'connecting'
-            ? 'Conectando…'
-            : 'Desconectado'
+            ? t('c_layout_sidebar.realtime_connecting')
+            : t('c_layout_sidebar.realtime_disconnected')
       }
     >
       {state === 'open' ? (
@@ -304,13 +305,13 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
           <Link
             href="/settings/profile"
             className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1.5 hover:bg-muted"
-            title="Meu perfil"
+            title={t('c_layout_sidebar.my_profile')}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
               {initials || '?'}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.name ?? 'Sem nome'}</p>
+              <p className="truncate text-sm font-medium">{user.name ?? t('c_layout_sidebar.no_name')}</p>
               <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
             </div>
           </Link>
@@ -318,7 +319,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
           <ThemeToggle />
           <Link
             href="/settings/profile"
-            title="Configurações do perfil"
+            title={t('c_layout_sidebar.profile_settings')}
             className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
           >
             <Settings className="h-4 w-4" />
