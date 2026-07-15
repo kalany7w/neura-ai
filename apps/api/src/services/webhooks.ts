@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
+import { assertPublicUrl } from './ssrf-guard.js';
 
 export const WEBHOOK_EVENTS = [
   'message.new',
@@ -44,6 +45,13 @@ async function fireOne(
     'X-Neura-Delivery': webhookId + '-' + Date.now(),
   };
   if (secret) headers['X-Neura-Signature'] = 'sha256=' + sign(secret, body);
+
+  // Guarda SSRF: resolve DNS e rejeita se o destino for interno/privado.
+  try {
+    await assertPublicUrl(url);
+  } catch (err) {
+    return { ok: false, status: 0, error: err instanceof Error ? err.message : 'blocked' };
+  }
 
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10_000);

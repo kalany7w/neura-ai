@@ -7,6 +7,17 @@ import { requirePermission } from '../middlewares/permissions.js';
 import { outboundQueue, dispatchOutbound } from '../queue.js';
 import { publishEvent } from '../redis-pub.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
+import { outboundLimiter } from '../rate-limit.js';
+import { logger } from '../logger.js';
+
+/** AGENT só pode agir em conversa atribuída a ele (ou sem agente). */
+function agentBlocked(
+  role: string | undefined,
+  userId: string | undefined,
+  assignedAgentId: string | null,
+): boolean {
+  return role === 'AGENT' && !!assignedAgentId && assignedAgentId !== userId;
+}
 
 export const messagesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -129,6 +140,7 @@ async function loadOwnableMessage(
   conversationId: string;
   conversation: {
     inboxId: string;
+    assignedAgentId: string | null;
     contact: { phoneNumber: string | null };
     inbox: { status: string };
   };
@@ -148,6 +160,7 @@ async function loadOwnableMessage(
       conversation: {
         select: {
           inboxId: true,
+          assignedAgentId: true,
           contact: { select: { phoneNumber: true } },
           inbox: { select: { status: true } },
         },
@@ -175,6 +188,9 @@ messagesRouter.post(
 
     const msg = await loadOwnableMessage(id, workspaceId);
     if (!msg) return c.json({ error: 'not_found' }, 404);
+    if (agentBlocked(c.get('role'), c.get('userId'), msg.conversation.assignedAgentId)) {
+      return c.json({ error: 'forbidden' }, 403);
+    }
     if (msg.direction !== 'OUTBOUND') return c.json({ error: 'inbound_not_editable' }, 409);
     if (msg.type !== 'TEXT') return c.json({ error: 'only_text_editable' }, 409);
     if (msg.deletedAt) return c.json({ error: 'already_deleted' }, 409);
@@ -344,6 +360,7 @@ messagesRouter.post(
   async (c) => {
     const workspaceId = c.get('workspaceId') as string;
     const userId = c.get('userId');
+    const role = c.get('role');
     const id = c.req.param('id');
 
     const body = await c.req.json().catch(() => null);
@@ -361,9 +378,14 @@ messagesRouter.post(
         mediaMimeType: true,
         deletedAt: true,
         createdAt: true,
+        conversation: { select: { assignedAgentId: true } },
       },
     });
     if (!source) return c.json({ error: 'not_found' }, 404);
+    // AGENT só encaminha DE conversa atribuída a ele (ou sem agente).
+    if (agentBlocked(role, userId, source.conversation.assignedAgentId)) {
+      return c.json({ error: 'forbidden' }, 403);
+    }
     if (source.deletedAt) return c.json({ error: 'cannot_forward_deleted' }, 409);
     if (!isForwardable(source.type)) {
       return c.json({ error: 'unsupported_type', message: 'Tipo não suportado pra encaminhar' }, 409);
@@ -381,8 +403,21 @@ messagesRouter.post(
     const sent: string[] = [];
 
     for (const target of targets) {
+      // AGENT não encaminha PRA conversa de outro agente.
+      if (agentBlocked(role, userId, target.assignedAgentId)) {
+        skipped.push({ conversationId: target.id, reason: 'forbidden' });
+        continue;
+      }
       if (target.inbox.status !== 'CONNECTED') {
         skipped.push({ conversationId: target.id, reason: 'inbox_not_connected' });
+        continue;
+      }
+      // Anti-ban: cada envio consome o limiter por inbox (30/min). Se estourar, pula.
+      try {
+        await outboundLimiter.consume(`inbox:${target.inbox.id}`);
+      } catch {
+        logger.warn({ inboxId: target.inbox.id, workspaceId }, 'forward outbound rate-limited');
+        skipped.push({ conversationId: target.id, reason: 'rate_limited' });
         continue;
       }
       await forwardOneMessage(workspaceId, userId, source, target);
@@ -402,6 +437,7 @@ messagesRouter.post(
   async (c) => {
     const workspaceId = c.get('workspaceId') as string;
     const userId = c.get('userId');
+    const role = c.get('role');
 
     const body = await c.req.json().catch(() => null);
     const parsed = forwardBatchBody.safeParse(body);
@@ -420,6 +456,7 @@ messagesRouter.post(
         mediaMimeType: true,
         deletedAt: true,
         createdAt: true,
+        conversation: { select: { assignedAgentId: true } },
       },
       // Ordem cronológica: as msgs reenviadas seguem a ordem original
       orderBy: { createdAt: 'asc' },
@@ -427,10 +464,16 @@ messagesRouter.post(
 
     if (sources.length === 0) return c.json({ error: 'not_found' }, 404);
 
-    const invalid = sources
+    // AGENT só encaminha DE conversas atribuídas a ele (ou sem agente).
+    const accessible = sources.filter(
+      (s) => !agentBlocked(role, userId, s.conversation.assignedAgentId),
+    );
+    if (accessible.length === 0) return c.json({ error: 'forbidden' }, 403);
+
+    const invalid = accessible
       .filter((s) => s.deletedAt || !isForwardable(s.type))
       .map((s) => s.id);
-    const valid = sources.filter((s) => !invalid.includes(s.id));
+    const valid = accessible.filter((s) => !invalid.includes(s.id));
     if (valid.length === 0) {
       return c.json({ error: 'no_forwardable_messages', invalid }, 409);
     }
@@ -447,15 +490,33 @@ messagesRouter.post(
     const sent: Array<{ conversationId: string; messageCount: number }> = [];
 
     for (const target of targets) {
+      // AGENT não encaminha PRA conversa de outro agente.
+      if (agentBlocked(role, userId, target.assignedAgentId)) {
+        skipped.push({ conversationId: target.id, reason: 'forbidden' });
+        continue;
+      }
       if (target.inbox.status !== 'CONNECTED') {
         skipped.push({ conversationId: target.id, reason: 'inbox_not_connected' });
         continue;
       }
-      // Reenvia em ordem cronológica original
+      // Reenvia em ordem cronológica original — cada envio respeita o limiter anti-ban.
+      let count = 0;
+      let rateLimited = false;
       for (const source of valid) {
+        try {
+          await outboundLimiter.consume(`inbox:${target.inbox.id}`);
+        } catch {
+          logger.warn({ inboxId: target.inbox.id, workspaceId }, 'forward-batch outbound rate-limited');
+          rateLimited = true;
+          break;
+        }
         await forwardOneMessage(workspaceId, userId, source, target);
+        count++;
       }
-      sent.push({ conversationId: target.id, messageCount: valid.length });
+      if (count > 0) sent.push({ conversationId: target.id, messageCount: count });
+      if (rateLimited && count === 0) {
+        skipped.push({ conversationId: target.id, reason: 'rate_limited' });
+      }
     }
 
     return c.json({
@@ -479,6 +540,9 @@ messagesRouter.post(
 
     const msg = await loadOwnableMessage(id, workspaceId);
     if (!msg) return c.json({ error: 'not_found' }, 404);
+    if (agentBlocked(c.get('role'), c.get('userId'), msg.conversation.assignedAgentId)) {
+      return c.json({ error: 'forbidden' }, 403);
+    }
     if (msg.direction !== 'OUTBOUND') return c.json({ error: 'inbound_not_revokable' }, 409);
     if (msg.deletedAt) return c.json({ error: 'already_deleted' }, 409);
     if (!msg.waMessageId) return c.json({ error: 'no_wa_message_id' }, 409);

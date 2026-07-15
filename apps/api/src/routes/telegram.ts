@@ -7,6 +7,7 @@
  */
 
 import { Hono } from 'hono';
+import { timingSafeEqual } from 'node:crypto';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
@@ -16,6 +17,15 @@ import { enqueueWelcomeProcess } from '../welcome-worker.js';
 import type { TgUpdate, TgMessage } from '../services/telegram-client.js';
 
 export const telegramRouter = new Hono();
+
+/** Compara dois secrets em tempo constante (evita timing side-channel). */
+function secretsMatch(provided: string | undefined, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 telegramRouter.post('/webhook/:slug', async (c) => {
   const slug = c.req.param('slug');
@@ -45,7 +55,13 @@ telegramRouter.post('/webhook/:slug', async (c) => {
   const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
   const expectedSecret = cfg.secretToken as string | undefined;
   const headerSecret = c.req.header('X-Telegram-Bot-Api-Secret-Token');
-  if (expectedSecret && headerSecret !== expectedSecret) {
+  // Fail-closed: se o inbox não tem secret configurado, REJEITA (não aceita sem auth).
+  // Reconectar o inbox regenera o secretToken.
+  if (!expectedSecret) {
+    logger.warn({ inboxId: inbox.id }, 'Telegram webhook: inbox sem secretToken — reconecte o inbox');
+    return c.json({ ok: false }, 403);
+  }
+  if (!secretsMatch(headerSecret, expectedSecret)) {
     logger.warn({ inboxId: inbox.id }, 'Telegram webhook: invalid secret token');
     return c.json({ ok: false }, 403);
   }

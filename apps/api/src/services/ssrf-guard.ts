@@ -1,0 +1,108 @@
+/**
+ * Proteção SSRF para URLs fornecidas por tenants (webhooks salientes, testes de webhook).
+ *
+ * Um admin/supervisor de um workspace pode cadastrar a URL de destino de um webhook.
+ * Sem guarda, ele poderia apontar pra `http://169.254.169.254/…` (metadata do cloud),
+ * `http://localhost:…` ou hosts internos da VPS e exfiltrar respostas/segredos.
+ *
+ * Uso:
+ *  - `assertHostnameAllowed(url)`  → validação síncrona barata no cadastro (scheme + host literal)
+ *  - `await assertPublicUrl(url)`  → resolve DNS e rejeita se QUALQUER IP for privado (antes do fetch)
+ */
+
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
+
+export class SsrfBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SsrfBlockedError';
+  }
+}
+
+/** Retorna true se o IPv4 (a.b.c.d) cai num range privado/reservado. */
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split('.').map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+    return true; // formato inesperado → bloqueia por segurança
+  }
+  const [a, b] = parts as [number, number, number, number];
+  if (a === 0) return true; // 0.0.0.0/8
+  if (a === 10) return true; // 10.0.0.0/8
+  if (a === 127) return true; // loopback
+  if (a === 169 && b === 254) return true; // link-local (inclui 169.254.169.254 metadata)
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
+  if (a === 192 && b === 0) return true; // 192.0.0.0/24 (IETF) / 192.0.2.0/24 (TEST-NET)
+  if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmark
+  if (a >= 224) return true; // 224.0.0.0/4 multicast + 240.0.0.0/4 reservado
+  return false;
+}
+
+/** Retorna true se o IPv6 cai num range privado/reservado. */
+function isPrivateIPv6(ip: string): boolean {
+  const lower = ip.toLowerCase();
+  if (lower === '::1' || lower === '::') return true; // loopback / unspecified
+  // IPv4-mapped (::ffff:a.b.c.d) → checa o IPv4 embutido
+  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateIPv4(mapped[1]!);
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7 ULA
+  if (lower.startsWith('fe80')) return true; // link-local
+  if (lower.startsWith('2001:db8')) return true; // documentação
+  return false;
+}
+
+function isPrivateIp(ip: string): boolean {
+  const kind = isIP(ip);
+  if (kind === 4) return isPrivateIPv4(ip);
+  if (kind === 6) return isPrivateIPv6(ip);
+  return true; // não é IP válido → bloqueia
+}
+
+/**
+ * Validação síncrona no cadastro: só http/https e nada de host obviamente interno.
+ * Não resolve DNS (isso é feito no fire-time por `assertPublicUrl`).
+ */
+export function assertHostnameAllowed(rawUrl: string): URL {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new SsrfBlockedError('URL inválida');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new SsrfBlockedError('Só http(s) é permitido');
+  }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.internal')) {
+    throw new SsrfBlockedError('Host interno não permitido');
+  }
+  // Se o host já é um IP literal, valida na hora.
+  if (isIP(host) && isPrivateIp(host)) {
+    throw new SsrfBlockedError('IP privado/reservado não permitido');
+  }
+  return url;
+}
+
+/**
+ * Validação no fire-time: resolve o hostname e rejeita se QUALQUER endereço for privado.
+ * Reduz o risco de DNS rebinding (host público no cadastro, privado no fetch).
+ */
+export async function assertPublicUrl(rawUrl: string): Promise<void> {
+  const url = assertHostnameAllowed(rawUrl);
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (isIP(host)) return; // já validado em assertHostnameAllowed
+  let addrs: Array<{ address: string }>;
+  try {
+    addrs = await lookup(host, { all: true });
+  } catch {
+    throw new SsrfBlockedError('Não foi possível resolver o host');
+  }
+  if (addrs.length === 0) throw new SsrfBlockedError('Host sem endereços');
+  for (const { address } of addrs) {
+    if (isPrivateIp(address)) {
+      throw new SsrfBlockedError('Host resolve pra IP privado/reservado');
+    }
+  }
+}
