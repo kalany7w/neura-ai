@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/lib/api';
+import { useT, localeFor } from '@/lib/i18n';
 
 interface SeriesDay {
   date: string;
@@ -13,18 +14,19 @@ interface SeriesDay {
 
 type Metric = 'conversations' | 'messages';
 
-const METRIC_OPTIONS: Array<{ value: Metric; label: string }> = [
-  { value: 'conversations', label: 'Conversas iniciadas' },
-  { value: 'messages', label: 'Mensagens (in / out)' },
+const METRIC_OPTIONS: Array<{ value: Metric; key: string }> = [
+  { value: 'conversations', key: 'dashboard.volume.conversations' },
+  { value: 'messages', key: 'dashboard.volume.messages' },
 ];
 
-function dayShortLabel(iso: string): string {
-  const d = new Date(iso + 'T00:00:00Z');
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-}
-
 export function DashboardTimeseriesChart() {
+  const { t, lang } = useT();
   const [metric, setMetric] = useState<Metric>('conversations');
+
+  function dayShortLabel(iso: string): string {
+    const d = new Date(iso + 'T00:00:00Z');
+    return d.toLocaleDateString(localeFor(lang), { day: '2-digit', month: '2-digit' });
+  }
 
   const { data } = useQuery<{ days: SeriesDay[] }>({
     queryKey: ['dashboard-timeseries', 14],
@@ -35,7 +37,7 @@ export function DashboardTimeseriesChart() {
   if (!data) {
     return (
       <div className="rounded-lg border bg-card p-5">
-        <p className="text-sm text-muted-foreground">Carregando gráfico…</p>
+        <p className="text-sm text-muted-foreground">{t('dashboard.chart_loading')}</p>
       </div>
     );
   }
@@ -87,9 +89,9 @@ export function DashboardTimeseriesChart() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Volume — últimos 14 dias
+            {t('dashboard.volume.title')}
           </h2>
-          <p className="mt-0.5 text-2xl font-bold">{totalLeft.toLocaleString('pt-BR')}</p>
+          <p className="mt-0.5 text-2xl font-bold">{totalLeft.toLocaleString(localeFor(lang))}</p>
         </div>
         <div className="flex gap-1 rounded-md bg-muted p-1 text-xs">
           {METRIC_OPTIONS.map((o) => (
@@ -103,7 +105,7 @@ export function DashboardTimeseriesChart() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {o.label}
+              {t(o.key)}
             </button>
           ))}
         </div>
@@ -234,11 +236,11 @@ export function DashboardTimeseriesChart() {
         <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Recebidas
+            {t('dashboard.volume.received')}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full bg-violet-500" />
-            Enviadas
+            {t('dashboard.volume.sent')}
           </span>
         </div>
       )}
