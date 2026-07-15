@@ -269,39 +269,29 @@ export default function ReportsPage() {
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => downloadCsv('conversations')}>
             <Download className="h-3.5 w-3.5" />
-            CSV conversas
+            {t('reports.csv_conversations')}
           </Button>
           <Button size="sm" variant="outline" onClick={() => downloadCsv('messages')}>
             <Download className="h-3.5 w-3.5" />
-            CSV mensagens
+            {t('reports.csv_messages')}
           </Button>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'agents', 'inboxes', 'sla', 'csat', 'kb'] as const).map((t) => (
+        {(['overview', 'agents', 'inboxes', 'sla', 'csat', 'kb'] as const).map((tabKey) => (
           <button
-            key={t}
+            key={tabKey}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(tabKey)}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
-              tab === t
+              tab === tabKey
                 ? 'border-foreground text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'overview'
-              ? 'Visão geral'
-              : t === 'agents'
-                ? 'Por agente'
-                : t === 'inboxes'
-                  ? 'Por inbox'
-                  : t === 'sla'
-                    ? 'SLA'
-                    : t === 'csat'
-                      ? 'Satisfação'
-                      : 'Base de conhecimento'}
+            {t(`reports.tab.${tabKey}`)}
           </button>
         ))}
       </div>
@@ -309,7 +299,7 @@ export default function ReportsPage() {
       {tab === 'overview' && (
         <>
           {overviewQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : overviewQ.data ? (
             <OverviewTab data={overviewQ.data} />
           ) : null}
@@ -319,7 +309,7 @@ export default function ReportsPage() {
       {tab === 'agents' && (
         <>
           {agentsQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : agentsQ.data ? (
             <AgentsTab rows={agentsQ.data.rows} />
           ) : null}
@@ -329,7 +319,7 @@ export default function ReportsPage() {
       {tab === 'inboxes' && (
         <>
           {inboxesQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : inboxesQ.data ? (
             <InboxesTab rows={inboxesQ.data.rows} />
           ) : null}
@@ -339,7 +329,7 @@ export default function ReportsPage() {
       {tab === 'sla' && (
         <>
           {slaQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : slaQ.data ? (
             <SlaTab data={slaQ.data} />
           ) : null}
@@ -349,7 +339,7 @@ export default function ReportsPage() {
       {tab === 'csat' && (
         <>
           {csatQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : csatQ.data ? (
             <CsatTab data={csatQ.data} />
           ) : null}
@@ -359,7 +349,7 @@ export default function ReportsPage() {
       {tab === 'kb' && (
         <>
           {kbQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : kbQ.data ? (
             <KbTab data={kbQ.data} />
           ) : null}
