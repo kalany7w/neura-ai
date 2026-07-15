@@ -100,15 +100,15 @@ export default function ContactsPage() {
     setSubmitting(true);
     try {
       await api('/api/contacts', { method: 'POST', body: JSON.stringify(values) });
-      toast.success('Contato criado');
+      toast.success(t('contacts.toast_created'));
       reset();
       setOpen(false);
       await qc.invalidateQueries({ queryKey: ['contacts'] });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'phone_taken') {
-        toast.error('Já existe contato com esse telefone');
+        toast.error(t('contacts.toast_phone_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro ao criar');
+        toast.error(err instanceof Error ? err.message : t('contacts.toast_create_error'));
       }
     } finally {
       setSubmitting(false);
@@ -127,23 +127,23 @@ export default function ContactsPage() {
         <div className="flex gap-2">
         <Button variant="outline" onClick={() => setImportOpen(true)}>
           <Upload className="h-4 w-4" />
-          Importar CSV
+          {t('contacts.import_csv')}
         </Button>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4" />
-              Novo contato
+              {t('contacts.new')}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Novo contato</DialogTitle>
-              <DialogDescription>Use formato E.164 (com código do país).</DialogDescription>
+              <DialogTitle>{t('contacts.new')}</DialogTitle>
+              <DialogDescription>{t('contacts.new_desc')}</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="phoneNumber">Telefone (E.164)</Label>
+                <Label htmlFor="phoneNumber">{t('contacts.phone_label')}</Label>
                 <Input
                   id="phoneNumber"
                   placeholder="+5511999999999"
@@ -154,11 +154,11 @@ export default function ContactsPage() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="name">Nome (opcional)</Label>
+                <Label htmlFor="name">{t('contacts.name_optional')}</Label>
                 <Input id="name" {...register('name')} />
               </div>
               <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? 'Criando...' : 'Criar'}
+                {submitting ? t('contacts.creating') : t('action.create')}
               </Button>
             </form>
           </DialogContent>
@@ -177,7 +177,7 @@ export default function ContactsPage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder="Buscar por nome ou telefone…"
+            placeholder={t('contacts.search_placeholder')}
             className="pl-8"
           />
         </div>
@@ -190,7 +190,7 @@ export default function ContactsPage() {
                 !labelId ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
               }`}
             >
-              Todas
+              {t('contacts.all_labels')}
             </button>
             {labelsData.labels.map((l) => (
               <button
@@ -211,9 +211,9 @@ export default function ContactsPage() {
 
       <div className="rounded-lg border bg-card divide-y">
         {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('action.loading')}</p>
         ) : !data?.items.length ? (
-          <p className="p-6 text-sm text-muted-foreground">Nenhum contato.</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('contacts.empty')}</p>
         ) : (
           <>
             {data.items.length > 0 && (
@@ -240,8 +240,8 @@ export default function ContactsPage() {
                 />
                 <span>
                   {selectedIds.size > 0
-                    ? `${selectedIds.size} selecionado(s)`
-                    : 'Selecionar página'}
+                    ? t('contacts.selected_count', { n: selectedIds.size })
+                    : t('contacts.select_page')}
                 </span>
               </div>
             )}
@@ -302,7 +302,7 @@ export default function ContactsPage() {
       {data && data.total > perPage && (
         <div className="flex items-center justify-between text-sm">
           <p className="text-muted-foreground">
-            {data.total} contatos · página {data.page} de {totalPages}
+            {t('contacts.pagination', { total: data.total, page: data.page, pages: totalPages })}
           </p>
           <div className="flex gap-2">
             <button
@@ -311,7 +311,7 @@ export default function ContactsPage() {
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               className="rounded border px-3 py-1 disabled:opacity-50"
             >
-              Anterior
+              {t('contacts.prev')}
             </button>
             <button
               type="button"
@@ -319,7 +319,7 @@ export default function ContactsPage() {
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="rounded border px-3 py-1 disabled:opacity-50"
             >
-              Próxima
+              {t('contacts.next')}
             </button>
           </div>
         </div>

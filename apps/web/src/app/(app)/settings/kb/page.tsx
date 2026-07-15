@@ -16,7 +16,7 @@ import {
   Send,
 } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, localeFor } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -70,10 +70,10 @@ interface Stats {
   withEmbedding: number;
 }
 
-const STATUS_LABEL: Record<ArticleStatus, string> = {
-  DRAFT: 'Rascunho',
-  PUBLISHED: 'Publicado',
-  ARCHIVED: 'Arquivado',
+const STATUS_KEY: Record<ArticleStatus, string> = {
+  DRAFT: 'settings_kb.status_draft',
+  PUBLISHED: 'settings_kb.status_published',
+  ARCHIVED: 'settings_kb.status_archived',
 };
 
 const STATUS_COLOR: Record<ArticleStatus, string> = {
@@ -85,7 +85,7 @@ const STATUS_COLOR: Record<ArticleStatus, string> = {
 export default function KbPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [selectedCategory, setSelectedCategory] = useState<string | 'all' | 'uncategorized'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | ArticleStatus>('all');
   const [q, setQ] = useState('');
@@ -129,84 +129,89 @@ export default function KbPage() {
     const count = cat._count?.articles ?? 0;
     const desc =
       count > 0
-        ? `${count} artigo${count > 1 ? 's' : ''} ficará${count > 1 ? 'o' : ''} sem categoria.`
-        : 'Categoria sem artigos.';
+        ? t(
+            count > 1
+              ? 'settings_kb.category_articles_will_lose_many'
+              : 'settings_kb.category_articles_will_lose_one',
+            { n: count },
+          )
+        : t('settings_kb.category_no_articles');
     if (
       !(await confirm({
-        title: `Remover "${cat.name}"?`,
+        title: t('settings_kb.remove_category_confirm', { name: cat.name }),
         description: desc,
-        confirmLabel: 'Remover',
+        confirmLabel: t('settings_kb.remove'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/kb/categories/${cat.id}`, { method: 'DELETE' });
-      toast.success('Categoria removida');
+      toast.success(t('settings_kb.category_removed'));
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['kb-categories'] }),
         qc.invalidateQueries({ queryKey: ['kb-articles'] }),
       ]);
       if (selectedCategory === cat.id) setSelectedCategory('all');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function archiveArticle(a: ArticleListItem) {
     try {
       await api(`/api/kb/articles/${a.id}/archive`, { method: 'POST' });
-      toast.success('Artigo arquivado');
+      toast.success(t('settings_kb.article_archived'));
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['kb-articles'] }),
         qc.invalidateQueries({ queryKey: ['kb-stats'] }),
       ]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function publishArticle(a: ArticleListItem) {
     try {
       await api(`/api/kb/articles/${a.id}/publish`, { method: 'POST' });
-      toast.success('Publicado — embedding em fila');
+      toast.success(t('settings_kb.published_embedding_queued'));
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['kb-articles'] }),
         qc.invalidateQueries({ queryKey: ['kb-stats'] }),
       ]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function reembedArticle(a: ArticleListItem) {
     try {
       await api(`/api/kb/articles/${a.id}/reembed`, { method: 'POST' });
-      toast.success('Re-embedding em fila');
+      toast.success(t('settings_kb.reembed_queued'));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function removeArticle(a: ArticleListItem) {
     if (
       !(await confirm({
-        title: `Excluir "${a.title}"?`,
-        description: 'Esta ação não pode ser desfeita.',
-        confirmLabel: 'Excluir',
+        title: t('settings_kb.delete_article_confirm', { title: a.title }),
+        description: t('settings_kb.action_irreversible'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/kb/articles/${a.id}`, { method: 'DELETE' });
-      toast.success('Excluído');
+      toast.success(t('settings_kb.deleted'));
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['kb-articles'] }),
         qc.invalidateQueries({ queryKey: ['kb-stats'] }),
       ]);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -235,23 +240,23 @@ export default function KbPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setCatDialogOpen(true)}>
             <Folder className="mr-2 h-4 w-4" />
-            Categorias
+            {t('settings_kb.categories')}
           </Button>
           <Button onClick={openNewArticle}>
             <Plus className="mr-2 h-4 w-4" />
-            Novo artigo
+            {t('settings_kb.new_article')}
           </Button>
         </div>
       </div>
 
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <StatCard label="Total" value={stats.total} />
-          <StatCard label="Publicados" value={stats.published} accent="emerald" />
-          <StatCard label="Rascunhos" value={stats.drafts} accent="amber" />
-          <StatCard label="Arquivados" value={stats.archived} />
+          <StatCard label={t('settings_kb.stat_total')} value={stats.total} />
+          <StatCard label={t('settings_kb.stat_published')} value={stats.published} accent="emerald" />
+          <StatCard label={t('settings_kb.stat_drafts')} value={stats.drafts} accent="amber" />
+          <StatCard label={t('settings_kb.stat_archived')} value={stats.archived} />
           <StatCard
-            label="Com embedding"
+            label={t('settings_kb.stat_with_embedding')}
             value={stats.withEmbedding}
             sub={
               stats.published > 0
@@ -267,13 +272,13 @@ export default function KbPage() {
         {/* Sidebar de categorias */}
         <aside className="space-y-1">
           <SidebarItem
-            label="Todas"
+            label={t('settings_kb.filter_all')}
             count={stats?.total ?? 0}
             active={selectedCategory === 'all'}
             onClick={() => setSelectedCategory('all')}
           />
           <SidebarItem
-            label="Sem categoria"
+            label={t('settings_kb.uncategorized')}
             active={selectedCategory === 'uncategorized'}
             onClick={() => setSelectedCategory('uncategorized')}
             muted
@@ -291,7 +296,7 @@ export default function KbPage() {
               <button
                 onClick={() => removeCategory(c)}
                 className="absolute right-1 top-1.5 hidden rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive group-hover:block"
-                title="Excluir categoria"
+                title={t('settings_kb.delete_category')}
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -299,7 +304,7 @@ export default function KbPage() {
           ))}
           {catsQ.data?.categories.length === 0 && (
             <p className="px-2 text-[11px] text-muted-foreground">
-              Sem categorias. Use o botão acima pra criar.
+              {t('settings_kb.no_categories_hint')}
             </p>
           )}
         </aside>
@@ -310,7 +315,7 @@ export default function KbPage() {
             <div className="relative min-w-[200px] flex-1">
               <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por título ou conteúdo…"
+                placeholder={t('settings_kb.search_placeholder')}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 className="pl-8"
@@ -328,29 +333,31 @@ export default function KbPage() {
                       : 'text-muted-foreground hover:bg-accent/50'
                   }`}
                 >
-                  {s === 'all' ? 'Todos' : STATUS_LABEL[s]}
+                  {s === 'all' ? t('settings_kb.status_all') : t(STATUS_KEY[s])}
                 </button>
               ))}
             </div>
           </div>
 
           {articlesQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : filteredArticles.length === 0 ? (
             <div className="rounded-lg border-2 border-dashed py-12 text-center">
               <BookOpen className="mx-auto h-10 w-10 text-muted-foreground/40" />
-              <p className="mt-3 font-medium">Nenhum artigo</p>
+              <p className="mt-3 font-medium">{t('settings_kb.no_articles')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {q
-                  ? 'Tente outra busca.'
+                  ? t('settings_kb.try_other_search')
                   : statusFilter === 'all'
-                    ? 'Crie o primeiro artigo da base.'
-                    : `Nenhum artigo ${STATUS_LABEL[statusFilter as ArticleStatus].toLowerCase()}.`}
+                    ? t('settings_kb.create_first')
+                    : t('settings_kb.no_articles_status', {
+                        status: t(STATUS_KEY[statusFilter as ArticleStatus]).toLowerCase(),
+                      })}
               </p>
               {!q && statusFilter === 'all' && (
                 <Button onClick={openNewArticle} className="mt-4">
                   <Plus className="mr-2 h-4 w-4" />
-                  Criar artigo
+                  {t('settings_kb.create_article')}
                 </Button>
               )}
             </div>
@@ -373,20 +380,22 @@ export default function KbPage() {
                           <span
                             className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_COLOR[a.status]}`}
                           >
-                            {STATUS_LABEL[a.status]}
+                            {t(STATUS_KEY[a.status])}
                           </span>
                           {a.status === 'PUBLISHED' && a.embeddingUpdatedAt && (
                             <span
-                              title={`Embedding gerado em ${new Date(a.embeddingUpdatedAt).toLocaleString('pt-BR')}`}
+                              title={t('settings_kb.embedding_generated_at', {
+                                date: new Date(a.embeddingUpdatedAt).toLocaleString(localeFor(lang)),
+                              })}
                               className="inline-flex items-center gap-0.5 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300"
                             >
                               <Sparkles className="h-2.5 w-2.5" />
-                              IA pronta
+                              {t('settings_kb.ai_ready')}
                             </span>
                           )}
                           {a.status === 'PUBLISHED' && !a.embeddingUpdatedAt && (
                             <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                              embedding pendente
+                              {t('settings_kb.embedding_pending')}
                             </span>
                           )}
                         </div>
@@ -396,8 +405,14 @@ export default function KbPage() {
                           </p>
                         )}
                         <p className="mt-1 text-[10px] text-muted-foreground">
-                          Atualizado {new Date(a.updatedAt).toLocaleString('pt-BR')}
-                          {a.viewCount > 0 && ` · ${a.viewCount} visualização${a.viewCount > 1 ? 'es' : ''}`}
+                          {t('settings_kb.updated', {
+                            date: new Date(a.updatedAt).toLocaleString(localeFor(lang)),
+                          })}
+                          {a.viewCount > 0 &&
+                            ` · ${t(
+                              a.viewCount > 1 ? 'settings_kb.views_many' : 'settings_kb.views_one',
+                              { n: a.viewCount },
+                            )}`}
                         </p>
                       </div>
                     </button>
@@ -407,7 +422,7 @@ export default function KbPage() {
                           size="icon"
                           variant="ghost"
                           onClick={() => publishArticle(a)}
-                          title="Publicar"
+                          title={t('settings_kb.publish')}
                         >
                           <Send className="h-4 w-4" />
                         </Button>
@@ -417,7 +432,7 @@ export default function KbPage() {
                           size="icon"
                           variant="ghost"
                           onClick={() => reembedArticle(a)}
-                          title="Re-gerar embedding"
+                          title={t('settings_kb.reembed')}
                         >
                           <RotateCw className="h-4 w-4" />
                         </Button>
@@ -427,7 +442,7 @@ export default function KbPage() {
                           size="icon"
                           variant="ghost"
                           onClick={() => archiveArticle(a)}
-                          title="Arquivar"
+                          title={t('settings_kb.archive')}
                         >
                           <Archive className="h-4 w-4" />
                         </Button>
@@ -436,7 +451,7 @@ export default function KbPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => removeArticle(a)}
-                        title="Excluir"
+                        title={t('action.delete')}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -556,6 +571,7 @@ function ArticleEditorDialog({
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
+  const { t } = useT();
   const detailQ = useQuery<{ article: ArticleDetail }>({
     queryKey: ['kb-article', articleId],
     queryFn: () => api(`/api/kb/articles/${articleId}`),
@@ -589,11 +605,11 @@ function ArticleEditorDialog({
 
   async function save() {
     if (!title.trim()) {
-      toast.error('Título obrigatório');
+      toast.error(t('settings_kb.title_required'));
       return;
     }
     if (!body.trim()) {
-      toast.error('Conteúdo obrigatório');
+      toast.error(t('settings_kb.body_required'));
       return;
     }
     setSubmitting(true);
@@ -609,21 +625,25 @@ function ArticleEditorDialog({
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        toast.success('Artigo atualizado');
+        toast.success(t('settings_kb.article_updated'));
       } else {
         await api('/api/kb/articles', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        toast.success(status === 'PUBLISHED' ? 'Publicado — embedding em fila' : 'Rascunho salvo');
+        toast.success(
+          status === 'PUBLISHED'
+            ? t('settings_kb.published_embedding_queued')
+            : t('settings_kb.draft_saved'),
+        );
       }
       await onSaved();
       onClose();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'category_not_found') {
-        toast.error('Categoria inválida');
+        toast.error(t('settings_kb.invalid_category'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -639,37 +659,36 @@ function ArticleEditorDialog({
     >
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{articleId ? 'Editar artigo' : 'Novo artigo'}</DialogTitle>
-          <DialogDescription>
-            Use Markdown no conteúdo. Quando publicar, o artigo é indexado por IA pra busca
-            semântica.
-          </DialogDescription>
+          <DialogTitle>
+            {articleId ? t('settings_kb.edit_article') : t('settings_kb.new_article')}
+          </DialogTitle>
+          <DialogDescription>{t('settings_kb.editor_description')}</DialogDescription>
         </DialogHeader>
 
         {articleId && detailQ.isLoading ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Carregando…</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">{t('action.loading')}</p>
         ) : (
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="kb-title">Título</Label>
+              <Label htmlFor="kb-title">{t('settings_kb.title_label')}</Label>
               <Input
                 id="kb-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Como configurar o webhook X"
+                placeholder={t('settings_kb.title_placeholder')}
               />
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="kb-category">Categoria</Label>
+                <Label htmlFor="kb-category">{t('settings_kb.category_label')}</Label>
                 <select
                   id="kb-category"
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="">— Sem categoria —</option>
+                  <option value="">{t('settings_kb.no_category_option')}</option>
                   {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
@@ -678,25 +697,25 @@ function ArticleEditorDialog({
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="kb-status">Status</Label>
+                <Label htmlFor="kb-status">{t('common.status')}</Label>
                 <select
                   id="kb-status"
                   value={status}
                   onChange={(e) => setStatus(e.target.value as ArticleStatus)}
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  <option value="DRAFT">Rascunho — não aparece na busca</option>
-                  <option value="PUBLISHED">Publicado — agentes encontram via busca IA</option>
-                  <option value="ARCHIVED">Arquivado — escondido</option>
+                  <option value="DRAFT">{t('settings_kb.status_draft_option')}</option>
+                  <option value="PUBLISHED">{t('settings_kb.status_published_option')}</option>
+                  <option value="ARCHIVED">{t('settings_kb.status_archived_option')}</option>
                 </select>
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-end justify-between">
-                <Label htmlFor="kb-body">Conteúdo (Markdown)</Label>
+                <Label htmlFor="kb-body">{t('settings_kb.body_label')}</Label>
                 <p className="text-[10px] text-muted-foreground">
-                  {body.length}/50000 caracteres
+                  {t('settings_kb.char_count', { n: body.length })}
                 </p>
               </div>
               <textarea
@@ -704,7 +723,7 @@ function ArticleEditorDialog({
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
                 rows={14}
-                placeholder={`# Passo a passo\n\n1. Acesse...\n2. Clique em...\n3. Cole o token gerado.\n\n**Dica:** use o link abaixo se precisar de ajuda.`}
+                placeholder={t('settings_kb.body_placeholder')}
                 className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm resize-y"
               />
             </div>
@@ -713,16 +732,16 @@ function ArticleEditorDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancelar
+            {t('action.cancel')}
           </Button>
           <Button onClick={save} disabled={submitting}>
             {submitting
-              ? 'Salvando…'
+              ? t('action.saving')
               : articleId
-                ? 'Salvar alterações'
+                ? t('settings_kb.save_changes')
                 : status === 'PUBLISHED'
-                  ? 'Criar e publicar'
-                  : 'Salvar rascunho'}
+                  ? t('settings_kb.create_and_publish')
+                  : t('settings_kb.save_draft')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -745,13 +764,14 @@ function CategoriesDialog({
   categories: Category[];
   onChanged: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#6366f1');
   const [submitting, setSubmitting] = useState(false);
 
   async function create() {
     if (!name.trim()) {
-      toast.error('Nome obrigatório');
+      toast.error(t('settings_kb.name_required'));
       return;
     }
     setSubmitting(true);
@@ -760,15 +780,15 @@ function CategoriesDialog({
         method: 'POST',
         body: JSON.stringify({ name: name.trim(), color }),
       });
-      toast.success('Categoria criada');
+      toast.success(t('settings_kb.category_created'));
       setName('');
       setColor('#6366f1');
       onChanged();
     } catch (err) {
       if (err instanceof ApiError && err.code === 'name_taken') {
-        toast.error('Já existe categoria com esse nome');
+        toast.error(t('settings_kb.name_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -779,21 +799,19 @@ function CategoriesDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Categorias da base</DialogTitle>
-          <DialogDescription>
-            Agrupe artigos por tema. Excluir uma categoria deixa os artigos sem agrupamento.
-          </DialogDescription>
+          <DialogTitle>{t('settings_kb.categories_dialog_title')}</DialogTitle>
+          <DialogDescription>{t('settings_kb.categories_dialog_description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 rounded-md border bg-muted/30 p-3">
           <Label className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            Nova categoria
+            {t('settings_kb.new_category')}
           </Label>
           <div className="flex gap-2">
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Onboarding"
+              placeholder={t('settings_kb.category_name_placeholder')}
               className="flex-1"
             />
             <input
@@ -801,17 +819,19 @@ function CategoriesDialog({
               value={color}
               onChange={(e) => setColor(e.target.value)}
               className="h-9 w-12 cursor-pointer rounded-md border bg-background"
-              title="Cor"
+              title={t('settings_kb.color')}
             />
             <Button onClick={create} disabled={submitting}>
-              {submitting ? '…' : 'Adicionar'}
+              {submitting ? '…' : t('action.add')}
             </Button>
           </div>
         </div>
 
         <div className="max-h-[300px] space-y-1 overflow-y-auto">
           {categories.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">Sem categorias.</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">
+              {t('settings_kb.no_categories')}
+            </p>
           ) : (
             categories.map((c) => (
               <div
@@ -822,7 +842,7 @@ function CategoriesDialog({
                   <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.color }} />
                   <span className="truncate text-sm">{c.name}</span>
                   <span className="text-[10px] text-muted-foreground">
-                    {c._count?.articles ?? 0} artigos
+                    {t('settings_kb.articles_count', { n: c._count?.articles ?? 0 })}
                   </span>
                 </div>
               </div>
@@ -832,7 +852,7 @@ function CategoriesDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Fechar
+            {t('action.close')}
           </Button>
         </DialogFooter>
       </DialogContent>

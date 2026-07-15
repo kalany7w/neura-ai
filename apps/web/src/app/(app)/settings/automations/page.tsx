@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, localeFor, type Lang } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,29 +113,27 @@ interface Template {
 }
 
 const TRIGGER_LABEL: Record<string, string> = {
-  'conversation.created': 'Conversa criada',
-  'message.new': 'Mensagem nova recebida',
-  'card.moved': 'Card movido no kanban',
-  'card.created': 'Card criado',
-  'conversation.assigned': 'Conversa atribuída',
-  'conversation.status_changed': 'Status da conversa mudou',
-  'time.no_response': 'Sem resposta há X horas',
-  'time.after_created': 'Conversa criada há X horas',
-  manual: 'Manual (botão no chat)',
+  'conversation.created': 'settings_automations.trigger_label.conversation_created',
+  'message.new': 'settings_automations.trigger_label.message_new',
+  'card.moved': 'settings_automations.trigger_label.card_moved',
+  'card.created': 'settings_automations.trigger_label.card_created',
+  'conversation.assigned': 'settings_automations.trigger_label.conversation_assigned',
+  'conversation.status_changed': 'settings_automations.trigger_label.conversation_status_changed',
+  'time.no_response': 'settings_automations.trigger_label.time_no_response',
+  'time.after_created': 'settings_automations.trigger_label.time_after_created',
+  manual: 'settings_automations.trigger_label.manual',
 };
 
 const TRIGGER_HINT: Record<string, string> = {
-  'conversation.created': 'Quando uma nova conversa começa em uma inbox',
-  'message.new': 'A cada mensagem nova (inbound ou outbound)',
-  'card.moved': 'Quando um card muda de stage no kanban',
-  'card.created': 'Quando um card é criado (manual ou auto)',
-  'conversation.assigned': 'Quando agente é atribuído (ou removido)',
-  'conversation.status_changed': 'Quando status muda (Aberta/Pendente/Resolvida/Adiada)',
-  'time.no_response':
-    'Cliente mandou msg e ninguém respondeu há ≥ X horas. Dispara 1× por conversa.',
-  'time.after_created':
-    'Conversa criada há ≥ X horas, ainda OPEN/PENDING. Dispara 1× por conversa.',
-  manual: 'Macro só dispara quando agente clica no botão da conversa',
+  'conversation.created': 'settings_automations.trigger_hint.conversation_created',
+  'message.new': 'settings_automations.trigger_hint.message_new',
+  'card.moved': 'settings_automations.trigger_hint.card_moved',
+  'card.created': 'settings_automations.trigger_hint.card_created',
+  'conversation.assigned': 'settings_automations.trigger_hint.conversation_assigned',
+  'conversation.status_changed': 'settings_automations.trigger_hint.conversation_status_changed',
+  'time.no_response': 'settings_automations.trigger_hint.time_no_response',
+  'time.after_created': 'settings_automations.trigger_hint.time_after_created',
+  manual: 'settings_automations.trigger_hint.manual',
 };
 
 const AUTO_TRIGGERS = [
@@ -153,48 +151,48 @@ const TIME_TRIGGERS = new Set(['time.no_response', 'time.after_created']);
 
 const FIELDS_BY_TRIGGER: Record<string, Array<{ value: string; label: string }>> = {
   'message.new': [
-    { value: 'message.content', label: 'Texto da mensagem' },
-    { value: 'message.type', label: 'Tipo (TEXT/IMAGE/VIDEO/AUDIO/DOCUMENT)' },
-    { value: 'message.direction', label: 'Direção (INBOUND/OUTBOUND)' },
-    { value: 'conversationId', label: 'ID da conversa' },
+    { value: 'message.content', label: 'settings_automations.field.message_content' },
+    { value: 'message.type', label: 'settings_automations.field.message_type' },
+    { value: 'message.direction', label: 'settings_automations.field.message_direction' },
+    { value: 'conversationId', label: 'settings_automations.field.conversation_id' },
   ],
   'conversation.created': [
-    { value: 'inboxId', label: 'ID da inbox' },
-    { value: 'contactId', label: 'ID do contato' },
+    { value: 'inboxId', label: 'settings_automations.field.inbox_id' },
+    { value: 'contactId', label: 'settings_automations.field.contact_id' },
   ],
   'card.moved': [
-    { value: 'stageId', label: 'Stage destino' },
-    { value: 'cardId', label: 'ID do card' },
+    { value: 'stageId', label: 'settings_automations.field.stage_dest' },
+    { value: 'cardId', label: 'settings_automations.field.card_id' },
   ],
-  'card.created': [{ value: 'cardId', label: 'ID do card' }],
+  'card.created': [{ value: 'cardId', label: 'settings_automations.field.card_id' }],
   'conversation.assigned': [
-    { value: 'assignedAgentId', label: 'Agente atribuído' },
-    { value: 'previousAgentId', label: 'Agente anterior' },
+    { value: 'assignedAgentId', label: 'settings_automations.field.assigned_agent' },
+    { value: 'previousAgentId', label: 'settings_automations.field.previous_agent' },
   ],
   'conversation.status_changed': [
-    { value: 'status', label: 'Novo status' },
-    { value: 'previousStatus', label: 'Status anterior' },
+    { value: 'status', label: 'settings_automations.field.new_status' },
+    { value: 'previousStatus', label: 'settings_automations.field.previous_status' },
   ],
 };
 
 const OP_LABEL: Record<ConditionOp, string> = {
-  equals: 'igual a',
-  contains: 'contém',
-  not_contains: 'não contém',
-  starts_with: 'começa com',
-  in: 'está em (vírgula)',
-  not_in: 'não está em (vírgula)',
+  equals: 'settings_automations.op.equals',
+  contains: 'settings_automations.op.contains',
+  not_contains: 'settings_automations.op.not_contains',
+  starts_with: 'settings_automations.op.starts_with',
+  in: 'settings_automations.op.in',
+  not_in: 'settings_automations.op.not_in',
 };
 
 const ACTION_KIND_LABEL: Record<ActionKind, string> = {
-  assign_agent: 'Atribuir agente',
-  set_status: 'Mudar status',
-  apply_label: 'Aplicar etiqueta',
-  send_template: 'Enviar template',
-  send_message: 'Enviar mensagem',
-  move_card: 'Mover card no kanban',
-  wait: 'Esperar (segundos)',
-  set_card_value: 'Definir valor do card',
+  assign_agent: 'settings_automations.action_kind.assign_agent',
+  set_status: 'settings_automations.action_kind.set_status',
+  apply_label: 'settings_automations.action_kind.apply_label',
+  send_template: 'settings_automations.action_kind.send_template',
+  send_message: 'settings_automations.action_kind.send_message',
+  move_card: 'settings_automations.action_kind.move_card',
+  wait: 'settings_automations.action_kind.wait',
+  set_card_value: 'settings_automations.action_kind.set_card_value',
 };
 
 const ACTION_KIND_ICON: Record<ActionKind, React.ComponentType<{ className?: string }>> = {
@@ -211,7 +209,7 @@ const ACTION_KIND_ICON: Record<ActionKind, React.ComponentType<{ className?: str
 export default function AutomationsPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Rule | null>(null);
   const [runsRule, setRunsRule] = useState<Rule | null>(null);
@@ -232,10 +230,9 @@ export default function AutomationsPage() {
     if (
       next &&
       !(await confirm({
-        title: 'Pausar todas as automações?',
-        description:
-          'Nenhuma regra dispara enquanto pausado. Mensagens, atribuições e ações automáticas ficam inertes até retomar.',
-        confirmLabel: 'Pausar',
+        title: t('settings_automations.pause_confirm_title'),
+        description: t('settings_automations.pause_confirm_desc'),
+        confirmLabel: t('settings_automations.pause'),
         destructive: true,
       }))
     )
@@ -245,10 +242,14 @@ export default function AutomationsPage() {
         method: 'PATCH',
         body: JSON.stringify({ paused: next }),
       });
-      toast.success(next ? 'Automações pausadas' : 'Automações retomadas');
+      toast.success(
+        next
+          ? t('settings_automations.status.paused')
+          : t('settings_automations.toast.resumed'),
+      );
       await qc.invalidateQueries({ queryKey: ['automations', 'settings'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -258,28 +259,32 @@ export default function AutomationsPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !rule.enabled }),
       });
-      toast.success(rule.enabled ? 'Desativada' : 'Ativada');
+      toast.success(
+        rule.enabled
+          ? t('settings_automations.deactivated')
+          : t('settings_automations.activated'),
+      );
       await qc.invalidateQueries({ queryKey: ['automations'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove(rule: Rule) {
     if (
       !(await confirm({
-        title: `Excluir regra "${rule.name}"?`,
-        confirmLabel: 'Excluir',
+        title: t('settings_automations.delete_confirm_title', { name: rule.name }),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/automations/${rule.id}`, { method: 'DELETE' });
-      toast.success('Regra excluída');
+      toast.success(t('settings_automations.toast.deleted'));
       await qc.invalidateQueries({ queryKey: ['automations'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -295,7 +300,7 @@ export default function AutomationsPage() {
         </div>
         <Button onClick={() => setCreateOpen(true)} disabled={settings?.paused}>
           <Plus className="h-4 w-4" />
-          Nova regra
+          {t('settings_automations.new_rule')}
         </Button>
       </div>
 
@@ -309,16 +314,18 @@ export default function AutomationsPage() {
         >
           <div className="flex-1">
             <p className="text-sm font-medium">
-              {settings.paused ? 'Automações pausadas' : 'Automações ativas'}
+              {settings.paused
+                ? t('settings_automations.status.paused')
+                : t('settings_automations.status.active')}
             </p>
             <p className="text-xs text-muted-foreground">
               {settings.paused
-                ? `Nenhuma regra dispara desde ${
-                    settings.pausedAt
-                      ? new Date(settings.pausedAt).toLocaleString('pt-BR')
-                      : 'há pouco'
-                  }. Útil pra manutenção, migração ou debug.`
-                : 'Todas as regras com switch ligado disparam normalmente.'}
+                ? t('settings_automations.paused_since', {
+                    date: settings.pausedAt
+                      ? new Date(settings.pausedAt).toLocaleString(localeFor(lang))
+                      : t('settings_automations.a_moment_ago'),
+                  })
+                : t('settings_automations.all_rules_fire')}
             </p>
           </div>
           <button
@@ -327,7 +334,11 @@ export default function AutomationsPage() {
             className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${
               settings.paused ? 'bg-amber-500' : 'bg-emerald-500'
             }`}
-            aria-label={settings.paused ? 'Retomar automações' : 'Pausar automações'}
+            aria-label={
+              settings.paused
+                ? t('settings_automations.resume_aria')
+                : t('settings_automations.pause_aria')
+            }
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition ${
@@ -339,18 +350,17 @@ export default function AutomationsPage() {
       )}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.rules.length ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-12 text-center">
           <Bot className="mx-auto h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">Nenhuma regra ainda</h3>
+          <h3 className="mt-3 font-semibold">{t('settings_automations.empty.title')}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Crie uma regra para automatizar tarefas repetitivas — atribuir agente em conversa nova,
-            aplicar etiqueta quando palavra-chave aparece, responder automaticamente…
+            {t('settings_automations.empty.desc')}
           </p>
           <Button className="mt-4" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
-            Criar primeira regra
+            {t('settings_automations.empty.create_first')}
           </Button>
         </div>
       ) : (
@@ -401,6 +411,7 @@ function RuleRow({
   onRemove: (r: Rule) => void;
   onShowRuns: () => void;
 }) {
+  const { t, lang } = useT();
   return (
     <div className={`rounded-lg border bg-card p-4 ${!rule.enabled ? 'opacity-60' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -410,12 +421,12 @@ function RuleRow({
             {rule.kind === 'macro' ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300">
                 <Wand2 className="h-2.5 w-2.5" />
-                Macro manual
+                {t('settings_automations.badge.macro_manual')}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                 <Zap className="h-2.5 w-2.5" />
-                {TRIGGER_LABEL[rule.trigger] ?? rule.trigger}
+                {t(TRIGGER_LABEL[rule.trigger] ?? rule.trigger)}
                 {rule.triggerConfig?.hoursThreshold && (
                   <span className="ml-1 opacity-70">
                     ({rule.triggerConfig.hoursThreshold}h)
@@ -425,7 +436,7 @@ function RuleRow({
             )}
             {!rule.enabled && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                Desativada
+                {t('settings_automations.deactivated')}
               </span>
             )}
           </div>
@@ -434,24 +445,25 @@ function RuleRow({
           )}
           <p className="mt-2 text-xs text-muted-foreground">
             {rule.conditions.length === 0
-              ? 'Sem condições — sempre dispara.'
-              : `${rule.conditions.length} condição(ões)`}
+              ? t('settings_automations.rule.no_conditions')
+              : t('settings_automations.rule.conditions_count', { n: rule.conditions.length })}
             {' · '}
-            {rule.actions.length} ação(ões){' · '}
-            executada {rule.runCount}x
+            {t('settings_automations.rule.actions_count', { n: rule.actions.length })}
+            {' · '}
+            {t('settings_automations.rule.executed_count', { n: rule.runCount })}
             {rule.lastFiredAt && (
               <>
                 {' · '}
                 <span className="inline-flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {new Date(rule.lastFiredAt).toLocaleString('pt-BR')}
+                  {new Date(rule.lastFiredAt).toLocaleString(localeFor(lang))}
                 </span>
               </>
             )}
           </p>
           {rule.lastError && (
             <p className="mt-1 text-xs text-destructive">
-              Último erro: {rule.lastError}
+              {t('settings_automations.rule.last_error', { error: rule.lastError })}
             </p>
           )}
         </div>
@@ -460,27 +472,27 @@ function RuleRow({
             size="sm"
             variant="ghost"
             onClick={onShowRuns}
-            title="Ver execuções"
+            title={t('settings_automations.view_runs')}
           >
             <History className="h-4 w-4" />
-            <span className="hidden sm:inline">Execuções</span>
+            <span className="hidden sm:inline">{t('settings_automations.runs_button')}</span>
           </Button>
           <Button
             size="icon"
             variant="ghost"
             onClick={() => onToggle(rule)}
-            title={rule.enabled ? 'Desativar' : 'Ativar'}
+            title={rule.enabled ? t('settings_automations.deactivate') : t('settings_automations.activate')}
           >
             <Power className={rule.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'} />
           </Button>
-          <Button size="icon" variant="ghost" onClick={onEdit} title="Editar">
+          <Button size="icon" variant="ghost" onClick={onEdit} title={t('action.edit')}>
             <Pencil className="h-4 w-4" />
           </Button>
           <Button
             size="icon"
             variant="ghost"
             onClick={() => onRemove(rule)}
-            title="Excluir"
+            title={t('action.delete')}
             className="text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
@@ -503,6 +515,7 @@ function RuleFormDialog({
   editing?: Rule | null;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -638,18 +651,18 @@ function RuleFormDialog({
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
-        toast.success('Regra atualizada');
+        toast.success(t('settings_automations.toast.updated'));
       } else {
         await api('/api/automations', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
-        toast.success('Regra criada');
+        toast.success(t('settings_automations.toast.created'));
       }
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['automations'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
+      toast.error(err instanceof Error ? err.message : t('settings_automations.toast.save_error'));
     } finally {
       setSubmitting(false);
     }
@@ -659,22 +672,23 @@ function RuleFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Editar regra' : 'Nova regra de automação'}</DialogTitle>
-          <DialogDescription>
-            Quando o gatilho dispara, as condições são avaliadas (todas em AND). Se passarem, as
-            ações rodam na ordem.
-          </DialogDescription>
+          <DialogTitle>
+            {editing
+              ? t('settings_automations.form.edit_title')
+              : t('settings_automations.form.new_title')}
+          </DialogTitle>
+          <DialogDescription>{t('settings_automations.form.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="rule-name">Nome</Label>
+              <Label htmlFor="rule-name">{t('common.name')}</Label>
               <Input
                 id="rule-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Atribuir suporte em conversa nova"
+                placeholder={t('settings_automations.form.name_placeholder')}
                 maxLength={120}
               />
             </div>
@@ -685,25 +699,25 @@ function RuleFormDialog({
                   checked={enabled}
                   onChange={(e) => setEnabled(e.target.checked)}
                 />
-                Ativada
+                {t('settings_automations.activated')}
               </Label>
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="rule-desc">Descrição (opcional)</Label>
+            <Label htmlFor="rule-desc">{t('settings_automations.form.description_label')}</Label>
             <Input
               id="rule-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="O que essa regra faz"
+              placeholder={t('settings_automations.form.description_placeholder')}
               maxLength={500}
             />
           </div>
 
           {/* Tipo: automação automática ou macro manual */}
           <div className="space-y-2">
-            <Label>Tipo</Label>
+            <Label>{t('settings_automations.form.type')}</Label>
             <div className="grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -716,10 +730,10 @@ function RuleFormDialog({
               >
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Zap className="h-4 w-4 text-amber-500" />
-                  Automação (dispara sozinha)
+                  {t('settings_automations.form.type_auto')}
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Roda quando o gatilho acontece — evento ou tempo.
+                  {t('settings_automations.form.type_auto_desc')}
                 </p>
               </button>
               <button
@@ -733,10 +747,10 @@ function RuleFormDialog({
               >
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Wand2 className="h-4 w-4 text-indigo-500" />
-                  Macro (manual no chat)
+                  {t('settings_automations.form.type_macro')}
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Aparece como botão no header da conversa — agente aplica em 1 click.
+                  {t('settings_automations.form.type_macro_desc')}
                 </p>
               </button>
             </div>
@@ -744,7 +758,7 @@ function RuleFormDialog({
 
           {kind === 'auto' && (
             <div className="space-y-2">
-              <Label htmlFor="rule-trigger">Gatilho</Label>
+              <Label htmlFor="rule-trigger">{t('settings_automations.form.trigger')}</Label>
               <select
                 id="rule-trigger"
                 value={trigger}
@@ -754,17 +768,19 @@ function RuleFormDialog({
                 }}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                {AUTO_TRIGGERS.map((t) => (
-                  <option key={t} value={t}>
-                    {TRIGGER_LABEL[t] ?? t}
+                {AUTO_TRIGGERS.map((trig) => (
+                  <option key={trig} value={trig}>
+                    {TRIGGER_LABEL[trig] ? t(TRIGGER_LABEL[trig]) : trig}
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-muted-foreground">{TRIGGER_HINT[trigger] ?? ''}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {TRIGGER_HINT[trigger] ? t(TRIGGER_HINT[trigger]) : ''}
+              </p>
               {TIME_TRIGGERS.has(trigger) && (
                 <div className="rounded-md border bg-amber-50/50 p-3 dark:bg-amber-950/20">
                   <Label htmlFor="hours-threshold" className="text-xs">
-                    Horas até disparar
+                    {t('settings_automations.form.hours_label')}
                   </Label>
                   <div className="mt-1 flex items-center gap-2">
                     <Input
@@ -778,11 +794,11 @@ function RuleFormDialog({
                       className="w-32"
                     />
                     <span className="text-xs text-muted-foreground">
-                      horas (min 0.1, max 672 = 4 semanas)
+                      {t('settings_automations.form.hours_hint')}
                     </span>
                   </div>
                   <p className="mt-1 text-[10px] text-muted-foreground">
-                    Scheduler varre a cada 5min. Dispara 1× por conversa.
+                    {t('settings_automations.form.scheduler_hint')}
                   </p>
                 </div>
               )}
@@ -792,8 +808,9 @@ function RuleFormDialog({
           {kind === 'macro' && (
             <div className="rounded-md border bg-indigo-50/50 p-3 dark:bg-indigo-950/20 text-xs text-muted-foreground">
               <Wand2 className="inline h-3 w-3 mr-1 text-indigo-500" />
-              Macro só dispara quando o agente clica no botão da conversa. Pula condições.
-              Aparece no dropdown <strong>Macros</strong> do header /inbox.
+              {t('settings_automations.form.macro_hint_before')}
+              <strong>{t('settings_automations.form.macro_word')}</strong>
+              {t('settings_automations.form.macro_hint_after')}
             </div>
           )}
 
@@ -801,16 +818,16 @@ function RuleFormDialog({
           <section className="space-y-2 rounded-lg border bg-muted/20 p-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Condições ({conditions.length})
+                {t('settings_automations.form.conditions_heading', { n: conditions.length })}
               </h3>
               <Button size="sm" variant="outline" onClick={addCondition}>
                 <Plus className="h-3.5 w-3.5" />
-                Adicionar
+                {t('action.add')}
               </Button>
             </div>
             {conditions.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Sem condições — a regra dispara em todo evento.
+                {t('settings_automations.form.no_conditions')}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -825,7 +842,7 @@ function RuleFormDialog({
                       >
                         {fieldOpts.map((f) => (
                           <option key={f.value} value={f.value}>
-                            {f.label}
+                            {t(f.label)}
                           </option>
                         ))}
                         {!fieldOpts.find((f) => f.value === cond.field) && (
@@ -841,14 +858,14 @@ function RuleFormDialog({
                       >
                         {Object.entries(OP_LABEL).map(([v, l]) => (
                           <option key={v} value={v}>
-                            {l}
+                            {t(l)}
                           </option>
                         ))}
                       </select>
                       <Input
                         value={Array.isArray(cond.value) ? cond.value.join(', ') : cond.value}
                         onChange={(e) => updateCondition(idx, { value: e.target.value })}
-                        placeholder="Valor"
+                        placeholder={t('settings_automations.form.value_placeholder')}
                         className="col-span-4 h-8 text-xs"
                       />
                       <button
@@ -869,13 +886,13 @@ function RuleFormDialog({
           <section className="space-y-2 rounded-lg border bg-muted/20 p-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Ações ({actions.length})
+                {t('settings_automations.form.actions_heading', { n: actions.length })}
               </h3>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline">
                     <Plus className="h-3.5 w-3.5" />
-                    Adicionar ação
+                    {t('settings_automations.form.add_action')}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -885,7 +902,7 @@ function RuleFormDialog({
                     return (
                       <DropdownMenuItem key={k} onSelect={() => addAction(k)}>
                         <Icon className="h-3.5 w-3.5" />
-                        {ACTION_KIND_LABEL[k]}
+                        {t(ACTION_KIND_LABEL[k])}
                       </DropdownMenuItem>
                     );
                   })}
@@ -894,7 +911,7 @@ function RuleFormDialog({
             </div>
             {actions.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Adicione pelo menos uma ação. As ações rodam em ordem.
+                {t('settings_automations.form.no_actions')}
               </p>
             ) : (
               <ul className="space-y-2">
@@ -905,7 +922,7 @@ function RuleFormDialog({
                         {idx + 1}.
                       </span>
                       <div className="flex-1">
-                        <p className="text-xs font-medium">{ACTION_KIND_LABEL[action.kind]}</p>
+                        <p className="text-xs font-medium">{t(ACTION_KIND_LABEL[action.kind])}</p>
                         <ActionEditor
                           action={action}
                           members={members}
@@ -930,13 +947,17 @@ function RuleFormDialog({
 
           <div className="flex justify-end gap-2 border-t pt-4">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button
               onClick={submit}
               disabled={submitting || !name.trim() || actions.length === 0}
             >
-              {submitting ? 'Salvando…' : editing ? 'Salvar alterações' : 'Criar regra'}
+              {submitting
+                ? t('action.saving')
+                : editing
+                  ? t('settings_automations.form.save_changes')
+                  : t('settings_automations.form.create_rule')}
             </Button>
           </div>
         </div>
@@ -958,6 +979,7 @@ function ActionEditor({
   templates: Template[];
   onChange: (patch: Partial<Action>) => void;
 }) {
+  const { t } = useT();
   if (action.kind === 'assign_agent') {
     return (
       <select
@@ -965,7 +987,7 @@ function ActionEditor({
         onChange={(e) => onChange({ userId: e.target.value || null } as Partial<Action>)}
         className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
       >
-        <option value="">— remover atribuição</option>
+        <option value="">{t('settings_automations.action.remove_assignment')}</option>
         {members.map((m) => (
           <option key={m.userId} value={m.userId}>
             {m.user.name ?? m.user.email}
@@ -985,10 +1007,10 @@ function ActionEditor({
         }
         className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
       >
-        <option value="OPEN">Aberta</option>
-        <option value="PENDING">Pendente</option>
-        <option value="RESOLVED">Resolvida</option>
-        <option value="SNOOZED">Adiada</option>
+        <option value="OPEN">{t('settings_automations.status_option.open')}</option>
+        <option value="PENDING">{t('settings_automations.status_option.pending')}</option>
+        <option value="RESOLVED">{t('settings_automations.status_option.resolved')}</option>
+        <option value="SNOOZED">{t('settings_automations.status_option.snoozed')}</option>
       </select>
     );
   }
@@ -1000,7 +1022,7 @@ function ActionEditor({
           onChange={(e) => onChange({ labelId: e.target.value } as Partial<Action>)}
           className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
         >
-          <option value="">Selecione…</option>
+          <option value="">{t('settings_automations.select_placeholder')}</option>
           {labels.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
@@ -1014,8 +1036,8 @@ function ActionEditor({
           }
           className="rounded-md border border-input bg-background px-2 py-1 text-xs"
         >
-          <option value="conversation">na conversa</option>
-          <option value="contact">no contato</option>
+          <option value="conversation">{t('settings_automations.label_target.conversation')}</option>
+          <option value="contact">{t('settings_automations.label_target.contact')}</option>
         </select>
       </div>
     );
@@ -1027,10 +1049,10 @@ function ActionEditor({
         onChange={(e) => onChange({ templateId: e.target.value } as Partial<Action>)}
         className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
       >
-        <option value="">Selecione…</option>
-        {templates.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.name}
+        <option value="">{t('settings_automations.select_placeholder')}</option>
+        {templates.map((tpl) => (
+          <option key={tpl.id} value={tpl.id}>
+            {tpl.name}
           </option>
         ))}
       </select>
@@ -1043,7 +1065,7 @@ function ActionEditor({
         onChange={(e) => onChange({ text: e.target.value } as Partial<Action>)}
         rows={2}
         maxLength={2000}
-        placeholder="Mensagem (suporta {{contact.name}} e {{contact.phoneNumber}})"
+        placeholder={t('settings_automations.action.message_placeholder')}
         className="mt-1 w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
       />
     );
@@ -1053,7 +1075,7 @@ function ActionEditor({
       <Input
         value={action.stageId}
         onChange={(e) => onChange({ stageId: e.target.value } as Partial<Action>)}
-        placeholder="ID do stage de destino"
+        placeholder={t('settings_automations.action.stage_placeholder')}
         className="mt-1 h-8 text-xs"
       />
     );
@@ -1072,7 +1094,7 @@ function ActionEditor({
           className="h-8 w-24 text-xs"
         />
         <span className="text-[11px] text-muted-foreground">
-          segundos (max 300 = 5min)
+          {t('settings_automations.action.seconds_hint')}
         </span>
       </div>
     );
@@ -1096,7 +1118,7 @@ function ActionEditor({
           placeholder="BRL"
           className="h-8 w-20 text-xs"
         />
-        <span className="text-[11px] text-muted-foreground">no card linkado</span>
+        <span className="text-[11px] text-muted-foreground">{t('settings_automations.action.card_value_hint')}</span>
       </div>
     );
   }
@@ -1149,22 +1171,22 @@ interface RunsResponse {
 
 const STATUS_STYLE: Record<RunStatus, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
   MATCHED: {
-    label: 'Executou',
+    label: 'settings_automations.run_status.matched',
     cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
     Icon: CheckCircle2,
   },
   PARTIAL: {
-    label: 'Parcial',
+    label: 'settings_automations.run_status.partial',
     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
     Icon: AlertTriangle,
   },
   FAILED: {
-    label: 'Falhou',
+    label: 'settings_automations.run_status.failed',
     cls: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
     Icon: XCircle,
   },
   SKIPPED: {
-    label: 'Pulou',
+    label: 'settings_automations.run_status.skipped',
     cls: 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
     Icon: SkipForward,
   },
@@ -1178,9 +1200,9 @@ function formatDurationMs(ms: number | null): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function formatRunDate(iso: string): string {
+function formatRunDate(iso: string, lang: Lang): string {
   const d = new Date(iso);
-  return d.toLocaleString('pt-BR', {
+  return d.toLocaleString(localeFor(lang), {
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',
@@ -1203,6 +1225,7 @@ function RunsDialog({
   onOpenChange: (v: boolean) => void;
   rule: Rule | null;
 }) {
+  const { t, lang } = useT();
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState<(typeof PER_PAGE_OPTIONS)[number]>(25);
   const [status, setStatus] = useState<RunStatus | 'ALL'>('ALL');
@@ -1250,13 +1273,12 @@ function RunsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-5 w-5 text-indigo-500" />
-            Execuções — {rule?.name}
+            {t('settings_automations.runs.title', { name: rule?.name ?? '' })}
           </DialogTitle>
           <DialogDescription>
-            Cada vez que o gatilho{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{rule?.trigger}</code>{' '}
-            disparou, uma linha foi gravada. Pulou = condições não passaram. Falhou = erro fatal.
-            Parcial = pelo menos uma ação falhou.
+            {t('settings_automations.runs.desc_before')}
+            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{rule?.trigger}</code>
+            {t('settings_automations.runs.desc_after')}
           </DialogDescription>
         </DialogHeader>
 
@@ -1264,7 +1286,7 @@ function RunsDialog({
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <SummaryCard
-              label="Total"
+              label={t('settings_automations.runs.total')}
               value={totalRuns}
               active={status === 'ALL'}
               onClick={() => setStatus('ALL')}
@@ -1272,7 +1294,7 @@ function RunsDialog({
             {(Object.keys(STATUS_STYLE) as RunStatus[]).map((s) => (
               <SummaryCard
                 key={s}
-                label={STATUS_STYLE[s].label}
+                label={t(STATUS_STYLE[s].label)}
                 value={summary[s]}
                 Icon={STATUS_STYLE[s].Icon}
                 cls={STATUS_STYLE[s].cls}
@@ -1285,7 +1307,7 @@ function RunsDialog({
           {/* Toolbar */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Mostrando</span>
+              <span>{t('settings_automations.runs.showing')}</span>
               <select
                 value={perPage}
                 onChange={(e) => setPerPage(Number(e.target.value) as (typeof PER_PAGE_OPTIONS)[number])}
@@ -1297,18 +1319,19 @@ function RunsDialog({
                   </option>
                 ))}
               </select>
-              <span>por página</span>
+              <span>{t('settings_automations.runs.per_page')}</span>
               {status !== 'ALL' && (
                 <>
                   <span>·</span>
                   <span>
-                    Filtrado: <strong>{STATUS_STYLE[status].label}</strong>
+                    {t('settings_automations.runs.filtered')}{' '}
+                    <strong>{t(STATUS_STYLE[status].label)}</strong>
                   </span>
                   <button
                     type="button"
                     onClick={() => setStatus('ALL')}
                     className="rounded p-0.5 hover:bg-accent"
-                    title="Limpar filtro"
+                    title={t('settings_automations.runs.clear_filter')}
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1320,20 +1343,22 @@ function RunsDialog({
               variant="ghost"
               onClick={() => refetch()}
               disabled={isFetching}
-              title="Recarregar"
+              title={t('settings_automations.runs.reload')}
             >
-              {isFetching ? 'Atualizando…' : 'Atualizar'}
+              {isFetching
+                ? t('settings_automations.runs.refreshing')
+                : t('settings_automations.runs.refresh')}
             </Button>
           </div>
 
           {/* Runs list */}
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando execuções…</p>
+            <p className="text-sm text-muted-foreground">{t('settings_automations.runs.loading')}</p>
           ) : !data || data.runs.length === 0 ? (
             <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
               {totalRuns === 0
-                ? 'Esta regra ainda não foi avaliada nenhuma vez. As execuções aparecem aqui assim que o gatilho dispara.'
-                : 'Nenhuma execução com este filtro.'}
+                ? t('settings_automations.runs.empty_never')
+                : t('settings_automations.runs.empty_filter')}
             </div>
           ) : (
             <ul className="divide-y rounded-lg border">
@@ -1355,10 +1380,10 @@ function RunsDialog({
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}
                       >
                         <Icon className="h-3 w-3" />
-                        {meta.label}
+                        {t(meta.label)}
                       </span>
                       <span className="text-[11px] font-mono text-muted-foreground">
-                        {formatRunDate(run.createdAt)}
+                        {formatRunDate(run.createdAt, lang)}
                       </span>
                       {run.resource && (
                         <span className="truncate font-mono text-[11px] text-muted-foreground">
@@ -1374,7 +1399,7 @@ function RunsDialog({
                         {run.conditionsResult && run.conditionsResult.length > 0 && (
                           <div>
                             <h4 className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
-                              Condições
+                              {t('settings_automations.runs.conditions')}
                             </h4>
                             <ul className="space-y-1">
                               {run.conditionsResult.map((cd, i) => (
@@ -1393,12 +1418,12 @@ function RunsDialog({
                                   )}
                                   <div className="min-w-0 flex-1 break-words">
                                     <code className="text-[11px]">{cd.field}</code>{' '}
-                                    <span className="text-muted-foreground">{OP_LABEL[cd.op]}</span>{' '}
+                                    <span className="text-muted-foreground">{t(OP_LABEL[cd.op])}</span>{' '}
                                     <code className="text-[11px]">
                                       {describeConditionValue(cd.value)}
                                     </code>
                                     <span className="ml-2 text-muted-foreground">
-                                      atual:{' '}
+                                      {t('settings_automations.runs.actual')}{' '}
                                       <code className="text-[11px]">{cd.actual || '∅'}</code>
                                     </span>
                                   </div>
@@ -1409,13 +1434,13 @@ function RunsDialog({
                         )}
                         {run.conditionsResult && run.conditionsResult.length === 0 && (
                           <p className="text-[11px] text-muted-foreground">
-                            Sem condições — disparo direto.
+                            {t('settings_automations.runs.no_conditions_direct')}
                           </p>
                         )}
                         {run.actionsResult && run.actionsResult.length > 0 && (
                           <div>
                             <h4 className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
-                              Ações
+                              {t('settings_automations.runs.actions')}
                             </h4>
                             <ul className="space-y-1">
                               {run.actionsResult.map((ar, i) => (
@@ -1433,7 +1458,7 @@ function RunsDialog({
                                     <XCircle className="mt-0.5 h-3.5 w-3.5 text-red-500" />
                                   )}
                                   <div className="min-w-0 flex-1">
-                                    <p className="font-medium">{ACTION_KIND_LABEL[ar.kind]}</p>
+                                    <p className="font-medium">{t(ACTION_KIND_LABEL[ar.kind])}</p>
                                     {ar.error && (
                                       <p className="break-words text-red-600 dark:text-red-400">
                                         {ar.error}
@@ -1451,7 +1476,7 @@ function RunsDialog({
                         {run.errorMessage && (
                           <div>
                             <h4 className="mb-1 font-semibold uppercase tracking-wider text-muted-foreground">
-                              Erro fatal
+                              {t('settings_automations.runs.fatal_error')}
                             </h4>
                             <p className="break-words rounded-md border border-red-300 bg-red-50 px-2 py-1 text-red-700 dark:bg-red-950/40 dark:text-red-300">
                               {run.errorMessage}
@@ -1470,7 +1495,11 @@ function RunsDialog({
           {data && data.total > 0 && (
             <div className="flex items-center justify-between border-t pt-3 text-xs">
               <p className="text-muted-foreground">
-                Página {data.page} de {totalPages} · {data.total} execução(ões)
+                {t('settings_automations.runs.pagination', {
+                  page: data.page,
+                  total: totalPages,
+                  count: data.total,
+                })}
               </p>
               <div className="flex items-center gap-1">
                 <Button
@@ -1479,7 +1508,7 @@ function RunsDialog({
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page <= 1 || isFetching}
                 >
-                  Anterior
+                  {t('settings_automations.runs.previous')}
                 </Button>
                 <Button
                   size="sm"
@@ -1487,7 +1516,7 @@ function RunsDialog({
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page >= totalPages || isFetching}
                 >
-                  Próxima
+                  {t('settings_automations.runs.next')}
                 </Button>
               </div>
             </div>

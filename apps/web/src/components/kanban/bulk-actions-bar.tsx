@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,12 +41,12 @@ interface LabelItem {
   color: string;
 }
 
-const SNOOZE_PRESETS: Array<{ label: string; minutes: number }> = [
-  { label: '15 min', minutes: 15 },
-  { label: '1 hora', minutes: 60 },
-  { label: '4 horas', minutes: 240 },
-  { label: 'Amanhã', minutes: 60 * 24 },
-  { label: '1 semana', minutes: 60 * 24 * 7 },
+const SNOOZE_PRESETS: Array<{ labelKey: string; minutes: number }> = [
+  { labelKey: 'c_kanban_bulk_actions_bar.snooze_15min', minutes: 15 },
+  { labelKey: 'c_kanban_bulk_actions_bar.snooze_1hour', minutes: 60 },
+  { labelKey: 'c_kanban_bulk_actions_bar.snooze_4hours', minutes: 240 },
+  { labelKey: 'c_kanban_bulk_actions_bar.snooze_tomorrow', minutes: 60 * 24 },
+  { labelKey: 'c_kanban_bulk_actions_bar.snooze_1week', minutes: 60 * 24 * 7 },
 ];
 
 function initialsFrom(s: string | null | undefined): string {
@@ -75,6 +76,7 @@ export function BulkActionsBar({
 }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
 
   async function run(payload: Record<string, unknown>) {
     try {
@@ -82,11 +84,11 @@ export function BulkActionsBar({
         method: 'POST',
         body: JSON.stringify({ ...payload, cardIds: selectedIds }),
       });
-      toast.success(`${res.affected} card(s) atualizado(s)`);
+      toast.success(t('c_kanban_bulk_actions_bar.toast_updated', { n: res.affected }));
       onClear();
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -105,9 +107,9 @@ export function BulkActionsBar({
   async function remove() {
     if (
       !(await confirm({
-        title: `Excluir ${selectedIds.length} card(s) selecionados?`,
-        description: 'Esta ação é definitiva.',
-        confirmLabel: 'Excluir',
+        title: t('c_kanban_bulk_actions_bar.delete_confirm_title', { n: selectedIds.length }),
+        description: t('c_kanban_bulk_actions_bar.delete_confirm_description'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     ) {
@@ -123,7 +125,7 @@ export function BulkActionsBar({
       <span className="rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
         {selectedIds.length}
       </span>
-      <span className="text-sm font-medium">selecionado(s)</span>
+      <span className="text-sm font-medium">{t('c_kanban_bulk_actions_bar.selected')}</span>
 
       <div className="ml-2 h-5 w-px bg-border" />
 
@@ -131,11 +133,11 @@ export function BulkActionsBar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline">
-            Mover pra…
+            {t('c_kanban_bulk_actions_bar.move_to')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          <DropdownMenuLabel>Stage destino</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('c_kanban_bulk_actions_bar.target_stage')}</DropdownMenuLabel>
           {stages.map((s) => (
             <DropdownMenuItem key={s.id} onSelect={() => move(s.id)}>
               <span
@@ -162,13 +164,13 @@ export function BulkActionsBar({
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline">
             <UserCheck className="h-3.5 w-3.5" />
-            Atribuir
+            {t('c_kanban_bulk_actions_bar.assign')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="max-h-72 overflow-y-auto">
           <DropdownMenuItem onSelect={() => assign(null)}>
             <UserX className="h-3.5 w-3.5" />
-            Remover atribuição
+            {t('c_kanban_bulk_actions_bar.unassign')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {members.map((m) => (
@@ -187,13 +189,13 @@ export function BulkActionsBar({
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline">
             <AlarmClock className="h-3.5 w-3.5" />
-            Adiar
+            {t('c_kanban_bulk_actions_bar.snooze')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           {SNOOZE_PRESETS.map((p) => (
             <DropdownMenuItem key={p.minutes} onSelect={() => snooze(p.minutes)}>
-              {p.label}
+              {t(p.labelKey)}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
@@ -205,7 +207,7 @@ export function BulkActionsBar({
           <DropdownMenuTrigger asChild>
             <Button size="sm" variant="outline">
               <Tag className="h-3.5 w-3.5" />
-              Etiqueta
+              {t('c_kanban_bulk_actions_bar.label')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="max-h-72 overflow-y-auto">
@@ -221,12 +223,12 @@ export function BulkActionsBar({
 
       <Button size="sm" variant="ghost" onClick={remove} className="text-destructive">
         <Trash2 className="h-3.5 w-3.5" />
-        Excluir
+        {t('action.delete')}
       </Button>
 
       <div className="ml-1 h-5 w-px bg-border" />
 
-      <Button size="sm" variant="ghost" onClick={onClear} title="Cancelar seleção">
+      <Button size="sm" variant="ghost" onClick={onClear} title={t('c_kanban_bulk_actions_bar.cancel_selection')}>
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

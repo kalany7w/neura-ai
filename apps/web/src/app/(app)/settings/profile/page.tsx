@@ -28,10 +28,10 @@ export default function ProfilePage() {
   }, [session?.user?.name, session?.user]);
 
   if (isPending) {
-    return <p className="text-sm text-muted-foreground">Carregando…</p>;
+    return <p className="text-sm text-muted-foreground">{t('action.loading')}</p>;
   }
   if (!session?.user) {
-    return <p className="text-sm text-destructive">Não autenticado.</p>;
+    return <p className="text-sm text-destructive">{t('settings_profile.not_authenticated')}</p>;
   }
 
   const user = session.user;
@@ -48,11 +48,11 @@ export default function ProfilePage() {
     setSavingName(true);
     try {
       const res = await authClient.updateUser({ name: name.trim() });
-      if (res.error) throw new Error(res.error.message ?? 'Erro');
-      toast.success('Perfil atualizado');
+      if (res.error) throw new Error(res.error.message ?? t('common.error'));
+      toast.success(t('settings_profile.toast.profile_updated'));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
+      toast.error(err instanceof Error ? err.message : t('settings_profile.toast.save_error'));
     } finally {
       setSavingName(false);
     }
@@ -62,11 +62,11 @@ export default function ProfilePage() {
     e.preventDefault();
     if (savingPassword) return;
     if (newPassword.length < 8) {
-      toast.error('A nova senha deve ter pelo menos 8 caracteres');
+      toast.error(t('settings_profile.toast.password_too_short'));
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error('Confirmação não bate com a nova senha');
+      toast.error(t('settings_profile.toast.password_mismatch'));
       return;
     }
     setSavingPassword(true);
@@ -76,13 +76,13 @@ export default function ProfilePage() {
         newPassword,
         revokeOtherSessions: true,
       });
-      if (res.error) throw new Error(res.error.message ?? 'Erro');
-      toast.success('Senha alterada. Sessões em outros dispositivos foram revogadas.');
+      if (res.error) throw new Error(res.error.message ?? t('common.error'));
+      toast.success(t('settings_profile.toast.password_changed'));
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao trocar senha');
+      toast.error(err instanceof Error ? err.message : t('settings_profile.toast.password_error'));
     } finally {
       setSavingPassword(false);
     }
@@ -101,7 +101,7 @@ export default function ProfilePage() {
             {initials || '?'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-semibold">{user.name ?? 'Sem nome'}</p>
+            <p className="truncate text-lg font-semibold">{user.name ?? t('settings_profile.no_name')}</p>
             <p className="truncate text-sm text-muted-foreground">{user.email}</p>
           </div>
         </div>
@@ -110,31 +110,31 @@ export default function ProfilePage() {
       <div className="rounded-lg border bg-card p-5">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
           <UserIcon className="h-4 w-4" />
-          Identidade
+          {t('settings_profile.identity')}
         </h2>
         <form onSubmit={saveName} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Nome de exibição</Label>
+            <Label htmlFor="name">{t('settings_profile.display_name')}</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Seu nome"
+              placeholder={t('settings_profile.name_placeholder')}
               maxLength={120}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="email" className="flex items-center gap-1.5">
               <Mail className="h-3.5 w-3.5" />
-              Email
+              {t('common.email')}
             </Label>
             <Input id="email" value={user.email} disabled />
             <p className="text-xs text-muted-foreground">
-              Pra trocar o email, fale com um administrador.
+              {t('settings_profile.email_change_hint')}
             </p>
           </div>
           <Button type="submit" disabled={savingName || !name.trim() || name === (user.name ?? '')}>
-            {savingName ? 'Salvando…' : 'Salvar alterações'}
+            {savingName ? t('action.saving') : t('settings_profile.save_changes')}
           </Button>
         </form>
       </div>
@@ -142,11 +142,11 @@ export default function ProfilePage() {
       <div className="rounded-lg border bg-card p-5">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
           <Lock className="h-4 w-4" />
-          Trocar senha
+          {t('settings_profile.change_password')}
         </h2>
         <form onSubmit={savePassword} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="current">Senha atual</Label>
+            <Label htmlFor="current">{t('settings_profile.current_password')}</Label>
             <Input
               id="current"
               type="password"
@@ -157,7 +157,7 @@ export default function ProfilePage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="new">Nova senha</Label>
+              <Label htmlFor="new">{t('settings_profile.new_password')}</Label>
               <Input
                 id="new"
                 type="password"
@@ -168,7 +168,7 @@ export default function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm">Confirmar nova senha</Label>
+              <Label htmlFor="confirm">{t('settings_profile.confirm_new_password')}</Label>
               <Input
                 id="confirm"
                 type="password"
@@ -180,7 +180,7 @@ export default function ProfilePage() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Mínimo 8 caracteres. Trocar a senha desconecta outras sessões abertas.
+            {t('settings_profile.password_hint')}
           </p>
           <Button
             type="submit"
@@ -188,7 +188,7 @@ export default function ProfilePage() {
               savingPassword || !currentPassword || newPassword.length < 8 || !confirmPassword
             }
           >
-            {savingPassword ? 'Atualizando…' : 'Atualizar senha'}
+            {savingPassword ? t('settings_profile.updating') : t('settings_profile.update_password')}
           </Button>
         </form>
       </div>

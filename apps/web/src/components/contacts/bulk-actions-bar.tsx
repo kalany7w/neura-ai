@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Tag, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +31,7 @@ interface Props {
 export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
 
   async function run(payload: Record<string, unknown>) {
     try {
@@ -37,21 +39,20 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
         method: 'POST',
         body: JSON.stringify({ ...payload, contactIds: selectedIds }),
       });
-      toast.success(`${res.affected} contato(s) atualizado(s)`);
+      toast.success(t('c_contacts_bulk_actions_bar.updated_toast', { n: res.affected }));
       onClear();
       await qc.invalidateQueries({ queryKey: ['contacts'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove() {
     if (
       !(await confirm({
-        title: `Excluir ${selectedIds.length} contato(s)?`,
-        description:
-          'Conversas e cards relacionados perdem o vínculo. Esta ação é definitiva.',
-        confirmLabel: 'Excluir',
+        title: t('c_contacts_bulk_actions_bar.delete_title', { n: selectedIds.length }),
+        description: t('c_contacts_bulk_actions_bar.delete_description'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
@@ -66,20 +67,20 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
       <span className="rounded-full bg-foreground px-2.5 py-0.5 text-xs font-bold text-background">
         {selectedIds.length}
       </span>
-      <span className="text-sm font-medium">selecionado(s)</span>
+      <span className="text-sm font-medium">{t('c_contacts_bulk_actions_bar.selected')}</span>
       <div className="ml-2 h-5 w-px bg-border" />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline">
             <Tag className="h-3.5 w-3.5" />
-            Aplicar etiqueta
+            {t('c_contacts_bulk_actions_bar.apply_label')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
-          <DropdownMenuLabel>Aplicar</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('c_contacts_bulk_actions_bar.apply')}</DropdownMenuLabel>
           {labels.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma etiqueta.</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('c_contacts_bulk_actions_bar.no_labels')}</p>
           ) : (
             labels.map((l) => (
               <DropdownMenuItem
@@ -95,7 +96,7 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>Remover etiqueta</DropdownMenuLabel>
+          <DropdownMenuLabel>{t('c_contacts_bulk_actions_bar.remove_label_header')}</DropdownMenuLabel>
           {labels.map((l) => (
             <DropdownMenuItem
               key={`u-${l.id}`}
@@ -105,18 +106,18 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
                 className="h-3 w-3 rounded-full opacity-50"
                 style={{ backgroundColor: l.color }}
               />
-              Remover {l.name}
+              {t('c_contacts_bulk_actions_bar.remove_named', { name: l.name })}
             </DropdownMenuItem>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Button size="sm" variant="ghost" onClick={remove} title="Excluir selecionados">
+      <Button size="sm" variant="ghost" onClick={remove} title={t('c_contacts_bulk_actions_bar.delete_selected')}>
         <Trash2 className="h-3.5 w-3.5 text-destructive" />
       </Button>
 
       <div className="ml-2 h-5 w-px bg-border" />
-      <Button size="sm" variant="ghost" onClick={onClear} title="Limpar seleção">
+      <Button size="sm" variant="ghost" onClick={onClear} title={t('c_contacts_bulk_actions_bar.clear_selection')}>
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

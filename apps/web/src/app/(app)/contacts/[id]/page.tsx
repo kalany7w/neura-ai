@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { MentionTextarea, type MentionTarget } from '@/components/ui/mention-textarea';
 import { renderMentions } from '@/lib/render-mentions';
+import { useT, formatMoney, formatDateShort, localeFor, type Lang } from '@/lib/i18n';
 
 interface LabelItem {
   id: string;
@@ -99,11 +100,11 @@ const OUTCOME_COLOR: Record<'POSITIVE' | 'NEGATIVE' | 'RISK', string> = {
   RISK: '#f59e0b',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: 'Aberta',
-  PENDING: 'Pendente',
-  RESOLVED: 'Resolvida',
-  SNOOZED: 'Adiada',
+const STATUS_LABEL_KEY: Record<string, string> = {
+  OPEN: 'contacts_id.status_open',
+  PENDING: 'contacts_id.status_pending',
+  RESOLVED: 'contacts_id.status_resolved',
+  SNOOZED: 'contacts_id.status_snoozed',
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -121,10 +122,6 @@ function initialsFrom(s: string | null | undefined): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join('');
-}
-
-function formatBRL(n: number): string {
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
 interface NoteAuthor {
@@ -148,6 +145,7 @@ type Tab = 'overview' | 'conversations' | 'cards' | 'notes' | 'journey';
 
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { t, lang } = useT();
   const qc = useQueryClient();
   const router = useRouter();
   const confirm = useConfirm();
@@ -189,7 +187,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       });
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -201,7 +199,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       });
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -209,24 +207,26 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     if (!data?.contact) return;
     if (
       !(await confirm({
-        title: `Excluir contato "${data.contact.name ?? data.contact.phoneNumber}"?`,
-        description: 'Conversas e cards relacionados perdem o vínculo.',
-        confirmLabel: 'Excluir',
+        title: t('contacts_id.delete_confirm_title', {
+          name: data.contact.name ?? data.contact.phoneNumber,
+        }),
+        description: t('contacts_id.delete_confirm_desc'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/contacts/${id}`, { method: 'DELETE' });
-      toast.success('Contato excluído');
+      toast.success(t('contacts_id.contact_deleted'));
       router.push('/contacts');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando…</p>;
-  if (!data) return <p className="text-sm text-destructive">Contato não encontrado.</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">{t('action.loading')}</p>;
+  if (!data) return <p className="text-sm text-destructive">{t('contacts_id.not_found')}</p>;
 
   const { contact, cards } = data;
   const appliedIds = new Set(contact.labels.map((cl) => cl.label.id));
@@ -246,7 +246,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {initialsFrom(contact.name ?? contact.phoneNumber)}
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold">{contact.name ?? 'Sem nome'}</h1>
+            <h1 className="truncate text-2xl font-bold">{contact.name ?? t('contacts_id.no_name')}</h1>
             <p className="flex items-center gap-1 text-sm text-muted-foreground">
               <Phone className="h-3.5 w-3.5" />
               {contact.phoneNumber}
@@ -256,11 +256,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setStartConvOpen(true)}>
             <MessageSquarePlus className="h-3.5 w-3.5" />
-            Iniciar conversa
+            {t('contacts_id.start_conversation')}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
             <Edit3 className="h-3.5 w-3.5" />
-            Editar
+            {t('action.edit')}
           </Button>
           <Button size="sm" variant="ghost" onClick={remove} className="text-destructive">
             <Trash2 className="h-3.5 w-3.5" />
@@ -270,27 +270,30 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'conversations', 'cards', 'notes', 'journey'] as const).map((t) => {
+        {(['overview', 'conversations', 'cards', 'notes', 'journey'] as const).map((tabKey) => {
           const notesCount = notesData?.notes.length;
           const labels: Record<Tab, string> = {
-            overview: 'Visão geral',
-            conversations: `Conversas (${contact.conversations.length})`,
-            cards: `Cards (${cards.length})`,
-            notes: notesCount === undefined ? 'Notas' : `Notas (${notesCount})`,
-            journey: 'Linha do tempo',
+            overview: t('contacts_id.tab_overview'),
+            conversations: t('contacts_id.tab_conversations', { n: contact.conversations.length }),
+            cards: t('contacts_id.tab_cards', { n: cards.length }),
+            notes:
+              notesCount === undefined
+                ? t('contacts_id.tab_notes')
+                : t('contacts_id.tab_notes_count', { n: notesCount }),
+            journey: t('contacts_id.tab_journey'),
           };
           return (
             <button
-              key={t}
+              key={tabKey}
               type="button"
-              onClick={() => setTab(t)}
+              onClick={() => setTab(tabKey)}
               className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
-                tab === t
+                tab === tabKey
                   ? 'border-foreground text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              {labels[t]}
+              {labels[tabKey]}
             </button>
           );
         })}
@@ -302,7 +305,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           <section className="rounded-lg border bg-card p-5">
             <h2 className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <Tag className="h-3.5 w-3.5" />
-              Etiquetas
+              {t('contacts_id.labels')}
             </h2>
             <div className="flex flex-wrap items-center gap-1.5">
               {contact.labels.map((cl) => (
@@ -332,7 +335,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       type="button"
                       className="inline-flex items-center gap-1 rounded-md border border-dashed bg-background px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
-                      + Adicionar
+                      {t('contacts_id.add_label')}
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
@@ -347,7 +350,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               )}
               {contact.labels.length === 0 && availableLabels.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Nenhuma etiqueta criada. Crie em Configurações → Etiquetas.
+                  {t('contacts_id.no_labels')}
                 </p>
               )}
             </div>
@@ -355,7 +358,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
           <section className="rounded-lg border bg-card p-5">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Atributos customizados
+              {t('contacts_id.custom_attrs_title')}
             </h2>
             {contact.customAttrs && Object.keys(contact.customAttrs).length > 0 ? (
               <dl className="space-y-2 text-sm">
@@ -370,25 +373,25 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               </dl>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Sem atributos. Edite o contato pra adicionar.
+                {t('contacts_id.no_attrs')}
               </p>
             )}
           </section>
 
           <section className="rounded-lg border bg-card p-5 md:col-span-2">
             <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Resumo
+              {t('contacts_id.summary')}
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatBox label="Conversas" value={contact.conversations.length} />
-              <StatBox label="Cards" value={cards.length} />
+              <StatBox label={t('contacts_id.stat_conversations')} value={contact.conversations.length} />
+              <StatBox label={t('contacts_id.stat_cards')} value={cards.length} />
               <StatBox
-                label="Não lidas"
+                label={t('contacts_id.stat_unread')}
                 value={contact.conversations.reduce((acc, c) => acc + c.unreadCount, 0)}
               />
               <StatBox
-                label="Desde"
-                value={new Date(contact.createdAt).toLocaleDateString('pt-BR')}
+                label={t('contacts_id.stat_since')}
+                value={formatDateShort(contact.createdAt, lang)}
               />
             </div>
           </section>
@@ -399,7 +402,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         <section className="space-y-2">
           {contact.conversations.length === 0 ? (
             <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-              Nenhuma conversa ainda. Use “Iniciar conversa” pra falar com este contato.
+              {t('contacts_id.no_conversations')}
             </div>
           ) : (
             contact.conversations.map((conv) => (
@@ -416,7 +419,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         STATUS_BADGE[conv.status] ?? 'bg-muted'
                       }`}
                     >
-                      {STATUS_LABELS[conv.status] ?? conv.status}
+                      {t(STATUS_LABEL_KEY[conv.status] ?? conv.status)}
                     </span>
                     <span className="truncate text-xs text-muted-foreground">{conv.inbox.name}</span>
                     {conv.unreadCount > 0 && (
@@ -426,7 +429,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     )}
                     <span className="ml-auto text-[10px] text-muted-foreground">
                       {conv.lastMessageAt
-                        ? new Date(conv.lastMessageAt).toLocaleString('pt-BR', {
+                        ? new Date(conv.lastMessageAt).toLocaleString(localeFor(lang), {
                             day: '2-digit',
                             month: '2-digit',
                             hour: '2-digit',
@@ -451,7 +454,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         <section className="space-y-2">
           {cards.length === 0 ? (
             <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-              Sem cards no kanban vinculados a este contato.
+              {t('contacts_id.no_cards')}
             </div>
           ) : (
             cards.map((card) => {
@@ -478,7 +481,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                   {card.value && Number(card.value) > 0 && (
                     <span className="font-semibold text-emerald-600">
-                      {formatBRL(Number(card.value))}
+                      {formatMoney(Number(card.value), lang)}
                     </span>
                   )}
                 </Link>
@@ -515,22 +518,31 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   );
 }
 
-function formatNoteDate(iso: string): string {
+function formatNoteDate(
+  iso: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  lang: Lang,
+): string {
   const d = new Date(iso);
   const now = new Date();
+  const locale = localeFor(lang);
   const sameDay =
     d.getFullYear() === now.getFullYear() &&
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
   if (sameDay) {
-    return `Hoje, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    return t('contacts_id.note_today', {
+      time: d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+    });
   }
   const diffMs = now.getTime() - d.getTime();
   const oneDayMs = 24 * 60 * 60 * 1000;
   if (diffMs >= 0 && diffMs < oneDayMs * 2) {
-    return `Ontem, ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+    return t('contacts_id.note_yesterday', {
+      time: d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
+    });
   }
-  return d.toLocaleString('pt-BR', {
+  return d.toLocaleString(locale, {
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',
@@ -552,7 +564,8 @@ function NotesTab({
   onChange: () => void;
   mentionTargets: MentionTarget[];
 }) {
-  const validSlugs = new Set(mentionTargets.map((t) => t.slug.toLowerCase()));
+  const { t, lang } = useT();
+  const validSlugs = new Set(mentionTargets.map((m) => m.slug.toLowerCase()));
   const confirm = useConfirm();
   const [composer, setComposer] = useState('');
   const [composerSubmitting, setComposerSubmitting] = useState(false);
@@ -571,10 +584,10 @@ function NotesTab({
         body: JSON.stringify({ body }),
       });
       setComposer('');
-      toast.success('Nota adicionada');
+      toast.success(t('contacts_id.note_added'));
       onChange();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar nota');
+      toast.error(err instanceof Error ? err.message : t('contacts_id.note_add_error'));
     } finally {
       setComposerSubmitting(false);
     }
@@ -600,10 +613,10 @@ function NotesTab({
         body: JSON.stringify({ body }),
       });
       cancelEdit();
-      toast.success('Nota atualizada');
+      toast.success(t('contacts_id.note_updated'));
       onChange();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar nota');
+      toast.error(err instanceof Error ? err.message : t('contacts_id.note_save_error'));
     } finally {
       setEditSubmitting(false);
     }
@@ -611,19 +624,19 @@ function NotesTab({
 
   async function removeNote(note: ContactNoteItem) {
     const ok = await confirm({
-      title: 'Excluir nota?',
-      description: 'A nota é apagada definitivamente.',
-      confirmLabel: 'Excluir',
+      title: t('contacts_id.note_delete_title'),
+      description: t('contacts_id.note_delete_desc'),
+      confirmLabel: t('action.delete'),
       destructive: true,
     });
     if (!ok) return;
     setDeletingId(note.id);
     try {
       await api(`/api/contact-notes/${note.id}`, { method: 'DELETE' });
-      toast.success('Nota excluída');
+      toast.success(t('contacts_id.note_deleted'));
       onChange();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao excluir');
+      toast.error(err instanceof Error ? err.message : t('contacts_id.note_delete_error'));
     } finally {
       setDeletingId(null);
     }
@@ -634,7 +647,7 @@ function NotesTab({
       <div className="rounded-lg border bg-card p-4">
         <Label htmlFor="contact-note-composer" className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           <StickyNote className="h-3.5 w-3.5" />
-          Adicionar nota
+          {t('contacts_id.add_note')}
         </Label>
         <MentionTextarea
           id="contact-note-composer"
@@ -649,28 +662,28 @@ function NotesTab({
           }}
           rows={3}
           maxLength={2000}
-          placeholder="Informações que persistem além de uma conversa: histórico, preferências, contexto de relacionamento… (use @ para mencionar um agente)"
+          placeholder={t('contacts_id.note_placeholder')}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-[11px] text-muted-foreground">
-            {composer.length}/2000 · Cmd/Ctrl+Enter pra salvar · @ menciona agente
+            {t('contacts_id.note_hint', { n: composer.length })}
           </p>
           <Button
             size="sm"
             onClick={addNote}
             disabled={composerSubmitting || !composer.trim()}
           >
-            {composerSubmitting ? 'Salvando…' : 'Adicionar nota'}
+            {composerSubmitting ? t('action.saving') : t('contacts_id.add_note')}
           </Button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Carregando notas…</p>
+        <p className="text-sm text-muted-foreground">{t('contacts_id.loading_notes')}</p>
       ) : notes.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
-          Nenhuma nota ainda. Use o campo acima pra criar a primeira.
+          {t('contacts_id.no_notes')}
         </div>
       ) : (
         <ul className="space-y-3">
@@ -679,7 +692,7 @@ function NotesTab({
             const isDeleting = deletingId === note.id;
             const wasEdited = note.updatedAt && note.updatedAt !== note.createdAt;
             const authorName =
-              note.author?.name?.trim() || note.author?.email || 'Agente removido';
+              note.author?.name?.trim() || note.author?.email || t('contacts_id.agent_removed');
             return (
               <li
                 key={note.id}
@@ -701,10 +714,12 @@ function NotesTab({
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{authorName}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {formatNoteDate(note.createdAt)}
+                        {formatNoteDate(note.createdAt, t, lang)}
                         {wasEdited && (
                           <span className="ml-1.5 italic">
-                            · editada {formatNoteDate(note.updatedAt)}
+                            {t('contacts_id.note_edited', {
+                              date: formatNoteDate(note.updatedAt, t, lang),
+                            })}
                           </span>
                         )}
                       </p>
@@ -716,7 +731,7 @@ function NotesTab({
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7"
-                        title="Editar"
+                        title={t('action.edit')}
                         onClick={() => startEdit(note)}
                       >
                         <Edit3 className="h-3.5 w-3.5" />
@@ -725,7 +740,7 @@ function NotesTab({
                         size="icon"
                         variant="ghost"
                         className="h-7 w-7 text-destructive hover:text-destructive"
-                        title="Excluir"
+                        title={t('action.delete')}
                         disabled={isDeleting}
                         onClick={() => removeNote(note)}
                       >
@@ -758,7 +773,7 @@ function NotesTab({
                     <div className="flex items-center justify-end gap-2">
                       <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={editSubmitting}>
                         <X className="h-3.5 w-3.5" />
-                        Cancelar
+                        {t('action.cancel')}
                       </Button>
                       <Button
                         size="sm"
@@ -766,7 +781,7 @@ function NotesTab({
                         disabled={editSubmitting || !editDraft.trim() || editDraft.trim() === note.body}
                       >
                         <Check className="h-3.5 w-3.5" />
-                        {editSubmitting ? 'Salvando…' : 'Salvar'}
+                        {editSubmitting ? t('action.saving') : t('action.save')}
                       </Button>
                     </div>
                   </div>
@@ -806,6 +821,7 @@ function EditContactDialog({
   contact: Contact;
   onSaved: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState(contact.name ?? '');
   const [submitting, setSubmitting] = useState(false);
 
@@ -821,11 +837,11 @@ function EditContactDialog({
         method: 'PATCH',
         body: JSON.stringify({ name: name.trim() || null }),
       });
-      toast.success('Contato atualizado');
+      toast.success(t('contacts_id.contact_updated'));
       onOpenChange(false);
       onSaved();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -835,28 +851,28 @@ function EditContactDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Editar contato</DialogTitle>
+          <DialogTitle>{t('contacts_id.edit_contact_title')}</DialogTitle>
           <DialogDescription>
-            Telefone é único e não pode ser alterado — use “Mesclar contatos” se for outro caso.
+            {t('contacts_id.edit_contact_desc')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="contact-name">Nome</Label>
+            <Label htmlFor="contact-name">{t('common.name')}</Label>
             <Input
               id="contact-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Nome do contato"
+              placeholder={t('contacts_id.contact_name_placeholder')}
               maxLength={120}
             />
           </div>
           <div className="space-y-2">
-            <Label>Telefone</Label>
+            <Label>{t('common.phone')}</Label>
             <Input value={contact.phoneNumber} disabled />
           </div>
           <Button onClick={submit} className="w-full" disabled={submitting}>
-            {submitting ? 'Salvando…' : 'Salvar'}
+            {submitting ? t('action.saving') : t('action.save')}
           </Button>
         </div>
       </DialogContent>
@@ -873,6 +889,7 @@ function StartConversationDialog({
   onOpenChange: (v: boolean) => void;
   contact: Contact;
 }) {
+  const { t } = useT();
   const router = useRouter();
   const { data: inboxesData } = useQuery<{ inboxes: Inbox[] }>({
     queryKey: ['inboxes'],
@@ -912,14 +929,14 @@ function StartConversationDialog({
         method: 'POST',
         body: JSON.stringify({ type: 'TEXT', text }),
       });
-      toast.success('Mensagem enviada');
+      toast.success(t('contacts_id.message_sent'));
       onOpenChange(false);
       router.push(`/inbox/${conversationId}`);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'inbox_not_connected') {
-        toast.error('Inbox não está conectada. Conecte em /inboxes.');
+        toast.error(t('contacts_id.inbox_not_connected'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -932,22 +949,22 @@ function StartConversationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Iniciar conversa</DialogTitle>
+          <DialogTitle>{t('contacts_id.start_conversation')}</DialogTitle>
           <DialogDescription>
-            Envia a primeira mensagem pra {contact.phoneNumber}.
-            {existing && ' Já existe conversa nesta inbox — vai retomar.'}
+            {t('contacts_id.start_conv_desc', { phone: contact.phoneNumber })}
+            {existing && t('contacts_id.start_conv_existing')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="start-inbox">Inbox</Label>
+            <Label htmlFor="start-inbox">{t('contacts_id.inbox_label')}</Label>
             <select
               id="start-inbox"
               value={inboxId}
               onChange={(e) => setInboxId(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              <option value="">Selecione…</option>
+              <option value="">{t('contacts_id.select_placeholder')}</option>
               {connectedInboxes.map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.name}
@@ -956,18 +973,18 @@ function StartConversationDialog({
             </select>
             {connectedInboxes.length === 0 && (
               <p className="text-xs text-amber-600">
-                Nenhuma inbox conectada. Conecte uma em /inboxes.
+                {t('contacts_id.no_connected_inbox')}
               </p>
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="start-text">Mensagem</Label>
+            <Label htmlFor="start-text">{t('contacts_id.message_label')}</Label>
             <textarea
               id="start-text"
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={4}
-              placeholder="Olá, tudo bem?"
+              placeholder={t('contacts_id.message_placeholder')}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
@@ -976,7 +993,7 @@ function StartConversationDialog({
             className="w-full"
             disabled={submitting || !inboxId || !text.trim()}
           >
-            {submitting ? 'Enviando…' : 'Enviar mensagem'}
+            {submitting ? t('contacts_id.sending') : t('contacts_id.send_message')}
           </Button>
         </div>
       </DialogContent>
@@ -1014,13 +1031,13 @@ interface JourneyEvent {
   noteAuthor?: string | null;
 }
 
-const EVENT_FILTERS: Array<{ key: JourneyEventKind | 'all'; label: string }> = [
-  { key: 'all', label: 'Tudo' },
-  { key: 'msg', label: 'Mensagens' },
-  { key: 'note', label: 'Notas' },
-  { key: 'card', label: 'Cards' },
-  { key: 'csat', label: 'Satisfação' },
-  { key: 'conv_started', label: 'Conversas' },
+const EVENT_FILTERS: Array<{ key: JourneyEventKind | 'all'; labelKey: string }> = [
+  { key: 'all', labelKey: 'contacts_id.filter_all' },
+  { key: 'msg', labelKey: 'contacts_id.filter_msg' },
+  { key: 'note', labelKey: 'contacts_id.filter_notes' },
+  { key: 'card', labelKey: 'contacts_id.filter_cards' },
+  { key: 'csat', labelKey: 'contacts_id.filter_csat' },
+  { key: 'conv_started', labelKey: 'contacts_id.filter_conversations' },
 ];
 
 const INBOX_TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -1031,6 +1048,7 @@ const INBOX_TYPE_ICON: Record<string, React.ComponentType<{ className?: string }
 };
 
 function JourneyTab({ contactId }: { contactId: string }) {
+  const { t } = useT();
   const [filter, setFilter] = useState<JourneyEventKind | 'all'>('all');
   const queryStr =
     filter !== 'all'
@@ -1042,7 +1060,7 @@ function JourneyTab({ contactId }: { contactId: string }) {
   });
 
   const events = data?.events ?? [];
-  const grouped = groupByDay(events);
+  const grouped = groupByDay(events, t);
 
   return (
     <div className="space-y-4">
@@ -1058,24 +1076,24 @@ function JourneyTab({ contactId }: { contactId: string }) {
                 : 'border-transparent text-muted-foreground hover:bg-accent/50'
             }`}
           >
-            {f.label}
+            {t(f.labelKey)}
           </button>
         ))}
         {data?.truncated && (
           <span className="ml-auto rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-            mostrando {events.length} mais recentes
+            {t('contacts_id.showing_recent', { n: events.length })}
           </span>
         )}
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando histórico…</p>
+        <p className="text-sm text-muted-foreground">{t('contacts_id.loading_history')}</p>
       ) : events.length === 0 ? (
         <div className="rounded-lg border-2 border-dashed py-12 text-center">
           <Clock className="mx-auto h-10 w-10 text-muted-foreground/40" />
-          <p className="mt-3 font-medium">Nada por enquanto</p>
+          <p className="mt-3 font-medium">{t('contacts_id.journey_empty_title')}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Quando esse contato tiver mensagens, notas, cards ou survey, aparecem aqui.
+            {t('contacts_id.journey_empty_desc')}
           </p>
         </div>
       ) : (
@@ -1100,7 +1118,10 @@ function JourneyTab({ contactId }: { contactId: string }) {
   );
 }
 
-function groupByDay(events: JourneyEvent[]): Array<{
+function groupByDay(
+  events: JourneyEvent[],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): Array<{
   day: string;
   label: string;
   events: JourneyEvent[];
@@ -1119,8 +1140,8 @@ function groupByDay(events: JourneyEvent[]): Array<{
   const ymdYesterday = yesterday.toISOString().slice(0, 10);
   return Array.from(groups.entries()).map(([day, evs]) => {
     let label = day;
-    if (day === ymdToday) label = 'Hoje';
-    else if (day === ymdYesterday) label = 'Ontem';
+    if (day === ymdToday) label = t('action.today');
+    else if (day === ymdYesterday) label = t('contacts_id.yesterday');
     else {
       const [y, m, d] = day.split('-');
       label = `${d}/${m}/${y}`;
@@ -1130,7 +1151,8 @@ function groupByDay(events: JourneyEvent[]): Array<{
 }
 
 function JourneyEventCard({ event }: { event: JourneyEvent }) {
-  const time = new Date(event.at).toLocaleTimeString('pt-BR', {
+  const { lang } = useT();
+  const time = new Date(event.at).toLocaleTimeString(localeFor(lang), {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -1182,6 +1204,7 @@ function useEventVisuals(event: JourneyEvent): {
   content: { title: React.ReactNode; body?: React.ReactNode };
   link?: string;
 } {
+  const { t } = useT();
   if (event.kind === 'msg') {
     const isIn = event.direction === 'INBOUND';
     return {
@@ -1192,7 +1215,7 @@ function useEventVisuals(event: JourneyEvent): {
       content: {
         title: (
           <span className="text-sm font-medium">
-            {isIn ? 'Mensagem do cliente' : 'Resposta enviada'}
+            {isIn ? t('contacts_id.event_msg_in') : t('contacts_id.event_msg_out')}
           </span>
         ),
         body: (
@@ -1211,7 +1234,7 @@ function useEventVisuals(event: JourneyEvent): {
       content: {
         title: (
           <span className="text-sm font-medium">
-            Nota interna
+            {t('contacts_id.event_note')}
             {event.noteAuthor && (
               <span className="ml-1 font-normal text-muted-foreground">
                 · {event.noteAuthor}
@@ -1235,7 +1258,7 @@ function useEventVisuals(event: JourneyEvent): {
       content: {
         title: (
           <span className="text-sm font-medium">
-            Card criado:{' '}
+            {t('contacts_id.event_card')}{' '}
             <span className="font-normal">
               {event.cardTitle}
               {event.funnelName && (
@@ -1269,7 +1292,7 @@ function useEventVisuals(event: JourneyEvent): {
       content: {
         title: (
           <span className="text-sm font-medium">
-            Resposta de satisfação · {type} {score}
+            {t('contacts_id.event_csat')} · {type} {score}
             {type === 'CSAT' && '/5'}
             {type === 'NPS' && '/10'}
           </span>
@@ -1286,7 +1309,7 @@ function useEventVisuals(event: JourneyEvent): {
       iconBg: 'bg-slate-500/15 text-slate-600 dark:text-slate-300',
       icon: <PlayCircle className="h-4 w-4" />,
       content: {
-        title: <span className="text-sm font-medium">Conversa iniciada</span>,
+        title: <span className="text-sm font-medium">{t('contacts_id.event_conv_started')}</span>,
       },
       link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
     };
@@ -1296,7 +1319,7 @@ function useEventVisuals(event: JourneyEvent): {
     iconBg: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     icon: <Check className="h-4 w-4" />,
     content: {
-      title: <span className="text-sm font-medium">Conversa resolvida</span>,
+      title: <span className="text-sm font-medium">{t('contacts_id.event_conv_resolved')}</span>,
     },
     link: event.conversationId ? `/inbox/${event.conversationId}` : undefined,
   };
