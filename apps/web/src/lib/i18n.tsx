@@ -274,6 +274,16 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
     pt: 'Tudo respondido. Nenhum cliente aguardando agora.',
     es: 'Todo respondido. Ningún cliente esperando ahora.',
   },
+
+  // Relatórios — abas + ações (chrome)
+  'reports.tab.overview': { pt: 'Visão geral', es: 'Visión general' },
+  'reports.tab.agents': { pt: 'Por agente', es: 'Por agente' },
+  'reports.tab.inboxes': { pt: 'Por inbox', es: 'Por inbox' },
+  'reports.tab.sla': { pt: 'SLA', es: 'SLA' },
+  'reports.tab.csat': { pt: 'Satisfação', es: 'Satisfacción' },
+  'reports.tab.kb': { pt: 'Base de conhecimento', es: 'Base de conocimiento' },
+  'reports.csv_conversations': { pt: 'CSV conversas', es: 'CSV conversaciones' },
+  'reports.csv_messages': { pt: 'CSV mensagens', es: 'CSV mensajes' },
 };
 
 interface I18nContextValue {
