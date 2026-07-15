@@ -1958,6 +1958,16 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
   "validation.slug_chars": { pt: "Apenas a-z, 0-9 e -", es: "Solo a-z, 0-9 y -" },
   "validation.e164": { pt: "Formato E.164: +5511999999999", es: "Formato E.164: +595991234567" },
   "validation.shortcut": { pt: "Atalho deve ser /palavra", es: "El atajo debe ser /palabra" },
+
+  // === i18n fan-out (auto-merge, 2026-07) ===
+  "settings_currency.title": { pt: "Moeda do workspace", es: "Moneda del workspace" },
+  "settings_currency.desc": { pt: "Usada nos valores de pipeline no dashboard e nos relatórios.", es: "Se usa en los montos de pipeline del panel y los reportes." },
+  "settings_currency.saved": { pt: "Moeda atualizada", es: "Moneda actualizada" },
+  "settings_currency.opt_USD": { pt: "Dólar (US$)", es: "Dólar (US$)" },
+  "settings_currency.opt_BRL": { pt: "Real (R$)", es: "Real (R$)" },
+  "settings_currency.opt_PYG": { pt: "Guarani (₲)", es: "Guaraní (₲)" },
+  "settings_currency.opt_EUR": { pt: "Euro (€)", es: "Euro (€)" },
+  "settings_currency.opt_ARS": { pt: "Peso argentino ($)", es: "Peso argentino ($)" },
 };
 
 interface I18nContextValue {

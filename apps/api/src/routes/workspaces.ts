@@ -100,10 +100,55 @@ workspacesRouter.get('/', requireAuth, async (c) => {
       name: m.workspace.name,
       slug: m.workspace.slug,
       role: m.role,
+      currency: readCurrency(m.workspace.settings),
     })),
     activeWorkspaceId,
   });
 });
+
+// Moeda do workspace (persistida em settings.currency). Default USD.
+const CURRENCIES = ['USD', 'BRL', 'PYG', 'EUR', 'ARS'] as const;
+function readCurrency(settings: unknown): string {
+  const c = (settings as Record<string, unknown> | null)?.currency;
+  return typeof c === 'string' && (CURRENCIES as readonly string[]).includes(c) ? c : 'USD';
+}
+
+const patchSettingsSchema = z.object({
+  currency: z.enum(CURRENCIES),
+});
+
+// PATCH /api/workspaces/me/settings — atualiza settings do workspace (moeda). Admin only.
+workspacesRouter.patch(
+  '/me/settings',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const body = await c.req.json().catch(() => null);
+    const parsed = patchSettingsSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const ws = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settings: true },
+    });
+    const merged = {
+      ...((ws?.settings as Record<string, unknown> | null) ?? {}),
+      currency: parsed.data.currency,
+    };
+    await prisma.workspace.update({ where: { id: workspaceId }, data: { settings: merged } });
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'workspace.settings_updated',
+      resource: `Workspace:${workspaceId}`,
+      metadata: { currency: parsed.data.currency },
+    });
+    return c.json({ ok: true, currency: parsed.data.currency });
+  },
+);
 
 // POST /api/workspaces/switch — muda activeWorkspaceId da sessão
 workspacesRouter.post('/switch', requireAuth, async (c) => {

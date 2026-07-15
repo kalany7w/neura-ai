@@ -18,6 +18,7 @@ interface WorkspaceListItem {
   name: string;
   slug: string;
   role: 'ADMIN' | 'SUPERVISOR' | 'AGENT';
+  currency?: string;
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

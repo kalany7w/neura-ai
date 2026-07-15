@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InviteForm } from '@/components/forms/invite-form';
 import { useOnlineAgents } from '@/hooks/use-online-agents';
+import { WorkspaceCurrencyCard } from '@/components/settings/workspace-currency-card';
 
 type Role = 'ADMIN' | 'SUPERVISOR' | 'AGENT';
 
@@ -187,6 +188,8 @@ export default function MembersPage() {
           {t('settings_members.readonly_notice')}
         </div>
       )}
+
+      {canManage && <WorkspaceCurrencyCard />}
 
       <div className={`grid gap-6 ${canManage ? 'lg:grid-cols-3' : ''}`}>
         {canManage && (
