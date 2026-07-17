@@ -56,6 +56,20 @@ import { emailOutboundWorker } from './email-outbound.js';
 import { csatWorker } from './csat-worker.js';
 import { welcomeWorker } from './welcome-worker.js';
 import { startWelcomeScheduler } from './welcome-scheduler.js';
+import { sendAlert } from './services/alert.js';
+
+// Erros não tratados no processo da API — logam e alertam (webhook opcional).
+// unhandledRejection não derruba o processo; uncaughtException encerra pro
+// container reiniciar num estado limpo.
+process.on('unhandledRejection', (reason) => {
+  void sendAlert('error', 'unhandledRejection na API', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+});
+process.on('uncaughtException', (err) => {
+  void sendAlert('fatal', 'uncaughtException na API — reiniciando', { error: err.message });
+  setTimeout(() => process.exit(1), 1_000);
+});
 
 const app = new Hono();
 
