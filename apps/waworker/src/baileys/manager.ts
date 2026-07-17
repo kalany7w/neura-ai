@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
+import { sendAlert } from '../alert.js';
 import { startSession, type SessionHandle } from './session.js';
 import { clearAuthState, flushPendingAuthState } from './auth-state.js';
 
@@ -29,6 +30,9 @@ class SessionManager {
           logger.warn({ inboxId: id }, 'Inbox logged out, clearing auth');
           await clearAuthState(id);
           this.removeSession(id);
+          void sendAlert('warn', 'Inbox WhatsApp deslogado — precisa reconectar (novo QR)', {
+            inboxId: id,
+          });
         },
         onClosed: (id, isLoggedOut) => {
           if (isLoggedOut) {
@@ -51,6 +55,10 @@ class SessionManager {
         await prisma.inbox
           .update({ where: { id: inboxId }, data: { status: 'ERROR' } })
           .catch(() => {});
+        void sendAlert('error', 'Sessão Baileys falhou ao iniciar (retries esgotados)', {
+          inboxId,
+          retries: retryCount,
+        });
       }
     }
   }
@@ -65,6 +73,10 @@ class SessionManager {
       prisma.inbox
         .update({ where: { id: inboxId }, data: { status: 'ERROR' } })
         .catch(() => {});
+      void sendAlert('error', 'Sessão Baileys caiu e esgotou os retries de reconexão', {
+        inboxId,
+        maxRetries: this.maxRetries,
+      });
       return;
     }
     const delay = this.backoffMs[Math.min(nextRetry - 1, this.backoffMs.length - 1)] ?? 30_000;
@@ -105,6 +117,11 @@ class SessionManager {
 
   list(): string[] {
     return [...this.sessions.keys()];
+  }
+
+  /** Snapshot leve pro endpoint /health do worker. */
+  healthSnapshot(): { activeSessions: number; sessionIds: string[] } {
+    return { activeSessions: this.sessions.size, sessionIds: [...this.sessions.keys()] };
   }
 
   /**

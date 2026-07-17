@@ -24,6 +24,8 @@ services:
       RESEND_FROM_NAME: ${RESEND_FROM_NAME}
       RATE_LIMIT_LOGIN_MAX: ${RATE_LIMIT_LOGIN_MAX:-5}
       RATE_LIMIT_LOGIN_WINDOW_SEC: ${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
+      # Alertas operacionais (opcional): webhook Discord/Slack pra erros não tratados.
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
@@ -91,10 +93,18 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET:-neura-media}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
     depends_on:
       - postgres
       - redis
       - minio
+    healthcheck:
+      # Usa node (fetch nativo) pra não depender de wget na imagem do worker.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:7303/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   postgres:
     # pgvector/pgvector:pg16 = Postgres 16 oficial + extensão pgvector pré-instalada.

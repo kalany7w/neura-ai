@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { logger } from './logger.js';
 import { env } from './env.js';
 import { sessionManager } from './baileys/manager.js';
@@ -5,9 +6,46 @@ import { outboundWorker } from './queue/outbound.js';
 import { startCommandsListener, shutdownCommandsListener } from './commands.js';
 import { prisma } from './db.js';
 import { redis } from './redis.js';
+import { sendAlert } from './alert.js';
+
+/**
+ * Health server mínimo: o compose/Coolify usa /health pra detectar um worker
+ * "vivo mas travado" (processo de pé mas event loop parado). Responder 200 já
+ * prova que o event loop responde; o body inclui o snapshot de sessões Baileys.
+ */
+function startHealthServer(): void {
+  const server = createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      const snap = sessionManager.healthSnapshot();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', ...snap }));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not_found' }));
+    }
+  });
+  server.listen(env.WAWORKER_PORT, () => {
+    logger.info({ port: env.WAWORKER_PORT }, 'Health server listening');
+  });
+  server.on('error', (err) => logger.error({ err }, 'Health server error'));
+}
+
+// Erros não tratados: sem isto, uma promise rejeitada some silenciosamente
+// (e o worker pode ficar num estado inconsistente sem ninguém saber).
+process.on('unhandledRejection', (reason) => {
+  void sendAlert('error', 'unhandledRejection no waworker', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+});
+process.on('uncaughtException', (err) => {
+  void sendAlert('fatal', 'uncaughtException no waworker — reiniciando', { error: err.message });
+  // Deixa o alerta tentar sair, depois encerra pro container reiniciar limpo.
+  setTimeout(() => process.exit(1), 1_000);
+});
 
 async function main() {
   logger.info({ env: env.NODE_ENV }, '🟡 Neura waworker booting');
+  startHealthServer();
 
   await prisma.$connect();
   logger.info('DB connected');
