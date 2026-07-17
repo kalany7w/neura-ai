@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { redis } from './redis.js';
 import { detectSchedule } from './services/ai-detect-schedule.js';
+import { wsConnections } from './metrics.js';
 
 /**
  * Cada cliente WS está inscrito em 3 canais do workspace ativo:
@@ -136,6 +137,7 @@ export function setupWebSocket(app: Hono) {
             if (!channelClients.has(ch)) channelClients.set(ch, new Set());
             channelClients.get(ch)!.add(ws);
           }
+          wsConnections.inc();
           // Presence: marca user como online no workspace via ZADD com score=timestamp.
           // Outras tabs do mesmo user mantêm o score atualizado via ping. Sem ZREM no
           // onClose pra evitar derrubar presence se uma tab fecha mas outras seguem.
@@ -186,6 +188,7 @@ export function setupWebSocket(app: Hono) {
           }
         },
         onClose: (_evt, ws) => {
+          if (!reject) wsConnections.dec();
           for (const ch of channels) {
             channelClients.get(ch)?.delete(ws);
           }

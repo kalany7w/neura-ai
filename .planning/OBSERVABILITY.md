@@ -28,7 +28,25 @@
   - Source maps (opcional): `SENTRY_ORG` + `SENTRY_PROJECT` + `SENTRY_AUTH_TOKEN` no build do web.
 - Verificado: `next build` do web passa com o wrap do Sentry (sem DSN = passthrough).
 
+### 5. Métricas Prometheus — LIGADO
+- `GET /metrics` na API (formato Prometheus), via `prom-client` (`apps/api/src/metrics.ts`).
+- Métricas: default de processo/Node (memória, CPU, event-loop lag, GC) +
+  `http_requests_total` e `http_request_duration_seconds` (histograma → p50/p95 e
+  taxa de 5xx, por método/rota/status) + `ws_active_connections` (gauge) +
+  `realtime_events_published_total` (por tipo de evento).
+- Rota label = padrão casado (`/api/conversations/:id`) → baixa cardinalidade.
+- Protegido por `METRICS_TOKEN` se setado (`Authorization: Bearer <token>`); vazio =
+  aberto (assumir rede interna / restringir no proxy). Já no compose e `.env.example`.
+- **Scrape config exemplo** (prometheus.yml):
+  ```yaml
+  scrape_configs:
+    - job_name: neura-api
+      metrics_path: /metrics
+      authorization: { credentials: '<METRICS_TOKEN>' }
+      static_configs: [{ targets: ['api:7301'] }]
+  ```
+
 ## Ainda pendente (backlog de observabilidade)
-- Métricas Prometheus (`/metrics`) com `prom-client`: conexões WS ativas, eventos/s, latência p50/p95, erros 5xx.
 - Uptime externo (Betterstack/UptimeRobot) batendo em `api.neura-ai.net/health`.
 - Stress test do real-time (script: N msgs em T segundos → todas aparecem <2s).
+- Dashboard Grafana pros gráficos das métricas acima.

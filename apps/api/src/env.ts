@@ -11,6 +11,9 @@ const apiEnvSchema = baseEnvSchema.extend({
   ALERT_WEBHOOK_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
   // Sentry (opcional): error tracking com stack trace. Sem DSN, é no-op.
   SENTRY_DSN: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  // Protege GET /metrics (Prometheus). Se setado, exige Authorization: Bearer <token>.
+  // Se ausente, /metrics fica aberto (assume rede interna) — logado um aviso no boot.
+  METRICS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
   TRUSTED_ORIGINS: z.string().transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean)),
