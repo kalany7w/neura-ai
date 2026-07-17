@@ -47,15 +47,6 @@ function normalizeEmail(raw: string | null | undefined): string | null {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) ? trimmed : null;
 }
 
-function parseTags(raw: string | null | undefined): string[] {
-  if (!raw) return [];
-  // Kommo usa vírgula ou ponto-e-vírgula como separador
-  return raw
-    .split(/[,;]/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-}
-
 function parseValue(raw: string | null | undefined): number | null {
   if (!raw) return null;
   // Kommo CSV em ES/PT-BR pode vir "1.234,56" ou "1,234.56". Estratégia: remove
