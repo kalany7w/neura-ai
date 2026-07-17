@@ -77,3 +77,45 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # E2E smoke (@smoke): páginas públicas + gate de auth do middleware. Só precisa
+  # do web buildado + rodando — sem api/db (por isso é um job à parte, leve).
+  # Os testes @fullstack (signup→app) exigem o stack completo e ficam pra um job
+  # dedicado/staging (ver apps/web/e2e/README.md).
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:7301
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build web (+ deps)
+        run: pnpm --filter @neura/web... build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @neura/web exec playwright install --with-deps chromium
+
+      - name: Run @smoke E2E
+        run: |
+          pnpm --filter @neura/web start &
+          for i in $(seq 1 60); do curl -sf http://localhost:7302/login >/dev/null && break; sleep 2; done
+          E2E_BASE_URL=http://localhost:7302 pnpm --filter @neura/web test:e2e:smoke
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7
