@@ -26,6 +26,8 @@ services:
       RATE_LIMIT_LOGIN_WINDOW_SEC: ${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
       # Alertas operacionais (opcional): webhook Discord/Slack pra erros não tratados.
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Sentry (opcional): error tracking. Sem DSN, é no-op.
+      SENTRY_DSN: ${SENTRY_DSN:-}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
@@ -94,6 +96,7 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-neura-media}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
       - postgres
       - redis

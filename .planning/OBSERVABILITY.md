@@ -19,29 +19,14 @@
 ### 3. Handlers globais de erro
 - API e waworker capturam `unhandledRejection` (loga+alerta) e `uncaughtException` (alerta e encerra pro container reiniciar limpo).
 
-## Próximo passo: Sentry (requer instalar deps no seu ambiente)
-
-Não foi ligado aqui porque adiciona dependências (`@sentry/*`) que não dá pra instalar de forma limpa no clone. Passos pra ativar:
-
-**API + waworker (`@sentry/node`):**
-```bash
-pnpm --filter @neura/api add @sentry/node
-pnpm --filter @neura/waworker add @sentry/node
-```
-No topo de cada entrypoint (`apps/api/src/index.ts`, `apps/waworker/src/index.ts`), ANTES de tudo:
-```ts
-import * as Sentry from '@sentry/node';
-if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, tracesSampleRate: 0.1, environment: env.NODE_ENV });
-```
-E em `sendAlert`, adicionar `Sentry.captureException`/`captureMessage` quando `level !== 'warn'`.
-
-**Web (`@sentry/nextjs`):**
-```bash
-pnpm --filter @neura/web add @sentry/nextjs
-npx @sentry/wizard@latest -i nextjs   # gera sentry.client/server/edge.config.ts + instrumentation
-```
-
-Adicionar `SENTRY_DSN` (e `NEXT_PUBLIC_SENTRY_DSN` no web) ao env schema, ao `docker-compose.yaml` e ao `.env.example`.
+### 4. Sentry (error tracking) — LIGADO, ativa com DSN
+- **api + waworker** (`@sentry/node`): init em `apps/{api,waworker}/src/instrument.ts` (primeiro import do entrypoint). Captura unhandledRejection/uncaughtException com stack trace automaticamente. `sendAlert` também faz `captureMessage` pros eventos de negócio (queda de sessão etc.).
+- **web** (`@sentry/nextjs`): `sentry.server.config.ts`, `sentry.edge.config.ts`, `src/instrumentation.ts` (+ `onRequestError`), `src/instrumentation-client.ts`; `next.config.mjs` envolvido com `withSentryConfig`.
+- **Tudo no-op sem DSN.** Pra ativar:
+  - `SENTRY_DSN` (api/waworker/web server) — já no compose e `.env.example`.
+  - `NEXT_PUBLIC_SENTRY_DSN` (browser) — **precisa estar no BUILD do web** (build arg no Docker), não só no runtime. Hoje o compose não passa como build arg; adicionar `ARG NEXT_PUBLIC_SENTRY_DSN` no `Dockerfile` (target web) + `build.args` no compose pra o client-side capturar.
+  - Source maps (opcional): `SENTRY_ORG` + `SENTRY_PROJECT` + `SENTRY_AUTH_TOKEN` no build do web.
+- Verificado: `next build` do web passa com o wrap do Sentry (sem DSN = passthrough).
 
 ## Ainda pendente (backlog de observabilidade)
 - Métricas Prometheus (`/metrics`) com `prom-client`: conexões WS ativas, eventos/s, latência p50/p95, erros 5xx.

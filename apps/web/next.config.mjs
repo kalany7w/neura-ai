@@ -1,3 +1,5 @@
+import { withSentryConfig } from '@sentry/nextjs';
+
 /** @type {import('next').NextConfig} */
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:7301';
 const isDev = process.env.NODE_ENV !== 'production';
@@ -60,4 +62,13 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// withSentryConfig: instrumenta o build. Upload de source maps só ocorre com
+// SENTRY_AUTH_TOKEN + SENTRY_ORG + SENTRY_PROJECT setados; senão é passthrough.
+export default withSentryConfig(nextConfig, {
+  silent: !process.env.CI,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  disableLogger: true,
+});
+
