@@ -58,6 +58,7 @@ import { csatWorker } from './csat-worker.js';
 import { welcomeWorker } from './welcome-worker.js';
 import { startWelcomeScheduler } from './welcome-scheduler.js';
 import { sendAlert } from './services/alert.js';
+import { registry, metricsMiddleware } from './metrics.js';
 
 // Erros não tratados no processo da API — logam e alertam (webhook opcional).
 // unhandledRejection não derruba o processo; uncaughtException encerra pro
@@ -85,6 +86,17 @@ app.use(
 );
 
 app.use('*', honoLogger((msg) => logger.info(msg)));
+
+// Métricas Prometheus — mede toda request (contagem + duração por rota/status).
+app.use('*', metricsMiddleware());
+
+// GET /metrics — scrape do Prometheus. Protegido por METRICS_TOKEN se setado.
+app.get('/metrics', async (c) => {
+  if (env.METRICS_TOKEN && c.req.header('Authorization') !== `Bearer ${env.METRICS_TOKEN}`) {
+    return c.text('unauthorized', 401);
+  }
+  return c.text(await registry.metrics(), 200, { 'Content-Type': registry.contentType });
+});
 
 // Raiz da API redireciona pro web app (UX + fallback pra links antigos
 // de verify-email que usavam baseURL como callbackURL).

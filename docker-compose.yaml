@@ -28,6 +28,8 @@ services:
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
       # Sentry (opcional): error tracking. Sem DSN, é no-op.
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Protege GET /metrics (Prometheus). Vazio = aberto (assume rede interna).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
