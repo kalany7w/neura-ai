@@ -60,6 +60,29 @@
 - Vars: API_URL, WS_URL, REDIS_URL, CLIENTS, MESSAGES, DURATION_MS, WAIT_MS,
   MAX_P95_MS, MIN_DELIVERY.
 
+### 7. Dashboard Grafana + Prometheus — pronto
+- `monitoring/` (ver `monitoring/README.md`): dashboard provisionado (10 painéis
+  sobre o /metrics) + Prometheus + Grafana num compose à parte.
+
+### 8. Uptime externo — endpoints prontos, falta dar de alta o monitor
+Serviço externo (Betterstack / UptimeRobot / Pingdom) batendo nos endpoints, pra
+detectar queda mesmo se o processo inteiro morrer (o alerta interno não sairia).
+
+**O que monitorar** (HTTP monitor, intervalo 1–3min, espera 200):
+| URL | Verifica | 503 quando |
+|-----|----------|------------|
+| `https://api.neura-ai.net/health` | API + Postgres + Redis | db ou redis fora |
+| `https://api.neura-ai.net/health/worker` | waworker (via heartbeat no Redis, TTL 60s) | worker morto/travado |
+| `https://app.neura-ai.net/` | web (Next) | web fora |
+
+- O **waworker não tem URL pública** → agora ele escreve um heartbeat no Redis a
+  cada 15s e a API expõe `/health/worker` (503 se o heartbeat > 60s). Assim o
+  worker fica observável externamente pela API.
+- **Setup** (ex.: Betterstack → Monitors → Create): 3 monitores HTTP com os URLs
+  acima, expected status 200, e alerta no mesmo destino do `ALERT_WEBHOOK_URL`
+  (email/Discord/Slack). Opcional: keyword check no body (`"status":"ok"`).
+- UptimeRobot free cobre os 3 (5min de intervalo no free).
+
 ## Ainda pendente (backlog de observabilidade)
-- Uptime externo (Betterstack/UptimeRobot) batendo em `api.neura-ai.net/health`.
-- Dashboard Grafana pros gráficos das métricas do /metrics.
+- Dar de alta os 3 monitores no serviço escolhido (tarefa de ops, sem código).
+- Alertas nativos do Grafana (5xx > 5% / p95 > 2s) → mesmo canal do webhook.

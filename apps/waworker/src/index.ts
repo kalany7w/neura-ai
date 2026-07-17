@@ -44,9 +44,22 @@ process.on('uncaughtException', (err) => {
   setTimeout(() => process.exit(1), 1_000);
 });
 
+/**
+ * Heartbeat no Redis pra a API expor a saúde do worker em /health/worker (o
+ * worker não tem URL pública, então o uptime externo o observa via API).
+ * TTL 60s: se o worker morrer, a chave expira e /health/worker vira 503.
+ */
+function startHeartbeat(): void {
+  const write = () =>
+    void redis.set('waworker:heartbeat', String(Date.now()), 'EX', 60).catch(() => {});
+  write();
+  setInterval(write, 15_000).unref();
+}
+
 async function main() {
   logger.info({ env: env.NODE_ENV }, '🟡 Neura waworker booting');
   startHealthServer();
+  startHeartbeat();
 
   await prisma.$connect();
   logger.info('DB connected');
