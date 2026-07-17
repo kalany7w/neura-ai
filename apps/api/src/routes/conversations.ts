@@ -7,7 +7,7 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.j
 import { requirePermission } from '../middlewares/permissions.js';
 import { dispatchOutbound } from '../queue.js';
 import { publishEvent } from '../redis-pub.js';
-import { outboundLimiter } from '../rate-limit.js';
+import { outboundLimiter, aiRateLimit } from '../rate-limit.js';
 import { logger } from '../logger.js';
 import { suggestReplies, type SuggestReplyInput } from '../services/ai-suggest.js';
 import { summarizeConversation } from '../services/ai-summarize.js';
@@ -650,6 +650,7 @@ conversationsRouter.post(
   '/:id/suggest-replies',
   requireAuth,
   requireWorkspace,
+  aiRateLimit,
   requirePermission('conversation.send_message'),
   async (c) => {
     if (!env.OPENAI_API_KEY) {
@@ -755,7 +756,7 @@ conversationsRouter.post(
 );
 
 // POST /api/conversations/:id/ai/summarize — gera resumo IA (cache em Conversation.aiSummary)
-conversationsRouter.post('/:id/ai/summarize', requireAuth, requireWorkspace, async (c) => {
+conversationsRouter.post('/:id/ai/summarize', requireAuth, requireWorkspace, aiRateLimit, async (c) => {
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
@@ -798,7 +799,7 @@ conversationsRouter.post('/:id/ai/summarize', requireAuth, requireWorkspace, asy
 });
 
 // POST /api/conversations/:id/ai/next-actions — sugere próximas ações
-conversationsRouter.post('/:id/ai/next-actions', requireAuth, requireWorkspace, async (c) => {
+conversationsRouter.post('/:id/ai/next-actions', requireAuth, requireWorkspace, aiRateLimit, async (c) => {
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
@@ -894,7 +895,7 @@ conversationsRouter.post('/:id/ai/next-actions', requireAuth, requireWorkspace, 
 });
 
 // POST /api/conversations/:id/ai/classify — força re-classify imediato (debug/manual)
-conversationsRouter.post('/:id/ai/classify', requireAuth, requireWorkspace, async (c) => {
+conversationsRouter.post('/:id/ai/classify', requireAuth, requireWorkspace, aiRateLimit, async (c) => {
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');
@@ -939,7 +940,7 @@ conversationsRouter.post('/:id/ai/classify', requireAuth, requireWorkspace, asyn
 });
 
 // POST /api/conversations/:id/ai/kb-suggest — força recompute de sugestão KB on-demand.
-conversationsRouter.post('/:id/ai/kb-suggest', requireAuth, requireWorkspace, async (c) => {
+conversationsRouter.post('/:id/ai/kb-suggest', requireAuth, requireWorkspace, aiRateLimit, async (c) => {
   if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
   const workspaceId = c.get('workspaceId') as string;
   const id = c.req.param('id');

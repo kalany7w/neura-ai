@@ -5,6 +5,7 @@ import { prisma } from '../db.js';
 import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
+import { aiRateLimit } from '../rate-limit.js';
 import { audit } from '../services/audit.js';
 import { publishEvent } from '../redis-pub.js';
 import { forecastCard } from '../services/ai-forecast.js';
@@ -808,6 +809,7 @@ kanbanRouter.post(
   '/cards/:id/ai/forecast',
   requireAuth,
   requireWorkspace,
+  aiRateLimit,
   async (c) => {
     if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
     const workspaceId = c.get('workspaceId') as string;
@@ -898,6 +900,7 @@ kanbanRouter.post(
   '/funnels/:id/ai/forecast-all',
   requireAuth,
   requireWorkspace,
+  aiRateLimit,
   requirePermission('funnel.manage'),
   async (c) => {
     if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);

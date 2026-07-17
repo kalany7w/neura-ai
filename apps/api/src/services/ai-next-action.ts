@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
+import { UNTRUSTED_DATA_RULE } from './ai-safety.js';
 
 export const nextActionSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -92,6 +93,7 @@ export async function suggestNextActions(input: NextActionInput): Promise<NextAc
     'confidence: 0-1 sua certeza dessa sugestão.',
     '',
     'Retorne APENAS JSON: { "actions": [...] }',
+    UNTRUSTED_DATA_RULE,
   ].join('\n');
 
   const lines: string[] = [];
@@ -129,10 +131,12 @@ export async function suggestNextActions(input: NextActionInput): Promise<NextAc
   }
   lines.push('');
   lines.push('=== ÚLTIMAS MENSAGENS ===');
+  lines.push('<dados_conversa>');
   for (const m of input.history) {
-    const trunc = m.content.slice(0, 250);
+    const trunc = m.content.slice(0, 250).replace(/<\/?dados_conversa>/gi, '');
     lines.push(`[${m.direction === 'inbound' ? 'CLIENTE' : 'AGENTE'}] ${trunc}`);
   }
+  lines.push('</dados_conversa>');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);

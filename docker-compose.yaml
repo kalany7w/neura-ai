@@ -2,6 +2,13 @@
 # IMPORTANTE: SEM `ports:` — Coolify faz roteamento via Caddy.
 # Cada serviço expõe sua porta INTERNA (7301/7302/7303) e Coolify direciona o domínio.
 
+# Rotação de logs: evita que o stdout (Pino/Next/Baileys) encha o disco da VPS.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   api:
     build:
@@ -9,6 +16,9 @@ services:
       dockerfile: Dockerfile
       target: api-runner
     restart: unless-stopped
+    logging: *default-logging
+    # Teto de memória (anti-leak). Ajuste conforme a VPS via env.
+    mem_limit: ${API_MEM_LIMIT:-1g}
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -69,6 +79,8 @@ services:
         SENTRY_PROJECT: ${SENTRY_PROJECT:-}
         SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${WEB_MEM_LIMIT:-1g}
     environment:
       NODE_ENV: production
       WEB_PORT: 7302
@@ -90,6 +102,9 @@ services:
       dockerfile: Dockerfile
       target: waworker-runner
     restart: unless-stopped
+    logging: *default-logging
+    # Baileys usa ~80-150MB por sessão — teto maior. Ajuste via env conforme a VPS.
+    mem_limit: ${WAWORKER_MEM_LIMIT:-2g}
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -123,6 +138,7 @@ services:
     # Usado pra Knowledge Base + RAG (busca semântica via embeddings OpenAI).
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-neura}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -138,6 +154,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
@@ -150,6 +167,7 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
+    logging: *default-logging
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
