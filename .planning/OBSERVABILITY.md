@@ -24,8 +24,12 @@
 - **web** (`@sentry/nextjs`): `sentry.server.config.ts`, `sentry.edge.config.ts`, `src/instrumentation.ts` (+ `onRequestError`), `src/instrumentation-client.ts`; `next.config.mjs` envolvido com `withSentryConfig`.
 - **Tudo no-op sem DSN.** Pra ativar:
   - `SENTRY_DSN` (api/waworker/web server) — já no compose e `.env.example`.
-  - `NEXT_PUBLIC_SENTRY_DSN` (browser) — **precisa estar no BUILD do web** (build arg no Docker), não só no runtime. Hoje o compose não passa como build arg; adicionar `ARG NEXT_PUBLIC_SENTRY_DSN` no `Dockerfile` (target web) + `build.args` no compose pra o client-side capturar.
-  - Source maps (opcional): `SENTRY_ORG` + `SENTRY_PROJECT` + `SENTRY_AUTH_TOKEN` no build do web.
+  - `NEXT_PUBLIC_SENTRY_DSN` (browser) — o Next inlina no bundle no `next build`,
+    então é **build arg**: já ligado no `Dockerfile` (stage builder: `ARG` + `ENV`)
+    e passado pelo `docker-compose.yaml` (`web.build.args`). Basta setar a var no
+    ambiente do build (Coolify: build-time env).
+  - Source maps (opcional): `SENTRY_ORG` + `SENTRY_PROJECT` + `SENTRY_AUTH_TOKEN`
+    também já são build args (mesmos lugares); setados, o build sobe os maps.
 - Verificado: `next build` do web passa com o wrap do Sentry (sem DSN = passthrough).
 
 ### 5. Métricas Prometheus — LIGADO
