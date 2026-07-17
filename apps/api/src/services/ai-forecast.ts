@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
+import { UNTRUSTED_DATA_RULE } from './ai-safety.js';
 
 export const forecastSchema = z.object({
   probability: z.number().min(0).max(1),
@@ -59,6 +60,7 @@ export async function forecastCard(input: ForecastInput): Promise<Forecast | nul
     '- Hesitação, comparação com concorrentes sem retorno',
     '',
     'Retorne APENAS JSON: { "probability": 0.0-1.0, "reasoning": "<1 frase ≤280 chars>" }',
+    UNTRUSTED_DATA_RULE,
   ].join('\n');
 
   const lines: string[] = [];
@@ -75,10 +77,12 @@ export async function forecastCard(input: ForecastInput): Promise<Forecast | nul
   lines.push('');
   if (input.history.length > 0) {
     lines.push('Histórico recente:');
+    lines.push('<dados_conversa>');
     for (const m of input.history) {
-      const trunc = m.content.slice(0, 250);
+      const trunc = m.content.slice(0, 250).replace(/<\/?dados_conversa>/gi, '');
       lines.push(`[${m.direction === 'inbound' ? 'CLIENTE' : 'AGENTE'}] ${trunc}`);
     }
+    lines.push('</dados_conversa>');
   } else {
     lines.push('(sem mensagens registradas)');
   }

@@ -9,6 +9,7 @@
 
 import { env } from '../env.js';
 import { logger } from '../logger.js';
+import { UNTRUSTED_DATA_RULE } from './ai-safety.js';
 
 export interface SummarizeInput {
   history: Array<{ direction: 'inbound' | 'outbound'; content: string }>;
@@ -35,15 +36,18 @@ export async function summarizeConversation(input: SummarizeInput): Promise<stri
     '',
     'Tom: objetivo e direto. Sem markdown. Sem prefixos como "Resumo:".',
     'NÃO copie o texto literal — sintetize.',
+    UNTRUSTED_DATA_RULE,
   ].join('\n');
 
   const lines: string[] = [];
   if (input.contactName) lines.push(`Cliente: ${input.contactName}`);
   lines.push('Conversa:');
+  lines.push('<dados_conversa>');
   for (const m of input.history) {
-    const trunc = m.content.slice(0, 300);
+    const trunc = m.content.slice(0, 300).replace(/<\/?dados_conversa>/gi, '');
     lines.push(`[${m.direction === 'inbound' ? 'CLIENTE' : 'AGENTE'}] ${trunc}`);
   }
+  lines.push('</dados_conversa>');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), SUMMARIZE_TIMEOUT_MS);

@@ -2,7 +2,7 @@ import { createMiddleware } from 'hono/factory';
 import { createHash } from 'node:crypto';
 import { auth } from '../auth.js';
 import { prisma } from '../db.js';
-import { apiKeyLimiter } from '../rate-limit.js';
+import { apiKeyLimiter, apiLimiter } from '../rate-limit.js';
 
 export interface AuthVars {
   userId: string;
@@ -61,6 +61,12 @@ export const requireAuth = createMiddleware<{ Variables: AuthVars }>(async (c, n
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session?.user || !session.session) {
     return c.json({ error: 'unauthorized' }, 401);
+  }
+  // Rate limit por usuário (antes o path de cookie não tinha limite nenhum).
+  try {
+    await apiLimiter.consume(session.user.id);
+  } catch {
+    return c.json({ error: 'rate_limited' }, 429);
   }
   c.set('userId', session.user.id);
   c.set('sessionId', session.session.id);
