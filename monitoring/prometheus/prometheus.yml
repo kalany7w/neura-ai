@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: neura-api
+    metrics_path: /metrics
+    static_configs:
+      # Ajuste pro endereço da API. Se o Prometheus roda na MESMA rede docker do
+      # app (ver README), 'api:7301' funciona. Standalone: use o host/IP da VPS.
+      - targets: ['api:7301']
+    # Se METRICS_TOKEN estiver setado na API, descomente e preencha:
+    # authorization:
+    #   type: Bearer
+    #   credentials: 'SEU_METRICS_TOKEN'
