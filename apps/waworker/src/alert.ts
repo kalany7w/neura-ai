@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/node';
 import { logger } from './logger.js';
 import { env } from './env.js';
 
@@ -18,6 +19,11 @@ export async function sendAlert(
   if (level === 'fatal') logger.fatal({ ...detail }, title);
   else if (level === 'error') logger.error({ ...detail }, title);
   else logger.warn({ ...detail }, title);
+
+  // Sentry (no-op sem DSN) — visibilidade dos eventos de negócio (queda de sessão etc.).
+  if (level !== 'warn') {
+    Sentry.captureMessage(title, { level: level === 'fatal' ? 'fatal' : 'error', extra: detail });
+  }
 
   const url = env.ALERT_WEBHOOK_URL;
   if (!url) return;

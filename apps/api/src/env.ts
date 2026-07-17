@@ -9,6 +9,8 @@ const apiEnvSchema = baseEnvSchema.extend({
   API_PORT: z.coerce.number().int().default(7301),
   // Webhook opcional (Discord/Slack) pra alertas operacionais (erros não tratados).
   ALERT_WEBHOOK_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
+  // Sentry (opcional): error tracking com stack trace. Sem DSN, é no-op.
+  SENTRY_DSN: z.preprocess(emptyToUndefined, z.string().url().optional()),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
   TRUSTED_ORIGINS: z.string().transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean)),
