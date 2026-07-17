@@ -1,6 +1,7 @@
 import { createMiddleware } from 'hono/factory';
 import type { Role } from '@neura/database';
 import { prisma } from '../db.js';
+import { tenantContext } from '../tenant-context.js';
 import type { AuthVars } from './auth.js';
 
 export interface WorkspaceVars extends AuthVars {
@@ -67,5 +68,6 @@ export const requireWorkspace = createMiddleware<{ Variables: WorkspaceVars }>(a
 
   c.set('workspaceId', workspaceId);
   c.set('role', role);
-  await next();
+  // Roda o resto do request dentro do contexto de tenant (guard de isolamento no db).
+  await tenantContext.run({ workspaceId }, next);
 });
