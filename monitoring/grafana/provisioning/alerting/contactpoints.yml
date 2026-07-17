@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# Grafana interpola $ALERT_WEBHOOK_URL do ambiente (mesmo webhook do app).
+# Tipo 'discord' (payload compatível com Discord). Se seu webhook é Slack, troque
+# 'type: discord' por 'type: slack' e 'url' por 'url' (mesmo campo).
+contactPoints:
+  - orgId: 1
+    name: neura-webhook
+    receivers:
+      - uid: neura-webhook-1
+        type: discord
+        disableResolveMessage: false
+        settings:
+          url: $ALERT_WEBHOOK_URL
