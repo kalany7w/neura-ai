@@ -62,6 +62,12 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web-runner
+      # NEXT_PUBLIC_* do Sentry precisam estar no BUILD (o Next inlina no bundle).
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production

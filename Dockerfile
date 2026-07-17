@@ -23,6 +23,17 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS builder
 COPY . .
 RUN pnpm db:generate
+# Build-time args do web: NEXT_PUBLIC_* são inlinados no bundle client pelo Next
+# no `next build` (não bastam em runtime). NEXT_PUBLIC_SENTRY_DSN habilita o Sentry
+# do browser. SENTRY_ORG/PROJECT/AUTH_TOKEN (opcionais) sobem os source maps.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG SENTRY_ORG=""
+ARG SENTRY_PROJECT=""
+ARG SENTRY_AUTH_TOKEN=""
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    SENTRY_ORG=$SENTRY_ORG \
+    SENTRY_PROJECT=$SENTRY_PROJECT \
+    SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
 # Build all (turbo paraleliza entre packages). 3 targets finais (api/web/waworker)
 # reusam a mesma camada via cache do Docker.
 RUN pnpm build
