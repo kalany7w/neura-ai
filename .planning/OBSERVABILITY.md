@@ -46,7 +46,20 @@
       static_configs: [{ targets: ['api:7301'] }]
   ```
 
+### 6. Stress test do real-time — script pronto
+- `apps/api/scripts/stress-realtime.mts` (`pnpm --filter @neura/api stress:realtime`).
+- Loga N clientes WS, publica M eventos no Redis (canal do workspace) e mede a
+  taxa de entrega + latência (publish → recebido) com p50/p95/p99. PASS/FAIL vs
+  alvos (default: 100% entrega, p95 < 2s — o critério da Fase 9 do roadmap).
+- REQUER stack rodando (API + Redis) e um usuário de teste com workspace:
+  ```bash
+  LOGIN_EMAIL=a@b.com LOGIN_PASSWORD=... \
+  CLIENTS=10 MESSAGES=100 DURATION_MS=10000 \
+  pnpm --filter @neura/api stress:realtime
+  ```
+- Vars: API_URL, WS_URL, REDIS_URL, CLIENTS, MESSAGES, DURATION_MS, WAIT_MS,
+  MAX_P95_MS, MIN_DELIVERY.
+
 ## Ainda pendente (backlog de observabilidade)
 - Uptime externo (Betterstack/UptimeRobot) batendo em `api.neura-ai.net/health`.
-- Stress test do real-time (script: N msgs em T segundos → todas aparecem <2s).
-- Dashboard Grafana pros gráficos das métricas acima.
+- Dashboard Grafana pros gráficos das métricas do /metrics.
