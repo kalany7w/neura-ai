@@ -10,5 +10,12 @@ export default defineConfig({
     // e fazem deleteMany globais — paralelizar arquivos derruba FK constraints.
     // Serial é necessário pra isolamento sem reescrever fixtures.
     fileParallelism: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      include: ['src/**/*.ts'],
+      // entrypoints/infra (só glue de servidor, wiring de rotas): fora do %.
+      exclude: ['src/index.ts', 'src/**/*.d.ts', 'src/**/*worker*.ts'],
+    },
   },
 });
