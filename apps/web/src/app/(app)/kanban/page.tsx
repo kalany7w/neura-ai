@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -906,7 +907,12 @@ export default function KanbanPage() {
     return { total, sumValue, unread, forecastValue, forecastedCount };
   }, [cardsData]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // Acessibilidade: mover cards por teclado (espaço pega/solta, setas movem) +
+    // anúncios de screen reader do dnd-kit.
+    useSensor(KeyboardSensor),
+  );
 
   async function handleDragEnd(e: DragEndEvent) {
     const cardId = e.active.id as string;

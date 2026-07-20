@@ -141,11 +141,21 @@ export default function CalendarPage() {
           <p className="text-muted-foreground">{t('page.calendar.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setRef(new Date(year, month - 1, 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={lang === 'es' ? 'Mes anterior' : 'Mês anterior'}
+            onClick={() => setRef(new Date(year, month - 1, 1))}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="font-medium capitalize min-w-40 text-center">{monthName}</span>
-          <Button variant="outline" size="sm" onClick={() => setRef(new Date(year, month + 1, 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={lang === 'es' ? 'Mes siguiente' : 'Próximo mês'}
+            onClick={() => setRef(new Date(year, month + 1, 1))}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setRef(new Date())}>
