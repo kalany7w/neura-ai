@@ -101,7 +101,9 @@ export default function ProfilePage() {
             {initials || '?'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-lg font-semibold">{user.name ?? t('settings_profile.no_name')}</p>
+            <p className="truncate text-lg font-semibold">
+              {user.name ?? t('settings_profile.no_name')}
+            </p>
             <p className="truncate text-sm text-muted-foreground">{user.email}</p>
           </div>
         </div>
@@ -179,16 +181,16 @@ export default function ProfilePage() {
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {t('settings_profile.password_hint')}
-          </p>
+          <p className="text-xs text-muted-foreground">{t('settings_profile.password_hint')}</p>
           <Button
             type="submit"
             disabled={
               savingPassword || !currentPassword || newPassword.length < 8 || !confirmPassword
             }
           >
-            {savingPassword ? t('settings_profile.updating') : t('settings_profile.update_password')}
+            {savingPassword
+              ? t('settings_profile.updating')
+              : t('settings_profile.update_password')}
           </Button>
         </form>
       </div>

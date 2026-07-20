@@ -19,7 +19,10 @@ const conditionSchema = z.object({
 
 const actionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('assign_agent'), userId: z.string().nullable() }),
-  z.object({ kind: z.literal('set_status'), status: z.enum(['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED']) }),
+  z.object({
+    kind: z.literal('set_status'),
+    status: z.enum(['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED']),
+  }),
   z.object({
     kind: z.literal('apply_label'),
     labelId: z.string().min(1),
@@ -75,7 +78,8 @@ automationsRouter.get(
     const settings = (ws?.settings as Record<string, unknown> | null) ?? {};
     return c.json({
       paused: settings.automationsPaused === true,
-      pausedAt: typeof settings.automationsPausedAt === 'string' ? settings.automationsPausedAt : null,
+      pausedAt:
+        typeof settings.automationsPausedAt === 'string' ? settings.automationsPausedAt : null,
     });
   },
 );
@@ -187,7 +191,8 @@ automationsRouter.patch(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const id = c.req.param('id');
     const existing = await prisma.automationRule.findFirst({ where: { id, workspaceId } });
@@ -294,80 +299,70 @@ automationsRouter.get(
 // ============================================================
 
 // GET /api/automations/macros — lista macros enabled do workspace (qualquer role)
-automationsRouter.get(
-  '/macros',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const macros = await prisma.automationRule.findMany({
-      where: { workspaceId, kind: 'macro', enabled: true },
-      orderBy: [{ priority: 'desc' }, { name: 'asc' }],
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        actions: true,
-        runCount: true,
-      },
-    });
-    return c.json({ macros });
-  },
-);
+automationsRouter.get('/macros', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const macros = await prisma.automationRule.findMany({
+    where: { workspaceId, kind: 'macro', enabled: true },
+    orderBy: [{ priority: 'desc' }, { name: 'asc' }],
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      actions: true,
+      runCount: true,
+    },
+  });
+  return c.json({ macros });
+});
 
 // POST /api/automations/macros/:id/execute — dispara macro numa conversa
 const macroExecuteBody = z.object({
   conversationId: z.string().min(1),
 });
 
-automationsRouter.post(
-  '/macros/:id/execute',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const parsed = macroExecuteBody.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
-    const workspaceId = c.get('workspaceId') as string;
-    const userId = c.get('userId');
-    const id = c.req.param('id');
-    const role = c.get('role')!;
+automationsRouter.post('/macros/:id/execute', requireAuth, requireWorkspace, async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = macroExecuteBody.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+  const workspaceId = c.get('workspaceId') as string;
+  const userId = c.get('userId');
+  const id = c.req.param('id');
+  const role = c.get('role')!;
 
-    // AGENT só pode executar macro em conversa atribuída ou sem agente
-    if (role === 'AGENT') {
-      const conv = await prisma.conversation.findFirst({
-        where: { id: parsed.data.conversationId, workspaceId },
-        select: { assignedAgentId: true },
-      });
-      if (!conv) return c.json({ error: 'not_found' }, 404);
-      if (conv.assignedAgentId && conv.assignedAgentId !== userId) {
-        return c.json({ error: 'forbidden' }, 403);
-      }
+  // AGENT só pode executar macro em conversa atribuída ou sem agente
+  if (role === 'AGENT') {
+    const conv = await prisma.conversation.findFirst({
+      where: { id: parsed.data.conversationId, workspaceId },
+      select: { assignedAgentId: true },
+    });
+    if (!conv) return c.json({ error: 'not_found' }, 404);
+    if (conv.assignedAgentId && conv.assignedAgentId !== userId) {
+      return c.json({ error: 'forbidden' }, 403);
     }
+  }
 
-    const result = await executeMacro({
-      ruleId: id,
-      workspaceId,
+  const result = await executeMacro({
+    ruleId: id,
+    workspaceId,
+    conversationId: parsed.data.conversationId,
+    actorUserId: userId,
+  });
+  if (result.status === 'NOT_FOUND') {
+    return c.json({ error: 'not_found' }, 404);
+  }
+  await audit({
+    workspaceId,
+    actorId: userId,
+    action: 'macro.executed',
+    resource: `AutomationRule:${id}`,
+    metadata: {
       conversationId: parsed.data.conversationId,
-      actorUserId: userId,
-    });
-    if (result.status === 'NOT_FOUND') {
-      return c.json({ error: 'not_found' }, 404);
-    }
-    await audit({
-      workspaceId,
-      actorId: userId,
-      action: 'macro.executed',
-      resource: `AutomationRule:${id}`,
-      metadata: {
-        conversationId: parsed.data.conversationId,
-        status: result.status,
-      },
-    });
-    return c.json({
       status: result.status,
-      actionsResult: result.actionsResult,
-      errorMessage: result.errorMessage,
-    });
-  },
-);
+    },
+  });
+  return c.json({
+    status: result.status,
+    actionsResult: result.actionsResult,
+    errorMessage: result.errorMessage,
+  });
+});

@@ -235,7 +235,9 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
               }
               return (
                 <p className="text-[11px] text-muted-foreground">
-                  {t('c_inboxes_inbox_card.qr_expires_in', { n: Math.max(1, Math.round(ms / 1000)) })}
+                  {t('c_inboxes_inbox_card.qr_expires_in', {
+                    n: Math.max(1, Math.round(ms / 1000)),
+                  })}
                 </p>
               );
             })()}
@@ -243,13 +245,17 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {(inbox.status === 'DISCONNECTED' || inbox.status === 'ERROR' || inbox.status === 'BANNED') && (
+        {(inbox.status === 'DISCONNECTED' ||
+          inbox.status === 'ERROR' ||
+          inbox.status === 'BANNED') && (
           <Button size="sm" onClick={connect} disabled={busy}>
             <PlugZap className="h-4 w-4" />
             {t('c_inboxes_inbox_card.connect')}
           </Button>
         )}
-        {(inbox.status === 'CONNECTED' || inbox.status === 'CONNECTING' || inbox.status === 'AWAITING_QR') && (
+        {(inbox.status === 'CONNECTED' ||
+          inbox.status === 'CONNECTING' ||
+          inbox.status === 'AWAITING_QR') && (
           <>
             <Button
               size="sm"
@@ -282,11 +288,7 @@ export function InboxCard({ inbox }: { inbox: InboxItem }) {
         </Button>
       </div>
 
-      <InboxSettingsDialog
-        inbox={inbox}
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-      />
+      <InboxSettingsDialog inbox={inbox} open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

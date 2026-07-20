@@ -61,7 +61,17 @@ calendarRouter.get('/', requireAuth, requireWorkspace, async (c) => {
       workspaceId,
       ...(useRange ? { eventDate: { gte: from, lte: to } } : {}),
       ...(cardId ? { cardId } : {}),
-      ...(typeFilter ? { type: typeFilter as 'TASK' | 'APPLICATION' | 'MAINTENANCE' | 'REPAIR' | 'SALE_FOLLOWUP' | 'OTHER' } : {}),
+      ...(typeFilter
+        ? {
+            type: typeFilter as
+              | 'TASK'
+              | 'APPLICATION'
+              | 'MAINTENANCE'
+              | 'REPAIR'
+              | 'SALE_FOLLOWUP'
+              | 'OTHER',
+          }
+        : {}),
     },
     orderBy: { eventDate: 'asc' },
     include: {
@@ -162,7 +172,9 @@ calendarRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
       ...(parsed.data.description !== undefined && { description: parsed.data.description }),
       ...(parsed.data.eventDate !== undefined && { eventDate: new Date(parsed.data.eventDate) }),
       ...(parsed.data.type !== undefined && { type: parsed.data.type }),
-      ...(parsed.data.assignedUserId !== undefined && { assignedUserId: parsed.data.assignedUserId }),
+      ...(parsed.data.assignedUserId !== undefined && {
+        assignedUserId: parsed.data.assignedUserId,
+      }),
     },
   });
 

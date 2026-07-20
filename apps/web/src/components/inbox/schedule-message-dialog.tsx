@@ -123,9 +123,7 @@ export function ScheduleMessageDialog({
             <CalendarClock className="h-5 w-5" />
             {t('c_inbox_schedule_message_dialog.title')}
           </DialogTitle>
-          <DialogDescription>
-            {t('c_inbox_schedule_message_dialog.description')}
-          </DialogDescription>
+          <DialogDescription>{t('c_inbox_schedule_message_dialog.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -154,8 +152,16 @@ export function ScheduleMessageDialog({
               {[
                 { id: '1h', label: t('c_inbox_schedule_message_dialog.shortcut_1h'), min: 60 },
                 { id: '4h', label: t('c_inbox_schedule_message_dialog.shortcut_4h'), min: 240 },
-                { id: 'tomorrow', label: t('c_inbox_schedule_message_dialog.shortcut_tomorrow_9'), min: -1 },
-                { id: 'monday', label: t('c_inbox_schedule_message_dialog.shortcut_monday_9'), min: -2 },
+                {
+                  id: 'tomorrow',
+                  label: t('c_inbox_schedule_message_dialog.shortcut_tomorrow_9'),
+                  min: -1,
+                },
+                {
+                  id: 'monday',
+                  label: t('c_inbox_schedule_message_dialog.shortcut_monday_9'),
+                  min: -2,
+                },
               ].map((s) => (
                 <Button
                   key={s.id}

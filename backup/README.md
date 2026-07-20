@@ -33,6 +33,7 @@ atrapalha o deploy.
 ## Restaurar
 
 Do destino pra um MinIO novo/limpo (mesmas aliases do script):
+
 ```sh
 mc alias set dst  <BACKUP_S3_ENDPOINT> <ACCESS> <SECRET>
 mc alias set src  http://minio:9000    <MINIO_ROOT_USER> <MINIO_ROOT_PASSWORD>
@@ -40,10 +41,12 @@ mc mirror --overwrite dst/<BACKUP_S3_BUCKET> src/neura-media
 ```
 
 ## Nota sobre a imagem
+
 Usa `minio/mc` + `/bin/sh`. Se a tag do `mc` que você fixar não tiver shell,
 troque por uma tag `RELEASE.*` que tenha, ou rode o mesmo script numa imagem
 `alpine` com o binário `mc` instalado.
 
 ## Postgres
+
 O backup do Postgres é separado (backup nativo do Coolify + `pg_dump`), não faz
 parte deste serviço.

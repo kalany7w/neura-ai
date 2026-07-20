@@ -418,8 +418,16 @@ function KbTab({ data }: { data: KbReport }) {
 
       {summary.drafts + summary.archived > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <CsatKpiCard label={t('reports.kb.drafts')} value={summary.drafts.toString()} sub={t('reports.kb.drafts_sub')} />
-          <CsatKpiCard label={t('reports.kb.archived')} value={summary.archived.toString()} sub={t('reports.kb.archived_sub')} />
+          <CsatKpiCard
+            label={t('reports.kb.drafts')}
+            value={summary.drafts.toString()}
+            sub={t('reports.kb.drafts_sub')}
+          />
+          <CsatKpiCard
+            label={t('reports.kb.archived')}
+            value={summary.archived.toString()}
+            sub={t('reports.kb.archived_sub')}
+          />
         </div>
       )}
 
@@ -428,7 +436,8 @@ function KbTab({ data }: { data: KbReport }) {
         {topArticles.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             {t('reports.kb.no_articles_before')}{' '}
-            <strong>{t('reports.kb.no_articles_strong')}</strong> {t('reports.kb.no_articles_after')}
+            <strong>{t('reports.kb.no_articles_strong')}</strong>{' '}
+            {t('reports.kb.no_articles_after')}
           </p>
         ) : (
           <ol className="space-y-1.5">
@@ -458,7 +467,9 @@ function KbTab({ data }: { data: KbReport }) {
                 </div>
                 <span className="shrink-0 text-sm font-medium tabular-nums">
                   {a.viewCount}
-                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">{t('reports.kb.usage')}</span>
+                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">
+                    {t('reports.kb.usage')}
+                  </span>
                 </span>
               </li>
             ))}
@@ -513,7 +524,11 @@ function CsatTab({ data }: { data: CsatReport }) {
         <CsatKpiCard
           label={t('reports.col.responses')}
           value={summary.totalResponses.toString()}
-          sub={summary.responseRate !== null ? t('reports.csat.response_rate', { rate: summary.responseRate }) : '—'}
+          sub={
+            summary.responseRate !== null
+              ? t('reports.csat.response_rate', { rate: summary.responseRate })
+              : '—'
+          }
         />
         {hasCsat && (
           <CsatKpiCard
@@ -542,9 +557,7 @@ function CsatTab({ data }: { data: CsatReport }) {
         {hasThumbs && (
           <CsatKpiCard
             label={t('reports.csat.thumbs_positive')}
-            value={
-              summary.thumbsPositiveRate !== null ? `${summary.thumbsPositiveRate}%` : '—'
-            }
+            value={summary.thumbsPositiveRate !== null ? `${summary.thumbsPositiveRate}%` : '—'}
             sub={t('reports.csat.thumbs_breakdown', {
               pos: summary.thumbsBreakdown.positives,
               neg: summary.thumbsBreakdown.negatives,
@@ -566,11 +579,7 @@ function CsatTab({ data }: { data: CsatReport }) {
                 const total = csatDistribution.reduce((a, b) => a + b.count, 0);
                 const sharePct = total > 0 ? Math.round((d.count / total) * 100) : 0;
                 const fill =
-                  d.score >= 4
-                    ? 'bg-emerald-500'
-                    : d.score === 3
-                      ? 'bg-amber-500'
-                      : 'bg-red-500';
+                  d.score >= 4 ? 'bg-emerald-500' : d.score === 3 ? 'bg-amber-500' : 'bg-red-500';
                 return (
                   <div key={d.score} className="flex items-center gap-3">
                     <span className="w-14 text-sm tabular-nums">
@@ -578,10 +587,7 @@ function CsatTab({ data }: { data: CsatReport }) {
                     </span>
                     <div className="relative flex-1">
                       <div className="h-5 rounded bg-muted/50">
-                        <div
-                          className={`h-5 rounded ${fill}`}
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className={`h-5 rounded ${fill}`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                     <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">
@@ -714,7 +720,10 @@ function SlaTab({ data }: { data: SlaReport }) {
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
-        <SlaKpiCard label={t('reports.sla.conversations_period')} value={summary.totalConversations.toLocaleString(localeFor(lang))} />
+        <SlaKpiCard
+          label={t('reports.sla.conversations_period')}
+          value={summary.totalConversations.toLocaleString(localeFor(lang))}
+        />
         <SlaKpiCard
           label={t('reports.col.frt_avg')}
           value={summary.frtAvgHuman}
@@ -757,9 +766,7 @@ function SlaTab({ data }: { data: SlaReport }) {
       <div className="rounded-lg border bg-card">
         <div className="border-b px-4 py-3">
           <h3 className="text-sm font-semibold">{t('reports.section.by_agent')}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t('reports.sla.by_agent_sub')}
-          </p>
+          <p className="text-xs text-muted-foreground">{t('reports.sla.by_agent_sub')}</p>
         </div>
         {agents.length === 0 ? (
           <p className="p-6 text-sm text-muted-foreground">{t('common.no_data')}</p>
@@ -782,24 +789,22 @@ function SlaTab({ data }: { data: SlaReport }) {
                   <tr key={a.userId} className="hover:bg-accent/30">
                     <td className="px-4 py-2">
                       <p className="font-medium">{a.name ?? a.email}</p>
-                      {a.name && (
-                        <p className="text-[11px] text-muted-foreground">{a.email}</p>
-                      )}
+                      {a.name && <p className="text-[11px] text-muted-foreground">{a.email}</p>}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{a.conversations}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">
-                      {formatSeconds(a.frtAvg)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
-                      {formatSeconds(a.frtP90)}
-                    </td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.frtHitRate)}`}>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatSeconds(a.frtAvg)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatSeconds(a.frtP90)}</td>
+                    <td
+                      className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.frtHitRate)}`}
+                    >
                       {a.frtHitRate != null ? `${a.frtHitRate}%` : '—'}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">
                       {a.rtAvg ? formatSeconds(a.rtAvg) : '—'}
                     </td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.rtHitRate)}`}>
+                    <td
+                      className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.rtHitRate)}`}
+                    >
                       {a.rtHitRate != null ? `${a.rtHitRate}%` : '—'}
                     </td>
                   </tr>
@@ -843,11 +848,7 @@ function formatSeconds(sec: number): string {
   return `${Math.round(sec / 8640) / 10}d`;
 }
 
-function setShortcut(
-  days: number,
-  setSince: (v: string) => void,
-  setUntil: (v: string) => void,
-) {
+function setShortcut(days: number, setSince: (v: string) => void, setUntil: (v: string) => void) {
   const until = new Date();
   const since = new Date(until.getTime() - days * 24 * 60 * 60 * 1000);
   setSince(toInputDate(since));
@@ -894,7 +895,9 @@ function OverviewTab({ data }: { data: Overview }) {
             neg: data.pipeline.negative,
           })}
           icon={TrendingUp}
-          accent={data.pipeline.conversionRate && data.pipeline.conversionRate >= 50 ? 'emerald' : 'slate'}
+          accent={
+            data.pipeline.conversionRate && data.pipeline.conversionRate >= 50 ? 'emerald' : 'slate'
+          }
         />
       </div>
 
@@ -1167,7 +1170,9 @@ function KpiCard({
           <p className="mt-1 text-2xl font-bold">{value}</p>
           {subtitle && <p className="mt-1 text-[11px] text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${ACCENT_BG[accent]}`}>
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${ACCENT_BG[accent]}`}
+        >
           <Icon className="h-4 w-4" />
         </div>
       </div>

@@ -130,9 +130,7 @@ const timeseriesQuery = z.object({
 
 dashboardRouter.get('/timeseries', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
-  const parsed = timeseriesQuery.safeParse(
-    Object.fromEntries(new URL(c.req.url).searchParams),
-  );
+  const parsed = timeseriesQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   const days = parsed.success ? parsed.data.days : 14;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   since.setUTCHours(0, 0, 0, 0);
@@ -145,9 +143,7 @@ dashboardRouter.get('/timeseries', requireAuth, requireWorkspace, async (c) => {
       GROUP BY 1
       ORDER BY 1 ASC
     `,
-    prisma.$queryRaw<
-      Array<{ day: Date; direction: 'INBOUND' | 'OUTBOUND'; count: bigint }>
-    >`
+    prisma.$queryRaw<Array<{ day: Date; direction: 'INBOUND' | 'OUTBOUND'; count: bigint }>>`
       SELECT date_trunc('day', m."createdAt")::date AS day, m.direction, COUNT(*)::bigint AS count
       FROM messages m
       JOIN conversations c ON c.id = m."conversationId"
@@ -158,8 +154,7 @@ dashboardRouter.get('/timeseries', requireAuth, requireWorkspace, async (c) => {
   ]);
 
   // Monta esqueleto com TODOS os dias (zeros pra dias sem dado)
-  const series: Record<string, { conversations: number; inbound: number; outbound: number }> =
-    {};
+  const series: Record<string, { conversations: number; inbound: number; outbound: number }> = {};
   for (let i = 0; i < days; i++) {
     const d = new Date(since);
     d.setUTCDate(d.getUTCDate() + i);

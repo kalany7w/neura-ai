@@ -275,8 +275,7 @@ integrationsRouter.patch(
 
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
-    if (parsed.data.allowedActions !== undefined)
-      data.allowedActions = parsed.data.allowedActions;
+    if (parsed.data.allowedActions !== undefined) data.allowedActions = parsed.data.allowedActions;
     if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
     let newSecret: string | null = null;
     if (parsed.data.regenerateSecret) {

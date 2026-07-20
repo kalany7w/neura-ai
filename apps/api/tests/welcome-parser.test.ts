@@ -62,11 +62,9 @@ describe('parseReply — fallback OpenAI', () => {
   it('chama OpenAI quando nada matchea localmente e retorna match', async () => {
     const fuzzyMock = vi.fn().mockResolvedValue('opt1');
 
-    const r = await parseReply(
-      { kind: 'text', text: 'tô interessado em adquirir' },
-      opts,
-      { fuzzyMatchFn: fuzzyMock },
-    );
+    const r = await parseReply({ kind: 'text', text: 'tô interessado em adquirir' }, opts, {
+      fuzzyMatchFn: fuzzyMock,
+    });
 
     expect(fuzzyMock).toHaveBeenCalledOnce();
     expect(r?.id).toBe('opt1');

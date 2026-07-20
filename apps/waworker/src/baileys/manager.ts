@@ -70,9 +70,7 @@ class SessionManager {
     if (nextRetry > this.maxRetries) {
       logger.error({ inboxId }, 'Max retries exhausted, giving up');
       this.removeSession(inboxId);
-      prisma.inbox
-        .update({ where: { id: inboxId }, data: { status: 'ERROR' } })
-        .catch(() => {});
+      prisma.inbox.update({ where: { id: inboxId }, data: { status: 'ERROR' } }).catch(() => {});
       void sendAlert('error', 'Sessão Baileys caiu e esgotou os retries de reconexão', {
         inboxId,
         maxRetries: this.maxRetries,

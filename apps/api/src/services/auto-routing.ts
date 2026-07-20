@@ -163,9 +163,7 @@ export async function applyTagWithRouting(params: ApplyTagParams): Promise<void>
       }),
     ]);
     const cardTitle =
-      conv?.contact?.name ??
-      conv?.contact?.phoneNumber ??
-      `Conversa #${conversationId.slice(-6)}`;
+      conv?.contact?.name ?? conv?.contact?.phoneNumber ?? `Conversa #${conversationId.slice(-6)}`;
     const cardPosition = (maxPos._max.position ?? -1) + 1;
 
     // Tenta criar card. Race: dois calls concurrent podem ambos passar o findFirst e

@@ -61,7 +61,7 @@ services:
       - redis
       - minio
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:7301/health"]
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:7301/health']
       interval: 30s
       timeout: 5s
       retries: 5
@@ -90,7 +90,7 @@ services:
       - api
     healthcheck:
       # Next responde 200 em / (página landing redireciona pra /login). Wget em alpine vem builtin.
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:7302/"]
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:7302/']
       interval: 30s
       timeout: 5s
       retries: 5
@@ -126,7 +126,13 @@ services:
       - minio
     healthcheck:
       # Usa node (fetch nativo) pra não depender de wget na imagem do worker.
-      test: ["CMD", "node", "-e", "fetch('http://localhost:7303/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:7303/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -146,7 +152,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neura} -d ${POSTGRES_DB:-neura_ai}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-neura} -d ${POSTGRES_DB:-neura_ai}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -159,7 +165,7 @@ services:
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -175,7 +181,7 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ['CMD', 'mc', 'ready', 'local']
       interval: 30s
       timeout: 5s
       retries: 5

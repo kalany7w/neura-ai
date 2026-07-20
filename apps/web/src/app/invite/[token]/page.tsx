@@ -42,9 +42,7 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>{t('invite_token.title')}</CardTitle>
-          <CardDescription>
-            {t('invite_token.description')}
-          </CardDescription>
+          <CardDescription>{t('invite_token.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           {session?.user ? (
@@ -53,9 +51,7 @@ export default function AcceptInvitePage({ params }: { params: Promise<{ token: 
             </Button>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {t('invite_token.login_required')}
-              </p>
+              <p className="text-sm text-muted-foreground">{t('invite_token.login_required')}</p>
               <Button asChild className="w-full">
                 <Link href={`/login?next=/invite/${token}`}>{t('invite_token.login')}</Link>
               </Button>

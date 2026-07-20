@@ -58,7 +58,10 @@ telegramRouter.post('/webhook/:slug', async (c) => {
   // Fail-closed: se o inbox não tem secret configurado, REJEITA (não aceita sem auth).
   // Reconectar o inbox regenera o secretToken.
   if (!expectedSecret) {
-    logger.warn({ inboxId: inbox.id }, 'Telegram webhook: inbox sem secretToken — reconecte o inbox');
+    logger.warn(
+      { inboxId: inbox.id },
+      'Telegram webhook: inbox sem secretToken — reconecte o inbox',
+    );
     return c.json({ ok: false }, 403);
   }
   if (!secretsMatch(headerSecret, expectedSecret)) {
@@ -68,7 +71,10 @@ telegramRouter.post('/webhook/:slug', async (c) => {
 
   if (inbox.status !== 'CONNECTED') {
     // Aceita mesmo desconectado pra não perder updates — só loga
-    logger.warn({ inboxId: inbox.id, status: inbox.status }, 'Telegram webhook on disconnected inbox');
+    logger.warn(
+      { inboxId: inbox.id, status: inbox.status },
+      'Telegram webhook on disconnected inbox',
+    );
   }
 
   const update = (await c.req.json().catch(() => null)) as TgUpdate | null;

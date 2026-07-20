@@ -15,35 +15,44 @@
 ## File Structure
 
 ### Schema (Prisma)
+
 - Modify: `packages/database/prisma/schema.prisma` — novos models `WelcomeFlow`, `WelcomeOption`; colunas novas em `Contact`, `Conversation`, `Label`, `Message`, `Workspace`; novo enum `MessageSender`.
 
 ### Shared types
+
 - Modify: `packages/shared/src/queue.ts` — extender `SendMessageJob.type` com `'INTERACTIVE'`, add `interactiveOptions` field; novo `QUEUE_WELCOME_PROCESS` constant e `WelcomeProcessJob` interface.
 
 ### API services (lógica core)
+
 - Create: `apps/api/src/services/auto-routing.ts` — aplica tag + cria card em funil destino.
 - Create: `apps/api/src/services/welcome-flow.ts` — `shouldTriggerWelcome`, `sendWelcome`, `retryAsText`, `markCompleted`, `markFailed`.
 - Create: `apps/api/src/services/welcome-parser.ts` — parseReply (número/keyword/exact/fuzzy).
 
 ### API workers (BullMQ + cron)
+
 - Create: `apps/api/src/welcome-worker.ts` — consumer BullMQ da queue `welcome-process`.
 - Create: `apps/api/src/welcome-scheduler.ts` — cron 30s para timeout fallback.
 
 ### API routes (hook leve em route existente)
+
 - Modify: `apps/api/src/routes/messages.ts` — quando inbound chega com `conversation.isAwaitingWelcomeChoice`, rotear pra welcome parser via queue.
 
 ### API boot
+
 - Modify: `apps/api/src/index.ts` — importar `welcomeWorker` e `startWelcomeScheduler`.
 
 ### Waworker
+
 - Modify: `apps/waworker/src/baileys/events.ts` — após `persistInboundMessage`, detectar primeira mensagem inbound de contato sem `welcomeRespondedAt` em inbox com flow habilitado, enfileirar job em `welcome-process`. Também: detectar `buttonReply` / `listResponseMessage` e mapear pro Message normal.
 - Modify: `apps/waworker/src/queue/outbound.ts` — handler novo pra `type === 'INTERACTIVE'` que monta listMessage via Baileys.
 - Create: `apps/waworker/src/welcome-trigger.ts` — helper `enqueueWelcomeProcess(payload)` que conecta ao Redis e adiciona job em `welcome-process` queue.
 
 ### Constants
+
 - Modify: `apps/api/src/services/audit.ts` — adicionar constantes de actions (`welcome.triggered`, `welcome.completed`, `welcome.failed`, `card.auto_routed`).
 
 ### Tests
+
 - Create: `apps/api/tests/welcome-parser.test.ts` — unit.
 - Create: `apps/api/tests/auto-routing.test.ts` — unit.
 - Create: `apps/api/tests/welcome-flow.test.ts` — unit.
@@ -54,6 +63,7 @@
 ## Task 1: Migration Prisma — schema novo
 
 **Files:**
+
 - Modify: `packages/database/prisma/schema.prisma`
 
 - [ ] **Step 1: Adicionar enum `MessageSender` e estender model `Message`**
@@ -230,6 +240,7 @@ git commit -m "feat(db): adiciona welcome flow schema (models + colunas + enum M
 ## Task 2: Audit action constants
 
 **Files:**
+
 - Modify: `apps/api/src/services/audit.ts`
 
 - [ ] **Step 1: Adicionar exports de actions**
@@ -267,6 +278,7 @@ git commit -m "feat(audit): adiciona constantes de actions pro welcome flow"
 ## Task 3: Estender SendMessageJob + adicionar WelcomeProcessJob
 
 **Files:**
+
 - Modify: `packages/shared/src/queue.ts`
 
 - [ ] **Step 1: Estender SendMessageJob.type com INTERACTIVE**
@@ -343,6 +355,7 @@ git commit -m "feat(shared): adiciona INTERACTIVE type e WelcomeProcessJob no qu
 ## Task 4: Service `auto-routing.ts`
 
 **Files:**
+
 - Create: `apps/api/src/services/auto-routing.ts`
 - Create: `apps/api/tests/auto-routing.test.ts`
 
@@ -647,6 +660,7 @@ git commit -m "feat(api): adiciona service auto-routing.applyTagWithRouting + te
 ## Task 5: Service `welcome-flow.ts`
 
 **Files:**
+
 - Create: `apps/api/src/services/welcome-flow.ts`
 - Create: `apps/api/tests/welcome-flow.test.ts`
 
@@ -930,10 +944,7 @@ export async function sendWelcome(
   }
 
   // Substituir placeholders no prompt
-  const prompt = flow.prompt.replace(
-    /\{\{contact\.name\}\}/g,
-    conv.contact.name || 'cliente',
-  );
+  const prompt = flow.prompt.replace(/\{\{contact\.name\}\}/g, conv.contact.name || 'cliente');
 
   // Persistir Message do bot (AI_AGENT, OUTBOUND, INTERACTIVE)
   const msg = await prisma.message.create({
@@ -1179,6 +1190,7 @@ git commit -m "feat(api): adiciona service welcome-flow (trigger/send/complete/f
 ## Task 6: Service `welcome-parser.ts`
 
 **Files:**
+
 - Create: `apps/api/src/services/welcome-parser.ts`
 - Create: `apps/api/tests/welcome-parser.test.ts`
 
@@ -1251,11 +1263,9 @@ describe('parseReply — fallback OpenAI', () => {
   it('chama OpenAI quando nada matchea localmente e retorna match', async () => {
     const fuzzyMock = vi.fn().mockResolvedValue('opt1');
 
-    const r = await parseReply(
-      { kind: 'text', text: 'tô interessado em adquirir' },
-      opts,
-      { fuzzyMatchFn: fuzzyMock },
-    );
+    const r = await parseReply({ kind: 'text', text: 'tô interessado em adquirir' }, opts, {
+      fuzzyMatchFn: fuzzyMock,
+    });
 
     expect(fuzzyMock).toHaveBeenCalledOnce();
     expect(r?.id).toBe('opt1');
@@ -1302,9 +1312,7 @@ interface ParserDeps {
   fuzzyMatchFn?: (text: string, options: WelcomeOptionLite[]) => Promise<string | null>;
 }
 
-const openaiClient = env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: env.OPENAI_API_KEY })
-  : null;
+const openaiClient = env.OPENAI_API_KEY ? new OpenAI({ apiKey: env.OPENAI_API_KEY }) : null;
 
 /**
  * Fuzzy match via OpenAI. Recebe texto livre + opções, retorna rowId ou null.
@@ -1320,7 +1328,10 @@ async function defaultFuzzyMatch(
   }
 
   const optList = options
-    .map((o) => `${o.position}. id=${o.id} | ${o.label} | keywords: ${o.matchKeywords.join(', ') || '(nenhuma)'}`)
+    .map(
+      (o) =>
+        `${o.position}. id=${o.id} | ${o.label} | keywords: ${o.matchKeywords.join(', ') || '(nenhuma)'}`,
+    )
     .join('\n');
 
   const prompt = `Você é um classificador. O cliente disse: "${text}"
@@ -1386,9 +1397,7 @@ export async function parseReply(
   if (byLabel) return byLabel;
 
   // 4. Match por keyword (substring)
-  const byKeyword = options.find((o) =>
-    o.matchKeywords.some((k) => text.includes(normalize(k))),
-  );
+  const byKeyword = options.find((o) => o.matchKeywords.some((k) => text.includes(normalize(k))));
   if (byKeyword) return byKeyword;
 
   // 5. Fuzzy fallback
@@ -1425,6 +1434,7 @@ git commit -m "feat(api): adiciona service welcome-parser (number/label/keyword/
 ## Task 7: Worker BullMQ `welcome-worker.ts`
 
 **Files:**
+
 - Create: `apps/api/src/welcome-worker.ts`
 
 - [ ] **Step 1: Implementar consumer**
@@ -1531,9 +1541,8 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
     replyInput = {
       kind: 'button_reply' as const,
       rowId: meta.interactiveRowId,
-      selectedDisplayText: typeof meta.interactiveDisplayText === 'string'
-        ? meta.interactiveDisplayText
-        : undefined,
+      selectedDisplayText:
+        typeof meta.interactiveDisplayText === 'string' ? meta.interactiveDisplayText : undefined,
     };
   } else if (msg.type === 'AUDIO') {
     // Esperar transcrição (Whisper worker já roda assíncrono). Se ainda não tem,
@@ -1600,7 +1609,10 @@ export const welcomeWorker = new Worker<WelcomeProcessJob>(
   QUEUE_WELCOME_PROCESS,
   async (job: Job<WelcomeProcessJob>) => {
     const { kind } = job.data;
-    logger.info({ jobId: job.id, kind, conversationId: job.data.conversationId }, 'welcome-worker processing');
+    logger.info(
+      { jobId: job.id, kind, conversationId: job.data.conversationId },
+      'welcome-worker processing',
+    );
     switch (kind) {
       case 'trigger':
         return handleTrigger(job.data);
@@ -1648,6 +1660,7 @@ git commit -m "feat(api): adiciona welcome-worker BullMQ consumer (trigger/parse
 ## Task 8: Scheduler `welcome-scheduler.ts`
 
 **Files:**
+
 - Create: `apps/api/src/welcome-scheduler.ts`
 
 - [ ] **Step 1: Implementar cron**
@@ -1667,9 +1680,7 @@ async function tick(): Promise<void> {
   try {
     // Busca conversas awaiting que passaram do timeout e não tiveram fallback texto ainda.
     // Usa cross-join com WelcomeFlow pra pegar fallbackTimeoutMinutes da inbox.
-    const candidates = await prisma.$queryRaw<
-      Array<{ id: string; workspaceId: string }>
-    >`
+    const candidates = await prisma.$queryRaw<Array<{ id: string; workspaceId: string }>>`
       SELECT c.id, c."workspaceId"
       FROM conversations c
       JOIN welcome_flows wf ON wf."inboxId" = c."inboxId"
@@ -1734,6 +1745,7 @@ git commit -m "feat(api): adiciona welcome-scheduler (poll 30s pra retry_text po
 ## Task 9: Hook em `routes/messages.ts` para inbound em awaiting
 
 **Files:**
+
 - Modify: `apps/api/src/routes/messages.ts`
 
 - [ ] **Step 1: Localizar handler de inbound message processing**
@@ -1790,6 +1802,7 @@ git commit -m "feat(api): rotear inbound pra welcome parser se conversa awaiting
 ## Task 10: Wire welcome-worker + scheduler em `apps/api/src/index.ts`
 
 **Files:**
+
 - Modify: `apps/api/src/index.ts`
 
 - [ ] **Step 1: Importar e bootar**
@@ -1828,6 +1841,7 @@ git commit -m "feat(api): wire welcome-worker + scheduler no boot"
 ## Task 11: Hook no waworker — trigger welcome em primeira mensagem inbound
 
 **Files:**
+
 - Modify: `apps/waworker/src/baileys/events.ts`
 - Create: `apps/waworker/src/welcome-trigger.ts`
 
@@ -1890,12 +1904,13 @@ import { enqueueWelcomeTrigger, enqueueWelcomeParseReply } from '../welcome-trig
 
 // Hook welcome flow: detectar primeira mensagem do contato (newConversation OR
 // é a primeira message inbound nessa conversa) → trigger.
-const isFirstInbound = await prisma.message.count({
-  where: {
-    conversationId: conversation.id,
-    direction: 'INBOUND',
-  },
-}) === 1; // já incluímos a recém criada, então 1 = primeira
+const isFirstInbound =
+  (await prisma.message.count({
+    where: {
+      conversationId: conversation.id,
+      direction: 'INBOUND',
+    },
+  })) === 1; // já incluímos a recém criada, então 1 = primeira
 
 if (isFirstInbound) {
   await enqueueWelcomeTrigger({
@@ -1988,6 +2003,7 @@ git commit -m "feat(waworker): hook welcome trigger em primeira inbound + detect
 ## Task 12: Outbound handler para `type === 'INTERACTIVE'`
 
 **Files:**
+
 - Modify: `apps/waworker/src/queue/outbound.ts`
 
 - [ ] **Step 1: Adicionar branch INTERACTIVE no outboundWorker**
@@ -2070,6 +2086,7 @@ git commit -m "feat(waworker): outbound handler pra type=INTERACTIVE (listMessag
 ## Task 13: Integration test end-to-end mockado
 
 **Files:**
+
 - Create: `apps/api/tests/integration/welcome-flow.test.ts`
 
 - [ ] **Step 1: Escrever teste integração**

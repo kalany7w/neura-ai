@@ -29,9 +29,7 @@ auditRouter.get(
   requirePermission('workspace.update'),
   async (c) => {
     const workspaceId = c.get('workspaceId') as string;
-    const parsed = listQuery.safeParse(
-      Object.fromEntries(new URL(c.req.url).searchParams),
-    );
+    const parsed = listQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
     if (!parsed.success) return c.json({ error: 'invalid_query' }, 400);
     const { actorId, action, resource, since, until, page, perPage } = parsed.data;
 
@@ -69,7 +67,7 @@ auditRouter.get(
 
     const enriched = items.map((i) => ({
       ...i,
-      actor: i.actorId ? userMap.get(i.actorId) ?? null : null,
+      actor: i.actorId ? (userMap.get(i.actorId) ?? null) : null,
     }));
 
     return c.json({ items: enriched, total, page, perPage });

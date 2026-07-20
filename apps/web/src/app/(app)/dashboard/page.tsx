@@ -105,7 +105,8 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">
-          {t('page.dashboard.welcome')}{firstName ? `, ${firstName}` : ''}
+          {t('page.dashboard.welcome')}
+          {firstName ? `, ${firstName}` : ''}
         </h1>
         <p className="text-muted-foreground">{t('page.dashboard.subtitle')}</p>
       </div>
@@ -249,9 +250,7 @@ export default function DashboardPage() {
           </Link>
         </div>
         {recentConversations.length === 0 ? (
-          <p className="mt-3 text-sm text-muted-foreground">
-            {t('dashboard.empty')}
-          </p>
+          <p className="mt-3 text-sm text-muted-foreground">{t('dashboard.empty')}</p>
         ) : (
           <ul className="mt-3 space-y-1.5">
             {recentConversations.map((conv) => (
@@ -340,7 +339,9 @@ function KpiCard({
           <p className="mt-1 text-3xl font-bold">{value}</p>
           {subtitle && <p className="mt-1 text-[11px] text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${ACCENT_BG[accent]}`}>
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${ACCENT_BG[accent]}`}
+        >
           <Icon className="h-4 w-4" />
         </div>
       </div>

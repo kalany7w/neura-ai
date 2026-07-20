@@ -39,9 +39,7 @@ export async function publishEvent(
 
   // CSAT detection: roda em message.new INBOUND. Fire-and-forget.
   if (event === 'message.new') {
-    const msg = data.message as
-      | { direction?: string; content?: string | null }
-      | undefined;
+    const msg = data.message as { direction?: string; content?: string | null } | undefined;
     const conversationId = data.conversationId as string | undefined;
     if (
       msg?.direction === 'INBOUND' &&

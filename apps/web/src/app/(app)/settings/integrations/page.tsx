@@ -88,13 +88,11 @@ function StatusBadge({ webhook }: { webhook: Webhook }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-        ok
-          ? 'bg-emerald-100 text-emerald-700'
-          : 'bg-red-100 text-red-700'
+        ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
       }`}
     >
       <Activity className="h-3 w-3" />
-      {ok ? `${webhook.lastStatus} OK` : webhook.lastError ?? `HTTP ${webhook.lastStatus ?? '—'}`}
+      {ok ? `${webhook.lastStatus} OK` : (webhook.lastError ?? `HTTP ${webhook.lastStatus ?? '—'}`)}
     </span>
   );
 }
@@ -117,7 +115,9 @@ export default function IntegrationsPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !w.enabled }),
       });
-      toast.success(w.enabled ? t('settings_integrations.disabled') : t('settings_integrations.enabled'));
+      toast.success(
+        w.enabled ? t('settings_integrations.disabled') : t('settings_integrations.enabled'),
+      );
       await qc.invalidateQueries({ queryKey: ['webhooks'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'));
@@ -344,7 +344,9 @@ function SecretBlock({ secret }: { secret: string }) {
           type="button"
           onClick={() => setShow((v) => !v)}
           className="rounded p-1 hover:bg-background"
-          title={show ? t('settings_integrations.secret.hide') : t('settings_integrations.secret.show')}
+          title={
+            show ? t('settings_integrations.secret.hide') : t('settings_integrations.secret.show')
+          }
         >
           {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
         </button>
@@ -488,7 +490,9 @@ function WebhookFormDialog({
                     className="mt-1"
                   />
                   <div className="min-w-0 flex-1 leading-tight">
-                    <p className="text-sm font-medium">{EVENT_LABELS[ev] ? t(EVENT_LABELS[ev]) : ev}</p>
+                    <p className="text-sm font-medium">
+                      {EVENT_LABELS[ev] ? t(EVENT_LABELS[ev]) : ev}
+                    </p>
                     <code className="block font-mono text-[10px] text-muted-foreground truncate">
                       {ev}
                     </code>

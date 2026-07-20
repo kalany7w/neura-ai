@@ -243,9 +243,7 @@ export default function AutomationsPage() {
         body: JSON.stringify({ paused: next }),
       });
       toast.success(
-        next
-          ? t('settings_automations.status.paused')
-          : t('settings_automations.toast.resumed'),
+        next ? t('settings_automations.status.paused') : t('settings_automations.toast.resumed'),
       );
       await qc.invalidateQueries({ queryKey: ['automations', 'settings'] });
     } catch (err) {
@@ -260,9 +258,7 @@ export default function AutomationsPage() {
         body: JSON.stringify({ enabled: !rule.enabled }),
       });
       toast.success(
-        rule.enabled
-          ? t('settings_automations.deactivated')
-          : t('settings_automations.activated'),
+        rule.enabled ? t('settings_automations.deactivated') : t('settings_automations.activated'),
       );
       await qc.invalidateQueries({ queryKey: ['automations'] });
     } catch (err) {
@@ -389,11 +385,7 @@ export default function AutomationsPage() {
         availableTriggers={data?.availableTriggers ?? []}
         editing={editing}
       />
-      <RunsDialog
-        open={!!runsRule}
-        onOpenChange={(v) => !v && setRunsRule(null)}
-        rule={runsRule}
-      />
+      <RunsDialog open={!!runsRule} onOpenChange={(v) => !v && setRunsRule(null)} rule={runsRule} />
     </div>
   );
 }
@@ -428,9 +420,7 @@ function RuleRow({
                 <Zap className="h-2.5 w-2.5" />
                 {t(TRIGGER_LABEL[rule.trigger] ?? rule.trigger)}
                 {rule.triggerConfig?.hoursThreshold && (
-                  <span className="ml-1 opacity-70">
-                    ({rule.triggerConfig.hoursThreshold}h)
-                  </span>
+                  <span className="ml-1 opacity-70">({rule.triggerConfig.hoursThreshold}h)</span>
                 )}
               </span>
             )}
@@ -481,7 +471,11 @@ function RuleRow({
             size="icon"
             variant="ghost"
             onClick={() => onToggle(rule)}
-            title={rule.enabled ? t('settings_automations.deactivate') : t('settings_automations.activate')}
+            title={
+              rule.enabled
+                ? t('settings_automations.deactivate')
+                : t('settings_automations.activate')
+            }
           >
             <Power className={rule.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'} />
           </Button>
@@ -615,9 +609,7 @@ function RuleFormDialog({
   }
 
   function updateAction(idx: number, patch: Partial<Action>) {
-    setActions((as) =>
-      as.map((a, i) => (i === idx ? ({ ...a, ...patch } as Action) : a)),
-    );
+    setActions((as) => as.map((a, i) => (i === idx ? ({ ...a, ...patch } as Action) : a)));
   }
 
   function removeAction(idx: number) {
@@ -639,7 +631,10 @@ function RuleFormDialog({
           value:
             c.op === 'in' || c.op === 'not_in'
               ? typeof c.value === 'string'
-                ? c.value.split(',').map((s) => s.trim()).filter(Boolean)
+                ? c.value
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean)
                 : c.value
               : c.value,
         })),
@@ -949,10 +944,7 @@ function RuleFormDialog({
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               {t('action.cancel')}
             </Button>
-            <Button
-              onClick={submit}
-              disabled={submitting || !name.trim() || actions.length === 0}
-            >
+            <Button onClick={submit} disabled={submitting || !name.trim() || actions.length === 0}>
               {submitting
                 ? t('action.saving')
                 : editing
@@ -1036,7 +1028,9 @@ function ActionEditor({
           }
           className="rounded-md border border-input bg-background px-2 py-1 text-xs"
         >
-          <option value="conversation">{t('settings_automations.label_target.conversation')}</option>
+          <option value="conversation">
+            {t('settings_automations.label_target.conversation')}
+          </option>
           <option value="contact">{t('settings_automations.label_target.contact')}</option>
         </select>
       </div>
@@ -1089,7 +1083,9 @@ function ActionEditor({
           max={300}
           value={action.seconds}
           onChange={(e) =>
-            onChange({ seconds: Math.max(1, Math.min(300, Number(e.target.value) || 1)) } as Partial<Action>)
+            onChange({
+              seconds: Math.max(1, Math.min(300, Number(e.target.value) || 1)),
+            } as Partial<Action>)
           }
           className="h-8 w-24 text-xs"
         />
@@ -1118,7 +1114,9 @@ function ActionEditor({
           placeholder="BRL"
           className="h-8 w-20 text-xs"
         />
-        <span className="text-[11px] text-muted-foreground">{t('settings_automations.action.card_value_hint')}</span>
+        <span className="text-[11px] text-muted-foreground">
+          {t('settings_automations.action.card_value_hint')}
+        </span>
       </div>
     );
   }
@@ -1169,7 +1167,10 @@ interface RunsResponse {
   summary: Record<RunStatus, number>;
 }
 
-const STATUS_STYLE: Record<RunStatus, { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }> = {
+const STATUS_STYLE: Record<
+  RunStatus,
+  { label: string; cls: string; Icon: React.ComponentType<{ className?: string }> }
+> = {
   MATCHED: {
     label: 'settings_automations.run_status.matched',
     cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
@@ -1310,7 +1311,9 @@ function RunsDialog({
               <span>{t('settings_automations.runs.showing')}</span>
               <select
                 value={perPage}
-                onChange={(e) => setPerPage(Number(e.target.value) as (typeof PER_PAGE_OPTIONS)[number])}
+                onChange={(e) =>
+                  setPerPage(Number(e.target.value) as (typeof PER_PAGE_OPTIONS)[number])
+                }
                 className="rounded-md border border-input bg-background px-2 py-1 text-xs"
               >
                 {PER_PAGE_OPTIONS.map((n) => (
@@ -1353,7 +1356,9 @@ function RunsDialog({
 
           {/* Runs list */}
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">{t('settings_automations.runs.loading')}</p>
+            <p className="text-sm text-muted-foreground">
+              {t('settings_automations.runs.loading')}
+            </p>
           ) : !data || data.runs.length === 0 ? (
             <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center text-sm text-muted-foreground">
               {totalRuns === 0
@@ -1406,9 +1411,7 @@ function RunsDialog({
                                 <li
                                   key={i}
                                   className={`flex items-start gap-2 rounded-md border bg-background px-2 py-1 ${
-                                    cd.matched
-                                      ? 'border-emerald-200'
-                                      : 'border-amber-300'
+                                    cd.matched ? 'border-emerald-200' : 'border-amber-300'
                                   }`}
                                 >
                                   {cd.matched ? (
@@ -1418,7 +1421,9 @@ function RunsDialog({
                                   )}
                                   <div className="min-w-0 flex-1 break-words">
                                     <code className="text-[11px]">{cd.field}</code>{' '}
-                                    <span className="text-muted-foreground">{t(OP_LABEL[cd.op])}</span>{' '}
+                                    <span className="text-muted-foreground">
+                                      {t(OP_LABEL[cd.op])}
+                                    </span>{' '}
                                     <code className="text-[11px]">
                                       {describeConditionValue(cd.value)}
                                     </code>
@@ -1447,9 +1452,7 @@ function RunsDialog({
                                 <li
                                   key={i}
                                   className={`flex items-start gap-2 rounded-md border bg-background px-2 py-1 ${
-                                    ar.status === 'ok'
-                                      ? 'border-emerald-200'
-                                      : 'border-red-300'
+                                    ar.status === 'ok' ? 'border-emerald-200' : 'border-red-300'
                                   }`}
                                 >
                                   {ar.status === 'ok' ? (
@@ -1552,7 +1555,9 @@ function SummaryCard({
     >
       <div className="flex items-center gap-1.5">
         {Icon && (
-          <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${cls ?? ''}`}>
+          <span
+            className={`inline-flex h-5 w-5 items-center justify-center rounded-full ${cls ?? ''}`}
+          >
             <Icon className="h-3 w-3" />
           </span>
         )}

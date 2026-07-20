@@ -38,7 +38,9 @@ export function ForgotPasswordForm() {
       }
       setSentTo(values.email);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_forms_forgot_password_form.error_unexpected'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_forms_forgot_password_form.error_unexpected'),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -64,10 +66,14 @@ export function ForgotPasswordForm() {
       <div className="space-y-2">
         <Label htmlFor="email">{t('common.email')}</Label>
         <Input id="email" type="email" autoComplete="email" {...register('email')} />
-        {errors.email && <p className="text-xs text-destructive">{t(errors.email.message ?? '')}</p>}
+        {errors.email && (
+          <p className="text-xs text-destructive">{t(errors.email.message ?? '')}</p>
+        )}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? t('c_forms_forgot_password_form.sending') : t('c_forms_forgot_password_form.submit')}
+        {isSubmitting
+          ? t('c_forms_forgot_password_form.sending')
+          : t('c_forms_forgot_password_form.submit')}
       </Button>
     </form>
   );

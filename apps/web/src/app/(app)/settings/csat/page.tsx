@@ -85,7 +85,9 @@ export default function CsatPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !s.enabled }),
       });
-      toast.success(s.enabled ? t('settings_csat.toast_deactivated') : t('settings_csat.toast_activated'));
+      toast.success(
+        s.enabled ? t('settings_csat.toast_deactivated') : t('settings_csat.toast_activated'),
+      );
       await qc.invalidateQueries({ queryKey: ['csat-surveys'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'));
@@ -170,9 +172,8 @@ export default function CsatPage() {
         <div className="grid gap-3">
           {data.surveys.map((s) => {
             const Icon = SCORE_TYPE_ICON[s.scoreType];
-            const respRate = s.sentCount > 0
-              ? Math.round((s.responseCount / s.sentCount) * 100)
-              : null;
+            const respRate =
+              s.sentCount > 0 ? Math.round((s.responseCount / s.sentCount) * 100) : null;
             return (
               <div
                 key={s.id}
@@ -426,10 +427,10 @@ function CsatDialog({
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{survey ? t('settings_csat.dialog_edit_title') : t('settings_csat.dialog_new_title')}</DialogTitle>
-          <DialogDescription>
-            {t('settings_csat.dialog_desc')}
-          </DialogDescription>
+          <DialogTitle>
+            {survey ? t('settings_csat.dialog_edit_title') : t('settings_csat.dialog_new_title')}
+          </DialogTitle>
+          <DialogDescription>{t('settings_csat.dialog_desc')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -451,11 +452,13 @@ function CsatDialog({
                 onChange={(e) => setChannelScope(e.target.value as ChannelScope)}
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
-                {(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL', 'WEBCHAT'] as ChannelScope[]).map((c) => (
-                  <option key={c} value={c}>
-                    {t(CHANNEL_LABEL[c])}
-                  </option>
-                ))}
+                {(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL', 'WEBCHAT'] as ChannelScope[]).map(
+                  (c) => (
+                    <option key={c} value={c}>
+                      {t(CHANNEL_LABEL[c])}
+                    </option>
+                  ),
+                )}
               </select>
             </div>
           </div>
@@ -478,7 +481,9 @@ function CsatDialog({
                   >
                     <Icon
                       className={`h-4 w-4 shrink-0 ${
-                        scoreType === st ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'
+                        scoreType === st
+                          ? 'text-indigo-600 dark:text-indigo-400'
+                          : 'text-muted-foreground'
                       }`}
                     />
                     <span className="text-xs">{t(SCORE_TYPE_LABEL[st])}</span>
@@ -498,9 +503,7 @@ function CsatDialog({
               value={delayMinutes}
               onChange={(e) => setDelayMinutes(Math.max(0, parseInt(e.target.value, 10) || 0))}
             />
-            <p className="text-[11px] text-muted-foreground">
-              {t('settings_csat.delay_hint')}
-            </p>
+            <p className="text-[11px] text-muted-foreground">{t('settings_csat.delay_hint')}</p>
           </div>
 
           <div className="space-y-1.5">
@@ -568,7 +571,11 @@ function CsatDialog({
             {t('action.cancel')}
           </Button>
           <Button onClick={save} disabled={submitting}>
-            {submitting ? t('action.saving') : survey ? t('action.save') : t('settings_csat.create_survey')}
+            {submitting
+              ? t('action.saving')
+              : survey
+                ? t('action.save')
+                : t('settings_csat.create_survey')}
           </Button>
         </div>
       </DialogContent>

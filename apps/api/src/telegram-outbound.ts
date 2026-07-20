@@ -26,7 +26,8 @@ const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 export const telegramOutboundWorker = new Worker<SendMessageJob>(
   QUEUE_OUTBOUND_TELEGRAM,
   async (job: Job<SendMessageJob>) => {
-    const { inboxId, workspaceId, conversationId, messageId, type, text, mediaUrl, kind } = job.data;
+    const { inboxId, workspaceId, conversationId, messageId, type, text, mediaUrl, kind } =
+      job.data;
 
     // Skip operações que Bot API não suporta bem ainda
     if (kind === 'reaction' || kind === 'edit' || kind === 'revoke') {

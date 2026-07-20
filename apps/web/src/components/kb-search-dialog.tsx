@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Search as SearchIcon, Sparkles, Loader2, FileText, ExternalLink } from 'lucide-react';
+import {
+  BookOpen,
+  Search as SearchIcon,
+  Sparkles,
+  Loader2,
+  FileText,
+  ExternalLink,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { useT } from '@/lib/i18n';

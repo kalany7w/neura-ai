@@ -63,7 +63,11 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
         onClose();
         return;
       }
-      toast.error(err instanceof Error ? err.message : t('c_inbox_welcome_flow_wizard_dialog.toast_apply_error'));
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('c_inbox_welcome_flow_wizard_dialog.toast_apply_error'),
+      );
     },
   });
 
@@ -73,7 +77,12 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -87,7 +96,9 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
         </DialogHeader>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium">{t('c_inbox_welcome_flow_wizard_dialog.choose_preset')}</p>
+          <p className="text-sm font-medium">
+            {t('c_inbox_welcome_flow_wizard_dialog.choose_preset')}
+          </p>
           <div className="grid grid-cols-2 gap-3">
             {data?.presets.map((p) => {
               const isSelected = selectedPreset === p.id;

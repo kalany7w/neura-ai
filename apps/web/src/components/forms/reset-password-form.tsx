@@ -63,7 +63,9 @@ export function ResetPasswordForm() {
       toast.success(t('c_forms_reset_password_form.reset_success'));
       router.push('/login');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_forms_reset_password_form.unexpected_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_forms_reset_password_form.unexpected_error'),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -82,7 +84,12 @@ export function ResetPasswordForm() {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="password">{t('c_forms_reset_password_form.new_password_label')}</Label>
-        <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
+        <Input
+          id="password"
+          type="password"
+          autoComplete="new-password"
+          {...register('password')}
+        />
         {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>
       <div className="space-y-2">

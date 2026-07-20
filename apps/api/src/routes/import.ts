@@ -109,7 +109,13 @@ importRouter.post(
       return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     }
 
-    const stats = { created: 0, updated: 0, skipped: 0, labelsCreated: 0, errors: [] as Array<{ row: number; reason: string }> };
+    const stats = {
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      labelsCreated: 0,
+      errors: [] as Array<{ row: number; reason: string }>,
+    };
     // Cache de labels do workspace (carrega 1x, evita roundtrip por tag)
     const allLabels = await prisma.label.findMany({
       where: { workspaceId },
@@ -272,9 +278,7 @@ importRouter.post(
       include: { stages: { orderBy: { order: 'asc' } } },
     });
     if (!funnel) return c.json({ error: 'funnel_not_found' }, 404);
-    const stageByLowerName = new Map(
-      funnel.stages.map((s) => [s.name.toLowerCase(), s]),
-    );
+    const stageByLowerName = new Map(funnel.stages.map((s) => [s.name.toLowerCase(), s]));
     const defaultStage = funnel.stages.find((s) => s.id === parsed.data.defaultStageId);
     if (!defaultStage) return c.json({ error: 'default_stage_not_in_funnel' }, 400);
 
@@ -314,14 +318,10 @@ importRouter.post(
         }
         const externalId = row.externalId?.trim() || null;
         const stage = row.stageName
-          ? stageByLowerName.get(row.stageName.toLowerCase()) ?? defaultStage
+          ? (stageByLowerName.get(row.stageName.toLowerCase()) ?? defaultStage)
           : defaultStage;
         const value =
-          typeof row.value === 'number'
-            ? row.value
-            : row.value
-              ? parseValue(row.value)
-              : null;
+          typeof row.value === 'number' ? row.value : row.value ? parseValue(row.value) : null;
 
         // Assigned agent: prioridade email > name
         let assignedAgentId: string | null = null;

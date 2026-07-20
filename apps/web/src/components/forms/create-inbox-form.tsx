@@ -54,11 +54,17 @@ export function CreateInboxForm({ onDone }: { onDone: () => void }) {
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">{t('c_forms_create_inbox_form.name_label')}</Label>
-          <Input id="name" placeholder={t('c_forms_create_inbox_form.name_placeholder')} {...register('name')} />
+          <Input
+            id="name"
+            placeholder={t('c_forms_create_inbox_form.name_placeholder')}
+            {...register('name')}
+          />
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
         <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting ? t('c_forms_create_inbox_form.creating') : t('c_forms_create_inbox_form.submit')}
+          {isSubmitting
+            ? t('c_forms_create_inbox_form.creating')
+            : t('c_forms_create_inbox_form.submit')}
         </Button>
       </form>
       {wizardInbox && (

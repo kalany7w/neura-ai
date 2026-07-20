@@ -55,12 +55,18 @@ export async function computeKbSuggestion(
 
   const parts: string[] = [];
   if (classification?.intent) parts.push(`Intent: ${classification.intent}`);
-  if (classification?.topics && Array.isArray(classification.topics) && classification.topics.length > 0) {
+  if (
+    classification?.topics &&
+    Array.isArray(classification.topics) &&
+    classification.topics.length > 0
+  ) {
     parts.push(`Tópicos: ${classification.topics.slice(0, 5).join(', ')}`);
   }
   const msgLines = conv.messages
     .reverse()
-    .map((m) => (m.content || m.transcription || `[${m.type.toLowerCase()}]`).slice(0, MSG_TRUNCATE))
+    .map((m) =>
+      (m.content || m.transcription || `[${m.type.toLowerCase()}]`).slice(0, MSG_TRUNCATE),
+    )
     .filter((s) => s.trim().length > 0);
   if (msgLines.length === 0 && parts.length === 0) {
     return null;

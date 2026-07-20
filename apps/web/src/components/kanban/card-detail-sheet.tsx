@@ -30,12 +30,7 @@ import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -206,7 +201,9 @@ export function CardDetailSheet({
           {data?.card.title ?? t('c_kanban_card_detail_sheet.title_fallback')}
         </DialogTitle>
         {isLoading || !data ? (
-          <div className="p-10 text-center text-sm text-muted-foreground">{t('action.loading')}</div>
+          <div className="p-10 text-center text-sm text-muted-foreground">
+            {t('action.loading')}
+          </div>
         ) : (
           <CardDetailBody
             data={data}
@@ -251,7 +248,9 @@ function CardDetailBody({
       });
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_kanban_card_detail_sheet.toast_save_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_card_detail_sheet.toast_save_error'),
+      );
     }
   }
 
@@ -264,7 +263,9 @@ function CardDetailBody({
       toast.success(t('c_kanban_card_detail_sheet.toast_stage_updated'));
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_kanban_card_detail_sheet.toast_move_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_card_detail_sheet.toast_move_error'),
+      );
     }
   }
 
@@ -376,11 +377,7 @@ function CardDetailBody({
         <div className="flex items-start gap-3 text-[11px] text-muted-foreground mb-2 font-medium">
           <span>{card.funnel.name}</span>
           <ArrowRight className="h-3 w-3 mt-0.5" />
-          <StageDropdown
-            current={card.stage}
-            stages={card.funnel.stages}
-            onChange={moveStage}
-          />
+          <StageDropdown current={card.stage} stages={card.funnel.stages} onChange={moveStage} />
         </div>
         <InlineTitle value={card.title} onSave={(v) => patch({ title: v })} />
         {activeSnooze && (
@@ -444,7 +441,10 @@ function CardDetailBody({
             </MetaField>
 
             {conversation && (
-              <MetaField icon={MessageCircle} label={t('c_kanban_card_detail_sheet.meta_conversation')}>
+              <MetaField
+                icon={MessageCircle}
+                label={t('c_kanban_card_detail_sheet.meta_conversation')}
+              >
                 <Link
                   href={`/inbox/${conversation.id}`}
                   className="flex items-center gap-2 rounded-md border bg-card p-2 text-sm hover:bg-accent"
@@ -468,9 +468,15 @@ function CardDetailBody({
               </MetaField>
             )}
 
-            <MetaField icon={History} label={t('c_kanban_card_detail_sheet.meta_history')} defaultCollapsed>
+            <MetaField
+              icon={History}
+              label={t('c_kanban_card_detail_sheet.meta_history')}
+              defaultCollapsed
+            >
               {history.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t('c_kanban_card_detail_sheet.history_empty')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('c_kanban_card_detail_sheet.history_empty')}
+                </p>
               ) : (
                 <ul className="space-y-1.5">
                   {history.slice(0, 10).map((h, i) => (
@@ -478,7 +484,10 @@ function CardDetailBody({
                       <span className="font-medium">
                         {t(ACTION_LABEL_KEYS[h.action] ?? h.action)}
                       </span>
-                      <span className="text-muted-foreground"> · {formatRelativeTime(h.createdAt, lang)}</span>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {formatRelativeTime(h.createdAt, lang)}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -605,7 +614,11 @@ function StageDropdown({
       <DropdownMenuContent align="start">
         <DropdownMenuLabel>{t('c_kanban_card_detail_sheet.move_to')}</DropdownMenuLabel>
         {stages.map((s) => (
-          <DropdownMenuItem key={s.id} onSelect={() => onChange(s.id)} disabled={s.id === current.id}>
+          <DropdownMenuItem
+            key={s.id}
+            onSelect={() => onChange(s.id)}
+            disabled={s.id === current.id}
+          >
             <span
               className="h-2 w-2 rounded-full"
               style={{
@@ -621,13 +634,7 @@ function StageDropdown({
   );
 }
 
-function DescriptionField({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (v: string) => void;
-}) {
+function DescriptionField({ value, onSave }: { value: string; onSave: (v: string) => void }) {
   const { t } = useT();
   const [draft, setDraft] = useState(value);
   const [editing, setEditing] = useState(false);
@@ -792,7 +799,9 @@ function AssigneeEditor({
               <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 text-muted-foreground/50">
                 <UserX className="h-3 w-3" />
               </span>
-              <span className="text-muted-foreground">{t('c_kanban_card_detail_sheet.no_assignee')}</span>
+              <span className="text-muted-foreground">
+                {t('c_kanban_card_detail_sheet.no_assignee')}
+              </span>
             </>
           )}
           <ChevronDown className="ml-auto h-3 w-3 text-muted-foreground" />
@@ -983,9 +992,7 @@ function MetaField({
         <Icon className="h-3 w-3" />
         {label}
         {defaultCollapsed && (
-          <ChevronDown
-            className={`ml-auto h-3 w-3 transition ${open ? '' : '-rotate-90'}`}
-          />
+          <ChevronDown className={`ml-auto h-3 w-3 transition ${open ? '' : '-rotate-90'}`} />
         )}
       </button>
       {open && children}
@@ -1111,12 +1118,10 @@ function TasksSection({ cardId, members }: { cardId: string; members: Member[] }
               ))}
             </select>
           </div>
-          <Button
-            onClick={create}
-            disabled={!title.trim() || !eventDate || submitting}
-            size="sm"
-          >
-            {submitting ? t('c_kanban_card_detail_sheet.creating_task') : t('c_kanban_card_detail_sheet.create_task')}
+          <Button onClick={create} disabled={!title.trim() || !eventDate || submitting} size="sm">
+            {submitting
+              ? t('c_kanban_card_detail_sheet.creating_task')
+              : t('c_kanban_card_detail_sheet.create_task')}
           </Button>
         </div>
       )}
@@ -1145,12 +1150,18 @@ function TasksSection({ cardId, members }: { cardId: string; members: Member[] }
                   className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 ${
                     done ? 'border-emerald-500 bg-emerald-500' : 'border-muted-foreground/40'
                   }`}
-                  title={done ? t('c_kanban_card_detail_sheet.mark_pending') : t('c_kanban_card_detail_sheet.mark_done')}
+                  title={
+                    done
+                      ? t('c_kanban_card_detail_sheet.mark_pending')
+                      : t('c_kanban_card_detail_sheet.mark_done')
+                  }
                 >
                   {done && <Check className="h-3 w-3 text-white" />}
                 </button>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-xs font-medium ${done ? 'line-through' : ''}`}>{task.title}</p>
+                  <p className={`text-xs font-medium ${done ? 'line-through' : ''}`}>
+                    {task.title}
+                  </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                     <span className="inline-flex items-center gap-1">
                       <Clock className="h-2.5 w-2.5" />

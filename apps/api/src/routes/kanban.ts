@@ -21,7 +21,10 @@ export const kanbanRouter = new Hono<{
 
 const funnelSchema = z.object({
   name: z.string().min(1).max(80),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#3b82f6'),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#3b82f6'),
   isDefault: z.boolean().default(false),
   // Preset opcional (xag, caltech) — se passado, cria stages do preset em vez do default.
   preset: z.string().optional(),
@@ -45,7 +48,8 @@ kanbanRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = funnelSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     try {
       const maxOrder = await prisma.funnel.aggregate({
@@ -164,7 +168,10 @@ kanbanRouter.delete(
 
 const stageSchema = z.object({
   name: z.string().min(1).max(60),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#94a3b8'),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#94a3b8'),
   outcome: z.enum(['POSITIVE', 'NEGATIVE', 'RISK']).nullable().optional(),
   order: z.number().int().optional(),
 });
@@ -271,9 +278,7 @@ kanbanRouter.post(
 
     // Update em transaction: 1 query por stage. N pequeno (50 max).
     await prisma.$transaction(
-      inputIds.map((id, idx) =>
-        prisma.stage.update({ where: { id }, data: { order: idx } }),
-      ),
+      inputIds.map((id, idx) => prisma.stage.update({ where: { id }, data: { order: idx } })),
     );
 
     return c.json({ ok: true });
@@ -321,10 +326,7 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
     where.OR = [{ assignedAgentId: userId }, { assignedAgentId: null }];
   }
   if (search) {
-    where.OR = [
-      ...(where.OR ?? []),
-      { title: { contains: search, mode: 'insensitive' } },
-    ];
+    where.OR = [...(where.OR ?? []), { title: { contains: search, mode: 'insensitive' } }];
   }
   if (labelId) where.labels = { some: { labelId } };
 
@@ -469,7 +471,8 @@ kanbanRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = cardSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const funnel = await prisma.funnel.findFirst({
       where: { id: parsed.data.funnelId, workspaceId },
@@ -611,7 +614,11 @@ const bulkActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('snooze'),
     cardIds: z.array(z.string()).min(1).max(200),
-    minutes: z.number().int().min(1).max(60 * 24 * 30),
+    minutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(60 * 24 * 30),
   }),
   z.object({
     action: z.literal('delete'),
@@ -730,7 +737,11 @@ kanbanRouter.post(
 // ==================== SNOOZE ====================
 
 const snoozeSchema = z.object({
-  minutes: z.number().int().min(1).max(60 * 24 * 30), // até 30 dias
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(60 * 24 * 30), // até 30 dias
   reason: z.string().max(200).optional(),
 });
 
@@ -742,7 +753,8 @@ kanbanRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = snoozeSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const id = c.req.param('id');
     const card = await prisma.card.findFirst({ where: { id, workspaceId } });
@@ -855,9 +867,7 @@ kanbanRouter.post(
     const history = messages
       .reverse()
       .map((m) => ({
-        direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as
-          | 'inbound'
-          | 'outbound',
+        direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
         content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
       }))
       .filter((m) => m.content.trim().length > 0);

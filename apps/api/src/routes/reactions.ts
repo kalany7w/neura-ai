@@ -33,7 +33,14 @@ reactionsRouter.post(
 
     const msg = await prisma.message.findFirst({
       where: { id, conversation: { workspaceId } },
-      include: { conversation: { include: { contact: { select: { phoneNumber: true } }, inbox: { select: { status: true } } } } },
+      include: {
+        conversation: {
+          include: {
+            contact: { select: { phoneNumber: true } },
+            inbox: { select: { status: true } },
+          },
+        },
+      },
     });
     if (!msg) return c.json({ error: 'not_found' }, 404);
     if (!msg.waMessageId) return c.json({ error: 'no_wa_message_id' }, 409);

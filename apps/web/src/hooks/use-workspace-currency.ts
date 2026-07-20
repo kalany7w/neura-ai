@@ -20,7 +20,6 @@ export function useWorkspaceCurrency(): string {
     staleTime: 5 * 60_000,
   });
   if (!data) return 'USD';
-  const active =
-    data.workspaces.find((w) => w.id === data.activeWorkspaceId) ?? data.workspaces[0];
+  const active = data.workspaces.find((w) => w.id === data.activeWorkspaceId) ?? data.workspaces[0];
   return active?.currency ?? 'USD';
 }

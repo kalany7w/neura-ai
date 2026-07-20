@@ -15,8 +15,18 @@ const createSchema = z.object({
   name: z.string().min(1).max(120),
   scope: z.enum(['default', 'inbox', 'label']),
   scopeId: z.string().nullable().optional(),
-  firstResponseThresholdMin: z.number().int().min(1).max(7 * 24 * 60).default(15),
-  resolutionThresholdMin: z.number().int().min(1).max(60 * 24 * 60).default(1440),
+  firstResponseThresholdMin: z
+    .number()
+    .int()
+    .min(1)
+    .max(7 * 24 * 60)
+    .default(15),
+  resolutionThresholdMin: z
+    .number()
+    .int()
+    .min(1)
+    .max(60 * 24 * 60)
+    .default(1440),
   enabled: z.boolean().default(true),
 });
 
@@ -50,7 +60,10 @@ slaPoliciesRouter.post(
       return c.json({ error: 'invalid_input', message: 'default policy não tem scopeId' }, 400);
     }
     if (data.scope !== 'default' && !data.scopeId) {
-      return c.json({ error: 'invalid_input', message: 'scopeId obrigatório pra inbox/label' }, 400);
+      return c.json(
+        { error: 'invalid_input', message: 'scopeId obrigatório pra inbox/label' },
+        400,
+      );
     }
     if (data.scope === 'inbox' && data.scopeId) {
       const inbox = await prisma.inbox.findFirst({

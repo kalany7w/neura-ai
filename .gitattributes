@@ -1,0 +1,13 @@
+# LF em todo o repo (deploy Linux + Prettier endOfLine:lf). Evita churn de CRLF em
+# devs Windows e mantém o format:check determinístico no CI.
+* text=auto eol=lf
+
+# Binários (git detecta, mas explícito não faz mal).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary

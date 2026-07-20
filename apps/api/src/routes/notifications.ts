@@ -18,9 +18,7 @@ notificationsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const userId = c.get('userId');
   const workspaceId = c.get('workspaceId') as string;
   const parsed = listQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
-  const { unreadOnly, limit } = parsed.success
-    ? parsed.data
-    : { unreadOnly: false, limit: 50 };
+  const { unreadOnly, limit } = parsed.success ? parsed.data : { unreadOnly: false, limit: 50 };
 
   const where = {
     userId,

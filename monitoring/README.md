@@ -21,7 +21,7 @@ docker compose -f docker-compose.monitoring.yml up -d
 ```
 
 - Grafana: http://localhost:3000 (admin / `GRAFANA_PASSWORD`, default `admin`).
-  O datasource Prometheus e o dashboard **"Neura AI — API"** (pasta *Neura*) já
+  O datasource Prometheus e o dashboard **"Neura AI — API"** (pasta _Neura_) já
   entram provisionados.
 - Prometheus: http://localhost:9090.
 
@@ -53,6 +53,7 @@ Memória (RSS/heap) · Event loop lag.
 ## Alertas nativos do Grafana (provisionados)
 
 Já vêm provisionados em `grafana/provisioning/alerting/`:
+
 - **API — erros 5xx > 5%** (5min) — crítico.
 - **API — latência p95 > 2s** (5min) — warning.
 - **API — target fora** (scrape down, 2min) — crítico.
@@ -60,16 +61,20 @@ Já vêm provisionados em `grafana/provisioning/alerting/`:
   webhook Discord/Slack do app; passado ao container Grafana pelo compose).
 
 Setar `ALERT_WEBHOOK_URL` no ambiente antes do `up -d`:
+
 ```bash
 ALERT_WEBHOOK_URL='https://discord.com/api/webhooks/...' \
 docker compose -f docker-compose.monitoring.yml up -d
 ```
+
 > Se seu webhook é Slack, troque `type: discord` por `type: slack` em
 > `grafana/provisioning/alerting/contactpoints.yml`.
 
 ### Fallback via UI
+
 O formato de alert rule provisionado varia entre versões do Grafana. Se as regras
 não carregarem, crie na UI (Alerting → Alert rules → New) com estes valores:
+
 - **5xx**: `100 * sum(rate(http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1)` — `IS ABOVE 5`, for `5m`.
 - **p95**: `histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))` — `IS ABOVE 2`, for `5m`.
 - Contact point: o `neura-webhook` (ou crie um novo apontando pro webhook).

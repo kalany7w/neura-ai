@@ -39,9 +39,7 @@ describe('renderTemplate', () => {
     });
 
     it('usa fallback aspas duplas quando valor é undefined', () => {
-      expect(renderTemplate('Olá {{contact.name | default "cliente"}}!', {})).toBe(
-        'Olá cliente!',
-      );
+      expect(renderTemplate('Olá {{contact.name | default "cliente"}}!', {})).toBe('Olá cliente!');
     });
 
     it('usa fallback raw (sem aspas) quando valor é vazio', () => {
@@ -85,9 +83,7 @@ describe('renderTemplate', () => {
     });
 
     it('fallback quando contact ausente', () => {
-      expect(renderTemplate("Oi {{contact.firstName | default 'amigo'}}!", {})).toBe(
-        'Oi amigo!',
-      );
+      expect(renderTemplate("Oi {{contact.firstName | default 'amigo'}}!", {})).toBe('Oi amigo!');
     });
   });
 

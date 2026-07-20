@@ -17,10 +17,7 @@ import { Label } from '@/components/ui/label';
 const signupFormSchema = z.object({
   name: z.string().min(2, 'validation.name_short').max(80),
   email: z.string().email('validation.email_invalid'),
-  password: z
-    .string()
-    .min(8, 'validation.password_min')
-    .max(128, 'validation.password_max'),
+  password: z.string().min(8, 'validation.password_min').max(128, 'validation.password_max'),
 });
 type SignupFormInput = z.infer<typeof signupFormSchema>;
 
@@ -68,12 +65,21 @@ export function SignupForm() {
       <div className="space-y-2">
         <Label htmlFor="email">{t('common.email')}</Label>
         <Input id="email" type="email" autoComplete="email" {...register('email')} />
-        {errors.email && <p className="text-xs text-destructive">{t(errors.email.message ?? '')}</p>}
+        {errors.email && (
+          <p className="text-xs text-destructive">{t(errors.email.message ?? '')}</p>
+        )}
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">{t('c_forms_signup_form.password')}</Label>
-        <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
-        {errors.password && <p className="text-xs text-destructive">{t(errors.password.message ?? '')}</p>}
+        <Input
+          id="password"
+          type="password"
+          autoComplete="new-password"
+          {...register('password')}
+        />
+        {errors.password && (
+          <p className="text-xs text-destructive">{t(errors.password.message ?? '')}</p>
+        )}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting ? t('c_forms_signup_form.submitting') : t('c_forms_signup_form.submit')}

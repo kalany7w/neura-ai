@@ -109,11 +109,13 @@ inboundEmailRouter.post('/:slug', async (c) => {
 
   const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
   const expectedSecret = cfg.inboundSecret as string | undefined;
-  const headerSecret =
-    c.req.header('X-Neura-Email-Secret') || c.req.header('x-neura-email-secret');
+  const headerSecret = c.req.header('X-Neura-Email-Secret') || c.req.header('x-neura-email-secret');
   // Fail-closed: sem secret configurado no inbox, REJEITA (não aceita sem auth).
   if (!expectedSecret) {
-    logger.warn({ inboxId: inbox.id }, 'inbound email: inbox sem inboundSecret — reconecte o inbox');
+    logger.warn(
+      { inboxId: inbox.id },
+      'inbound email: inbox sem inboundSecret — reconecte o inbox',
+    );
     return c.json({ ok: false }, 403);
   }
   if (!secretsMatch(headerSecret, expectedSecret)) {
@@ -128,7 +130,10 @@ inboundEmailRouter.post('/:slug', async (c) => {
   const raw = await c.req.json().catch(() => null);
   const parsed = payloadSchema.safeParse(raw);
   if (!parsed.success) {
-    logger.warn({ inboxId: inbox.id, issues: parsed.error.issues.slice(0, 3) }, 'inbound email: invalid payload');
+    logger.warn(
+      { inboxId: inbox.id, issues: parsed.error.issues.slice(0, 3) },
+      'inbound email: invalid payload',
+    );
     return c.json({ ok: false, error: 'invalid_payload' }, 400);
   }
 
@@ -154,8 +159,7 @@ async function processInbound(
   const fromName =
     pickField(payload, 'FromName') || fromParsed.name || fromParsed.address.split('@')[0];
 
-  const subject =
-    pickField(payload, 'Subject', 'subject')?.trim() || '(sem assunto)';
+  const subject = pickField(payload, 'Subject', 'subject')?.trim() || '(sem assunto)';
 
   const textBody = pickField(payload, 'TextBody', 'text');
   const htmlBody = pickField(payload, 'HtmlBody', 'html');
@@ -188,9 +192,15 @@ async function processInbound(
   if (inReplyTo) {
     const original = await prisma.message.findFirst({
       where: { emailMessageId: inReplyTo },
-      select: { conversationId: true, conversation: { select: { workspaceId: true, inboxId: true } } },
+      select: {
+        conversationId: true,
+        conversation: { select: { workspaceId: true, inboxId: true } },
+      },
     });
-    if (original?.conversation.workspaceId === workspaceId && original.conversation.inboxId === inboxId) {
+    if (
+      original?.conversation.workspaceId === workspaceId &&
+      original.conversation.inboxId === inboxId
+    ) {
       conversationId = original.conversationId;
     }
   }

@@ -27,7 +27,10 @@ async function processScheduledTick(_job: Job): Promise<void> {
     try {
       const conv = await prisma.conversation.findFirst({
         where: { id: sched.conversationId, workspaceId: sched.workspaceId },
-        include: { contact: { select: { phoneNumber: true } }, inbox: { select: { status: true } } },
+        include: {
+          contact: { select: { phoneNumber: true } },
+          inbox: { select: { status: true } },
+        },
       });
       if (!conv) {
         await prisma.scheduledMessage.update({
@@ -102,9 +105,7 @@ export async function startScheduledMsgsScheduler(): Promise<void> {
     connection: bullConnection,
     concurrency: 1,
   });
-  worker.on('failed', (job, err) =>
-    logger.error({ err, jobId: job?.id }, 'scheduled tick failed'),
-  );
+  worker.on('failed', (job, err) => logger.error({ err, jobId: job?.id }, 'scheduled tick failed'));
   // Tick a cada 30s
   await scheduledMsgsQueue.add(
     'tick',

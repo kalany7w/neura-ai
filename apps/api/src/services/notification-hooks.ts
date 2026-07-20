@@ -104,9 +104,7 @@ async function handleMessageNew(
   if (shouldDedup(`msg:${conv.assignedAgentId}:${conversationId}`)) return;
 
   const who = conv.contact.name ?? conv.contact.phoneNumber ?? 'Contato';
-  const preview = message.content
-    ? message.content.slice(0, 80)
-    : `[${message.type ?? 'mídia'}]`;
+  const preview = message.content ? message.content.slice(0, 80) : `[${message.type ?? 'mídia'}]`;
   await createNotification({
     workspaceId,
     userId: conv.assignedAgentId,

@@ -16,17 +16,20 @@
 ## File Structure
 
 ### API
+
 - Create: `apps/api/src/routes/lead-detail.ts` — `GET /api/conversations/:id/lead-detail` (consolidated query)
 - Modify: `apps/api/src/routes/conversations.ts` — adicionar `PATCH /api/conversations/:id/contact` (update Contact básicos + customAttrs)
 - Modify: `apps/api/src/index.ts` — wire `leadDetailRouter`
 
 ### Web
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx` — refactor completo (substitui o existente, pattern Kommo)
 - Create: `apps/web/src/components/inbox/sla-badge.tsx` — pill CALIENTE/TIBIO/FRIO derivado do SLA
 - Create: `apps/web/src/components/inbox/lead-section-collapsible.tsx` — wrapper UI pra seções recolhíveis
 - Modify: `apps/web/src/app/(app)/inbox/[id]/page.tsx` — day separators no timeline + AI_AGENT badge + "lido até aqui" marker
 
 ### shadcn components a instalar
+
 - `collapsible` — pra seções dobráveis
 
 ---
@@ -34,6 +37,7 @@
 ## Task 1: Install shadcn `collapsible`
 
 **Files:**
+
 - Auto-created: `apps/web/src/components/ui/collapsible.tsx`
 
 - [ ] **Step 1: Add component**
@@ -65,6 +69,7 @@ git commit -m "chore(web): adiciona shadcn collapsible para seções do lead det
 ## Task 2: Endpoint `GET /api/conversations/:id/lead-detail`
 
 **Files:**
+
 - Create: `apps/api/src/routes/lead-detail.ts`
 - Modify: `apps/api/src/index.ts`
 
@@ -237,6 +242,7 @@ git commit -m "feat(api): endpoint /api/conversations/:id/lead-detail consolidad
 ## Task 3: Endpoint `PATCH /api/conversations/:id/contact`
 
 **Files:**
+
 - Modify: `apps/api/src/routes/conversations.ts`
 
 - [ ] **Step 1: Adicionar handler**
@@ -313,6 +319,7 @@ git commit -m "feat(api): PATCH /api/conversations/:id/contact (inline contact e
 ## Task 4: Side panel — refactor completo (header + SLA badge)
 
 **Files:**
+
 - Create: `apps/web/src/components/inbox/sla-badge.tsx`
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx` (rewrite)
 
@@ -508,6 +515,7 @@ git commit -m "feat(web): refactor side panel — header + SLA badge + lead-deta
 ## Task 5: Side panel — seção Embudo (funnel + stage selector inline)
 
 **Files:**
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 - [ ] **Step 1: Adicionar seção Embudo**
@@ -583,6 +591,7 @@ git commit -m "feat(web): side panel — seção Embudo com stage selector inlin
 ## Task 6: Side panel — seção Atributos custom
 
 **Files:**
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 - [ ] **Step 1: Implementar sección**
@@ -716,6 +725,7 @@ git commit -m "feat(web): side panel — seção Atributos custom editável inli
 ## Task 7: Side panel — seção Etiquetas (chip toggle)
 
 **Files:**
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 - [ ] **Step 1: Implementar seção**
@@ -808,6 +818,7 @@ git commit -m "feat(web): side panel — seção Etiquetas com toggle inline"
 ## Task 8: Side panel — seção Contato editável
 
 **Files:**
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 - [ ] **Step 1: Implementar seção**
@@ -888,6 +899,7 @@ git commit -m "feat(web): side panel — seção Contato com edição inline de 
 ## Task 9: Side panel — Resumo IA + ações inferiores
 
 **Files:**
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 - [ ] **Step 1: Implementar seção AI summary + ações**
@@ -1010,6 +1022,7 @@ git commit -m "feat(web): side panel — resumo IA + ações de status"
 ## Task 10: Side panel — real-time WS subscriptions
 
 **Files:**
+
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 - [ ] **Step 1: Subscribe a eventos WS pra invalidar lead-detail**
@@ -1055,6 +1068,7 @@ git commit -m "feat(web): side panel — invalidate lead-detail em WS events"
 ## Task 11: Chat — separadores de dia
 
 **Files:**
+
 - Modify: `apps/web/src/app/(app)/inbox/[id]/page.tsx`
 
 - [ ] **Step 1: Adicionar helper de grouping**
@@ -1125,6 +1139,7 @@ git commit -m "feat(web): chat timeline — separadores de dia (Hoje/Ontem/EEEE 
 ## Task 12: Chat — badge AI_AGENT no MessageItem
 
 **Files:**
+
 - Modify: `apps/web/src/app/(app)/inbox/[id]/page.tsx`
 
 - [ ] **Step 1: Estender MessageItem type**
@@ -1172,6 +1187,7 @@ git commit -m "feat(web): chat — badge 'Agente IA' nas mensagens com senderTyp
 ## Task 13: Chat — "Lido até aqui" marker + scroll-to-bottom button
 
 **Files:**
+
 - Modify: `apps/web/src/app/(app)/inbox/[id]/page.tsx`
 
 - [ ] **Step 1: Track última msg lida ao abrir conversa**
@@ -1199,13 +1215,15 @@ No render do timeline (após o day separator), adicionar lógica:
 
 ```typescript
 // Dentro do map, antes do bubble:
-{readUpToTs !== null &&
-  new Date(item.createdAt).getTime() > readUpToTs &&
-  /* prev item já passou — só render uma vez */
-  (() => {
-    // implementar via ref ou comparar com previousItem se disponível.
-    return null;
-  })()}
+{
+  readUpToTs !== null &&
+    new Date(item.createdAt).getTime() > readUpToTs &&
+    /* prev item já passou — só render uma vez */
+    (() => {
+      // implementar via ref ou comparar com previousItem se disponível.
+      return null;
+    })();
+}
 ```
 
 **Better approach — render marker via IIFE com tracker:**
@@ -1319,6 +1337,7 @@ Expected: PASS (suíte da Fase A+B+followups).
 - [ ] **Step 4: Smoke manual (opcional)**
 
 Se ambiente dev disponível:
+
 1. `pnpm dev`
 2. Browser → login → abrir conversa do inbox
 3. Side panel: ver header com SLA badge, embudo, atributos, etiquetas, contato, resumo IA, ações

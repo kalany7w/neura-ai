@@ -17,7 +17,8 @@ export function middleware(req: NextRequest) {
 
   // Better Auth cookie: tenta os dois nomes possíveis
   const session =
-    req.cookies.get('better-auth.session_token') ?? req.cookies.get('__Secure-better-auth.session_token');
+    req.cookies.get('better-auth.session_token') ??
+    req.cookies.get('__Secure-better-auth.session_token');
 
   if (!session) {
     const url = req.nextUrl.clone();
@@ -30,5 +31,7 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+  ],
 };

@@ -114,16 +114,11 @@ export async function applyInboxRules(params: {
             where: { id: params.conversationId },
             data: { assignedAgentId: agentId },
           });
-          await publishEvent(
-            params.workspaceId,
-            'conversations',
-            'conversation.assigned',
-            { conversationId: params.conversationId, assignedAgentId: agentId },
-          );
-          logger.info(
-            { conversationId: params.conversationId, agentId },
-            'Round-robin: assigned',
-          );
+          await publishEvent(params.workspaceId, 'conversations', 'conversation.assigned', {
+            conversationId: params.conversationId,
+            assignedAgentId: agentId,
+          });
+          logger.info({ conversationId: params.conversationId, agentId }, 'Round-robin: assigned');
         }
       }
     }

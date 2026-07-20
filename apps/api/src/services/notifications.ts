@@ -2,7 +2,12 @@ import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { redis } from '../redis.js';
 
-type NotifKind = 'message.new' | 'conversation.assigned' | 'sla.critical' | 'card.outcome' | 'calendar.reminder';
+type NotifKind =
+  | 'message.new'
+  | 'conversation.assigned'
+  | 'sla.critical'
+  | 'card.outcome'
+  | 'calendar.reminder';
 
 interface CreateParams {
   workspaceId: string;

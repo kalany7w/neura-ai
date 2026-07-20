@@ -76,7 +76,12 @@ export default function LabelsPage() {
     formState: { errors },
   } = useForm<Input>({
     resolver: zodResolver(schema),
-    defaultValues: { color: '#94a3b8', scope: 'BOTH', routesToFunnelId: null, routesToStageId: null },
+    defaultValues: {
+      color: '#94a3b8',
+      scope: 'BOTH',
+      routesToFunnelId: null,
+      routesToStageId: null,
+    },
   });
 
   async function onCreate(values: Input) {
@@ -131,7 +136,11 @@ export default function LabelsPage() {
           <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">{t('common.name')}</Label>
-              <Input id="name" placeholder={t('settings_labels.name_placeholder')} {...register('name')} />
+              <Input
+                id="name"
+                placeholder={t('settings_labels.name_placeholder')}
+                {...register('name')}
+              />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -167,13 +176,13 @@ export default function LabelsPage() {
                 <SelectContent>
                   <SelectItem value="none">{t('settings_labels.global_all_funnels')}</SelectItem>
                   {funnelsData?.funnels.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                {t('settings_labels.funnel_hint')}
-              </p>
+              <p className="text-xs text-muted-foreground">{t('settings_labels.funnel_hint')}</p>
             </div>
 
             {watch('routesToFunnelId') && (
@@ -187,11 +196,14 @@ export default function LabelsPage() {
                     <SelectValue placeholder={t('settings_labels.choose_stage')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {(funnelsData?.funnels.find((f) => f.id === watch('routesToFunnelId'))?.stages ?? []).map(
-                      (s) => (
-                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                      ),
-                    )}
+                    {(
+                      funnelsData?.funnels.find((f) => f.id === watch('routesToFunnelId'))
+                        ?.stages ?? []
+                    ).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -211,10 +223,7 @@ export default function LabelsPage() {
           ) : (
             <ul className="space-y-2">
               {data.labels.map((l) => (
-                <li
-                  key={l.id}
-                  className="flex items-center justify-between rounded-md border p-3"
-                >
+                <li key={l.id} className="flex items-center justify-between rounded-md border p-3">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <span
                       style={{ backgroundColor: l.color }}
@@ -225,7 +234,9 @@ export default function LabelsPage() {
                         <p className="font-medium truncate">{l.name}</p>
                         {l.routesToFunnelId ? (
                           <span className="inline-flex items-center rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            → {funnelNameById.get(l.routesToFunnelId) ?? t('settings_labels.funnel_fallback')}
+                            →{' '}
+                            {funnelNameById.get(l.routesToFunnelId) ??
+                              t('settings_labels.funnel_fallback')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
@@ -345,9 +356,7 @@ function EditLabelDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('settings_labels.edit_label')}</DialogTitle>
-          <DialogDescription>
-            {t('settings_labels.edit_desc')}
-          </DialogDescription>
+          <DialogDescription>{t('settings_labels.edit_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
@@ -399,7 +408,9 @@ function EditLabelDialog({
               <SelectContent>
                 <SelectItem value="none">{t('settings_labels.global_all_funnels')}</SelectItem>
                 {funnels.map((f) => (
-                  <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.name}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -416,14 +427,14 @@ function EditLabelDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {stages.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {!stageId && (
-                <p className="text-[11px] text-amber-600">
-                  {t('settings_labels.no_stage_hint')}
-                </p>
+                <p className="text-[11px] text-amber-600">{t('settings_labels.no_stage_hint')}</p>
               )}
             </div>
           )}

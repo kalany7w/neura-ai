@@ -167,10 +167,7 @@ emailOutboundWorker.on('failed', async (job, err) => {
  * Pra MVP — não suporta markdown.
  */
 function textToHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   // Auto-link URLs simples
   const linked = escaped.replace(
     /(https?:\/\/[^\s<>"']+)/g,

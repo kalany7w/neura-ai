@@ -69,7 +69,12 @@ interface ContactCard {
   title: string;
   value: string | null;
   funnel: { id: string; name: string };
-  stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
+  stage: {
+    id: string;
+    name: string;
+    color: string;
+    outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+  };
 }
 
 interface Contact {
@@ -246,7 +251,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             {initialsFrom(contact.name ?? contact.phoneNumber)}
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold">{contact.name ?? t('contacts_id.no_name')}</h1>
+            <h1 className="truncate text-2xl font-bold">
+              {contact.name ?? t('contacts_id.no_name')}
+            </h1>
             <p className="flex items-center gap-1 text-sm text-muted-foreground">
               <Phone className="h-3.5 w-3.5" />
               {contact.phoneNumber}
@@ -341,7 +348,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
                     {availableLabels.map((l) => (
                       <DropdownMenuItem key={l.id} onSelect={() => applyLabel(l.id)}>
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: l.color }} />
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: l.color }}
+                        />
                         {l.name}
                       </DropdownMenuItem>
                     ))}
@@ -349,9 +359,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 </DropdownMenu>
               )}
               {contact.labels.length === 0 && availableLabels.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {t('contacts_id.no_labels')}
-                </p>
+                <p className="text-xs text-muted-foreground">{t('contacts_id.no_labels')}</p>
               )}
             </div>
           </section>
@@ -372,9 +380,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 ))}
               </dl>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                {t('contacts_id.no_attrs')}
-              </p>
+              <p className="text-xs text-muted-foreground">{t('contacts_id.no_attrs')}</p>
             )}
           </section>
 
@@ -383,7 +389,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               {t('contacts_id.summary')}
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <StatBox label={t('contacts_id.stat_conversations')} value={contact.conversations.length} />
+              <StatBox
+                label={t('contacts_id.stat_conversations')}
+                value={contact.conversations.length}
+              />
               <StatBox label={t('contacts_id.stat_cards')} value={cards.length} />
               <StatBox
                 label={t('contacts_id.stat_unread')}
@@ -421,7 +430,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     >
                       {t(STATUS_LABEL_KEY[conv.status] ?? conv.status)}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">{conv.inbox.name}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {conv.inbox.name}
+                    </span>
                     {conv.unreadCount > 0 && (
                       <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
                         {conv.unreadCount}
@@ -474,7 +485,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                       <span>{card.funnel.name}</span>
                       <ChevronRight className="h-2.5 w-2.5" />
                       <span className="inline-flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: accent }} />
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ backgroundColor: accent }}
+                        />
                         {card.stage.name}
                       </span>
                     </div>
@@ -645,7 +659,10 @@ function NotesTab({
   return (
     <section className="space-y-4">
       <div className="rounded-lg border bg-card p-4">
-        <Label htmlFor="contact-note-composer" className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Label
+          htmlFor="contact-note-composer"
+          className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+        >
           <StickyNote className="h-3.5 w-3.5" />
           {t('contacts_id.add_note')}
         </Label>
@@ -669,11 +686,7 @@ function NotesTab({
           <p className="text-[11px] text-muted-foreground">
             {t('contacts_id.note_hint', { n: composer.length })}
           </p>
-          <Button
-            size="sm"
-            onClick={addNote}
-            disabled={composerSubmitting || !composer.trim()}
-          >
+          <Button size="sm" onClick={addNote} disabled={composerSubmitting || !composer.trim()}>
             {composerSubmitting ? t('action.saving') : t('contacts_id.add_note')}
           </Button>
         </div>
@@ -771,14 +784,21 @@ function NotesTab({
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-ring"
                     />
                     <div className="flex items-center justify-end gap-2">
-                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={editSubmitting}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={cancelEdit}
+                        disabled={editSubmitting}
+                      >
                         <X className="h-3.5 w-3.5" />
                         {t('action.cancel')}
                       </Button>
                       <Button
                         size="sm"
                         onClick={() => saveEdit(note.id)}
-                        disabled={editSubmitting || !editDraft.trim() || editDraft.trim() === note.body}
+                        disabled={
+                          editSubmitting || !editDraft.trim() || editDraft.trim() === note.body
+                        }
                       >
                         <Check className="h-3.5 w-3.5" />
                         {editSubmitting ? t('action.saving') : t('action.save')}
@@ -852,9 +872,7 @@ function EditContactDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('contacts_id.edit_contact_title')}</DialogTitle>
-          <DialogDescription>
-            {t('contacts_id.edit_contact_desc')}
-          </DialogDescription>
+          <DialogDescription>{t('contacts_id.edit_contact_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
@@ -972,9 +990,7 @@ function StartConversationDialog({
               ))}
             </select>
             {connectedInboxes.length === 0 && (
-              <p className="text-xs text-amber-600">
-                {t('contacts_id.no_connected_inbox')}
-              </p>
+              <p className="text-xs text-amber-600">{t('contacts_id.no_connected_inbox')}</p>
             )}
           </div>
           <div className="space-y-2">
@@ -1005,13 +1021,7 @@ function StartConversationDialog({
 // Journey Tab — cross-canal timeline
 // ============================================================
 
-type JourneyEventKind =
-  | 'msg'
-  | 'note'
-  | 'card'
-  | 'csat'
-  | 'conv_started'
-  | 'conv_resolved';
+type JourneyEventKind = 'msg' | 'note' | 'card' | 'csat' | 'conv_started' | 'conv_resolved';
 
 interface JourneyEvent {
   id: string;
@@ -1054,7 +1064,11 @@ function JourneyTab({ contactId }: { contactId: string }) {
     filter !== 'all'
       ? `?types=${encodeURIComponent(filter === 'conv_started' ? 'conv_started,conv_resolved' : filter)}`
       : '';
-  const { data, isLoading } = useQuery<{ events: JourneyEvent[]; total: number; truncated: boolean }>({
+  const { data, isLoading } = useQuery<{
+    events: JourneyEvent[];
+    total: number;
+    truncated: boolean;
+  }>({
     queryKey: ['journey', contactId, filter],
     queryFn: () => api(`/api/contacts/${contactId}/journey${queryStr}`),
   });
@@ -1162,9 +1176,7 @@ function JourneyEventCard({ event }: { event: JourneyEvent }) {
 
   const inner = (
     <div className="flex gap-3 rounded-lg border bg-card p-3 transition-colors hover:border-foreground/30">
-      <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${iconBg}`}
-      >
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
@@ -1236,9 +1248,7 @@ function useEventVisuals(event: JourneyEvent): {
           <span className="text-sm font-medium">
             {t('contacts_id.event_note')}
             {event.noteAuthor && (
-              <span className="ml-1 font-normal text-muted-foreground">
-                · {event.noteAuthor}
-              </span>
+              <span className="ml-1 font-normal text-muted-foreground">· {event.noteAuthor}</span>
             )}
           </span>
         ),

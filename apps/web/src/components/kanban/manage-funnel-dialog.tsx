@@ -159,7 +159,9 @@ export function ManageFunnelDialog({
       toast.success(t('c_kanban_manage_funnel_dialog.funnel_updated'));
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.save_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.save_error'),
+      );
     } finally {
       setSavingFunnel(false);
     }
@@ -168,7 +170,9 @@ export function ManageFunnelDialog({
   async function deleteFunnel() {
     if (
       !(await confirm({
-        title: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_title', { name: funnel!.name }),
+        title: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_title', {
+          name: funnel!.name,
+        }),
         description: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_desc'),
         confirmLabel: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_label'),
         destructive: true,
@@ -181,7 +185,9 @@ export function ManageFunnelDialog({
       onOpenChange(false);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.delete_funnel_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.delete_funnel_error'),
+      );
     }
   }
 
@@ -190,9 +196,7 @@ export function ManageFunnelDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('c_kanban_manage_funnel_dialog.title')}</DialogTitle>
-          <DialogDescription>
-            {t('c_kanban_manage_funnel_dialog.description')}
-          </DialogDescription>
+          <DialogDescription>{t('c_kanban_manage_funnel_dialog.description')}</DialogDescription>
         </DialogHeader>
 
         {/* Funnel meta */}
@@ -238,11 +242,7 @@ export function ManageFunnelDialog({
               {t('c_kanban_manage_funnel_dialog.reorder_hint')}
             </span>
           </div>
-          <SortableStagesList
-            funnelId={funnel.id}
-            stages={funnel.stages}
-            refresh={refresh}
-          />
+          <SortableStagesList funnelId={funnel.id} stages={funnel.stages} refresh={refresh} />
           <NewStageRow funnelId={funnel.id} stages={funnel.stages} refresh={refresh} />
         </section>
       </DialogContent>
@@ -250,13 +250,7 @@ export function ManageFunnelDialog({
   );
 }
 
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (c: string) => void;
-}) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {STAGE_COLORS.map((c) => (
@@ -296,9 +290,7 @@ function SortableStagesList({
   }, [stages]);
 
   // PointerSensor com distance pra não disparar drag em clique acidental (8px)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   async function handleDragEnd(ev: DragEndEvent) {
     const { active, over } = ev;
@@ -319,7 +311,9 @@ function SortableStagesList({
     } catch (err) {
       // Rollback se server rejeitar
       setLocalOrder(stages);
-      toast.error(err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.reorder_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.reorder_error'),
+      );
     } finally {
       setBusy(false);
     }
@@ -327,10 +321,7 @@ function SortableStagesList({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext
-        items={localOrder.map((s) => s.id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={localOrder.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <ul className="space-y-2">
           {localOrder.map((s) => (
             <SortableStageRow
@@ -366,14 +357,10 @@ function SortableStageRow({
   const [editingColor, setEditingColor] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: stage.id, disabled });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: stage.id,
+    disabled,
+  });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -386,8 +373,7 @@ function SortableStageRow({
     setOutcome(stage.outcome);
   }, [stage.id, stage.name, stage.color, stage.outcome]);
 
-  const dirty =
-    name !== stage.name || color !== stage.color || outcome !== stage.outcome;
+  const dirty = name !== stage.name || color !== stage.color || outcome !== stage.outcome;
 
   async function patch(payload: Record<string, unknown>) {
     setBusy(true);
@@ -544,7 +530,9 @@ function NewStageRow({
     setSubmitting(true);
     try {
       // Insere antes do primeiro stage com outcome (POSITIVE/NEGATIVE), senão no fim
-      const outcomeOrder = stages.find((s) => s.outcome === 'POSITIVE' || s.outcome === 'NEGATIVE')?.order;
+      const outcomeOrder = stages.find(
+        (s) => s.outcome === 'POSITIVE' || s.outcome === 'NEGATIVE',
+      )?.order;
       const lastNormal = stages
         .filter((s) => s.outcome !== 'POSITIVE' && s.outcome !== 'NEGATIVE')
         .reduce((acc, s) => Math.max(acc, s.order), -1);
@@ -580,10 +568,7 @@ function NewStageRow({
   return (
     <div className="space-y-3 rounded-lg border-2 border-dashed bg-muted/20 p-3">
       <div className="flex items-center gap-2">
-        <span
-          className="h-5 w-5 shrink-0 rounded-full"
-          style={{ backgroundColor: color }}
-        />
+        <span className="h-5 w-5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -602,7 +587,9 @@ function NewStageRow({
       <ColorPicker value={color} onChange={setColor} />
       <div className="flex gap-2">
         <Button size="sm" onClick={submit} disabled={!name.trim() || submitting}>
-          {submitting ? t('c_kanban_manage_funnel_dialog.creating') : t('c_kanban_manage_funnel_dialog.create_stage')}
+          {submitting
+            ? t('c_kanban_manage_funnel_dialog.creating')
+            : t('c_kanban_manage_funnel_dialog.create_stage')}
         </Button>
         <Button
           size="sm"

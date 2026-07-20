@@ -168,9 +168,7 @@ async function handleForecast(job: Job<AiJob>): Promise<void> {
   const history = messages
     .reverse()
     .map((m) => ({
-      direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as
-        | 'inbound'
-        | 'outbound',
+      direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
       content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
     }))
     .filter((m) => m.content.trim().length > 0);
@@ -201,10 +199,7 @@ async function handleForecast(job: Job<AiJob>): Promise<void> {
     probability: result.probability,
     reasoning: result.reasoning,
   });
-  logger.info(
-    { cardId: targetId, probability: result.probability },
-    'card forecasted',
-  );
+  logger.info({ cardId: targetId, probability: result.probability }, 'card forecasted');
 }
 
 export const aiWorker = new Worker<AiJob>(
@@ -221,8 +216,5 @@ aiWorker.on('failed', (job, err) => {
   if (!job) return;
   const attempts = job.attemptsMade ?? 0;
   const max = job.opts?.attempts ?? 1;
-  logger.warn(
-    { err, jobId: job.id, kind: job.data.kind, attempts, max },
-    'ai job failed',
-  );
+  logger.warn({ err, jobId: job.id, kind: job.data.kind, attempts, max }, 'ai job failed');
 });

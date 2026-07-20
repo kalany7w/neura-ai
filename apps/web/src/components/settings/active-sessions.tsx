@@ -2,14 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  Chrome,
-  Globe,
-  LogOut,
-  Monitor,
-  RefreshCw,
-  Smartphone,
-} from 'lucide-react';
+import { Chrome, Globe, LogOut, Monitor, RefreshCw, Smartphone } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
@@ -90,9 +83,7 @@ export function ActiveSessions() {
       mapped.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setSessions(mapped);
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : t('c_settings_active_sessions.list_error'),
-      );
+      toast.error(err instanceof Error ? err.message : t('c_settings_active_sessions.list_error'));
     } finally {
       setLoading(false);
     }
@@ -171,9 +162,7 @@ export function ActiveSessions() {
       {loading && !sessions ? (
         <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !sessions || sessions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {t('c_settings_active_sessions.empty')}
-        </p>
+        <p className="text-sm text-muted-foreground">{t('c_settings_active_sessions.empty')}</p>
       ) : (
         <ul className="divide-y">
           {sessions.map((s) => {

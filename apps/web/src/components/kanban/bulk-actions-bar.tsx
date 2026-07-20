@@ -1,14 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  AlarmClock,
-  Tag,
-  Trash2,
-  UserCheck,
-  UserX,
-  X,
-} from 'lucide-react';
+import { AlarmClock, Tag, Trash2, UserCheck, UserX, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
@@ -228,7 +221,12 @@ export function BulkActionsBar({
 
       <div className="ml-1 h-5 w-px bg-border" />
 
-      <Button size="sm" variant="ghost" onClick={onClear} title={t('c_kanban_bulk_actions_bar.cancel_selection')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onClear}
+        title={t('c_kanban_bulk_actions_bar.cancel_selection')}
+      >
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

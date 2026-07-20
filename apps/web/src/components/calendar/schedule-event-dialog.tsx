@@ -98,7 +98,9 @@ export function ScheduleEventDialog({
       setOpen(false);
       qc.invalidateQueries({ queryKey: ['calendar'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_calendar_schedule_event_dialog.toast_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_calendar_schedule_event_dialog.toast_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -112,14 +114,16 @@ export function ScheduleEventDialog({
           <DialogTitle className="flex items-center gap-2">
             <CalendarPlus className="h-5 w-5" /> {t('c_calendar_schedule_event_dialog.title')}
           </DialogTitle>
-          <DialogDescription>
-            {t('c_calendar_schedule_event_dialog.description')}
-          </DialogDescription>
+          <DialogDescription>{t('c_calendar_schedule_event_dialog.description')}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="title">{t('c_calendar_schedule_event_dialog.field_title')}</Label>
-            <Input id="title" {...register('title')} placeholder={t('c_calendar_schedule_event_dialog.title_placeholder')} />
+            <Input
+              id="title"
+              {...register('title')}
+              placeholder={t('c_calendar_schedule_event_dialog.title_placeholder')}
+            />
             {errors.title && <p className="text-xs text-destructive">{errors.title.message}</p>}
           </div>
           <div className="space-y-1">
@@ -131,16 +135,29 @@ export function ScheduleEventDialog({
           </div>
           <div className="space-y-1">
             <Label>{t('c_calendar_schedule_event_dialog.field_type')}</Label>
-            <Select value={watch('type')} onValueChange={(v) => setValue('type', v as Input['type'])}>
+            <Select
+              value={watch('type')}
+              onValueChange={(v) => setValue('type', v as Input['type'])}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="APPLICATION">{t('c_calendar_schedule_event_dialog.type_application')}</SelectItem>
-                <SelectItem value="MAINTENANCE">{t('c_calendar_schedule_event_dialog.type_maintenance')}</SelectItem>
-                <SelectItem value="REPAIR">{t('c_calendar_schedule_event_dialog.type_repair')}</SelectItem>
-                <SelectItem value="SALE_FOLLOWUP">{t('c_calendar_schedule_event_dialog.type_sale_followup')}</SelectItem>
-                <SelectItem value="OTHER">{t('c_calendar_schedule_event_dialog.type_other')}</SelectItem>
+                <SelectItem value="APPLICATION">
+                  {t('c_calendar_schedule_event_dialog.type_application')}
+                </SelectItem>
+                <SelectItem value="MAINTENANCE">
+                  {t('c_calendar_schedule_event_dialog.type_maintenance')}
+                </SelectItem>
+                <SelectItem value="REPAIR">
+                  {t('c_calendar_schedule_event_dialog.type_repair')}
+                </SelectItem>
+                <SelectItem value="SALE_FOLLOWUP">
+                  {t('c_calendar_schedule_event_dialog.type_sale_followup')}
+                </SelectItem>
+                <SelectItem value="OTHER">
+                  {t('c_calendar_schedule_event_dialog.type_other')}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -149,7 +166,9 @@ export function ScheduleEventDialog({
               {t('action.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? t('c_calendar_schedule_event_dialog.submitting') : t('c_calendar_schedule_event_dialog.submit')}
+              {submitting
+                ? t('c_calendar_schedule_event_dialog.submitting')
+                : t('c_calendar_schedule_event_dialog.submit')}
             </Button>
           </DialogFooter>
         </form>

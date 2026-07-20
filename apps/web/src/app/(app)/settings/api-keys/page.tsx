@@ -61,7 +61,9 @@ export default function ApiKeysPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !key.enabled }),
       });
-      toast.success(key.enabled ? t('settings_api_keys.deactivated') : t('settings_api_keys.activated'));
+      toast.success(
+        key.enabled ? t('settings_api_keys.deactivated') : t('settings_api_keys.activated'),
+      );
       await qc.invalidateQueries({ queryKey: ['api-keys'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'));
@@ -173,13 +175,13 @@ export default function ApiKeysPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => toggle(key)}
-                        title={key.enabled ? t('settings_api_keys.deactivate') : t('settings_api_keys.activate')}
+                        title={
+                          key.enabled
+                            ? t('settings_api_keys.deactivate')
+                            : t('settings_api_keys.activate')
+                        }
                       >
-                        <Power
-                          className={
-                            key.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'
-                          }
-                        />
+                        <Power className={key.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'} />
                       </Button>
                       <Button
                         size="icon"
@@ -253,9 +255,7 @@ function CreateKeyDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('settings_api_keys.create_title')}</DialogTitle>
-          <DialogDescription>
-            {t('settings_api_keys.create_desc')}
-          </DialogDescription>
+          <DialogDescription>{t('settings_api_keys.create_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
@@ -295,9 +295,7 @@ function RevealDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('settings_api_keys.reveal_title')}</DialogTitle>
-          <DialogDescription>
-            {t('settings_api_keys.reveal_desc', { name })}
-          </DialogDescription>
+          <DialogDescription>{t('settings_api_keys.reveal_desc', { name })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
@@ -327,7 +325,9 @@ function RevealDialog({
           </Button>
           <p className="text-xs text-muted-foreground">
             {t('settings_api_keys.usage_hint')}{' '}
-            <code className="rounded bg-muted px-1 py-0.5">Authorization: Bearer {plain.slice(0, 14)}…</code>
+            <code className="rounded bg-muted px-1 py-0.5">
+              Authorization: Bearer {plain.slice(0, 14)}…
+            </code>
           </p>
           <Button onClick={onClose} className="w-full">
             {t('settings_api_keys.saved_key')}

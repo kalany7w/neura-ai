@@ -2,11 +2,12 @@ import { Flame, Thermometer, Snowflake } from 'lucide-react';
 
 type Temperature = 'CALIENTE' | 'TIBIO' | 'FRIO';
 
-const CONFIG: Record<Temperature, { label: string; bg: string; text: string; Icon: typeof Flame }> = {
-  CALIENTE: { label: 'CALIENTE', bg: 'bg-red-100', text: 'text-red-700', Icon: Flame },
-  TIBIO: { label: 'TIBIO', bg: 'bg-amber-100', text: 'text-amber-800', Icon: Thermometer },
-  FRIO: { label: 'FRIO', bg: 'bg-slate-100', text: 'text-slate-600', Icon: Snowflake },
-};
+const CONFIG: Record<Temperature, { label: string; bg: string; text: string; Icon: typeof Flame }> =
+  {
+    CALIENTE: { label: 'CALIENTE', bg: 'bg-red-100', text: 'text-red-700', Icon: Flame },
+    TIBIO: { label: 'TIBIO', bg: 'bg-amber-100', text: 'text-amber-800', Icon: Thermometer },
+    FRIO: { label: 'FRIO', bg: 'bg-slate-100', text: 'text-slate-600', Icon: Snowflake },
+  };
 
 export function SlaBadge({ temperature }: { temperature: Temperature }) {
   const cfg = CONFIG[temperature];

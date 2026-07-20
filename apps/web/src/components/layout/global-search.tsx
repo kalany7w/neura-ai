@@ -33,7 +33,12 @@ interface CardHit {
   id: string;
   title: string;
   funnel: { id: string; name: string };
-  stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
+  stage: {
+    id: string;
+    name: string;
+    color: string;
+    outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+  };
 }
 
 interface SearchResp {
@@ -93,10 +98,7 @@ export function GlobalSearch() {
   }, []);
 
   const hasResults =
-    !!data &&
-    (data.contacts.length > 0 ||
-      data.conversations.length > 0 ||
-      data.cards.length > 0);
+    !!data && (data.contacts.length > 0 || data.conversations.length > 0 || data.cards.length > 0);
 
   function go(href: string) {
     router.push(href);

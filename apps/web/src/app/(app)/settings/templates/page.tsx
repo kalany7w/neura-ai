@@ -126,7 +126,11 @@ export default function TemplatesPage() {
     try {
       await api(`/api/templates/${tpl.id}/${tpl.pinnedAt ? 'unpin' : 'pin'}`, { method: 'POST' });
       await qc.invalidateQueries({ queryKey: ['templates'] });
-      toast.success(tpl.pinnedAt ? t('settings_templates.toast_unpinned') : t('settings_templates.toast_pinned'));
+      toast.success(
+        tpl.pinnedAt
+          ? t('settings_templates.toast_unpinned')
+          : t('settings_templates.toast_pinned'),
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'));
     }
@@ -147,13 +151,23 @@ export default function TemplatesPage() {
           <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">{t('common.name')}</Label>
-              <Input id="name" placeholder={t('settings_templates.name_placeholder')} {...register('name')} />
+              <Input
+                id="name"
+                placeholder={t('settings_templates.name_placeholder')}
+                {...register('name')}
+              />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="shortcut">{t('settings_templates.shortcut_label')}</Label>
-              <Input id="shortcut" placeholder={t('settings_templates.shortcut_placeholder')} {...register('shortcut')} />
-              {errors.shortcut && <p className="text-xs text-destructive">{t(errors.shortcut.message ?? '')}</p>}
+              <Input
+                id="shortcut"
+                placeholder={t('settings_templates.shortcut_placeholder')}
+                {...register('shortcut')}
+              />
+              {errors.shortcut && (
+                <p className="text-xs text-destructive">{t(errors.shortcut.message ?? '')}</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="body">{t('settings_templates.body_label')}</Label>
@@ -277,13 +291,11 @@ export default function TemplatesPage() {
                           size="icon"
                           variant="ghost"
                           onClick={() => togglePin(tpl)}
-                          title={isPinned ? t('settings_templates.unpin') : t('settings_templates.pin')}
+                          title={
+                            isPinned ? t('settings_templates.unpin') : t('settings_templates.pin')
+                          }
                         >
-                          {isPinned ? (
-                            <PinOff className="h-4 w-4" />
-                          ) : (
-                            <Pin className="h-4 w-4" />
-                          )}
+                          {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                         </Button>
                         <Button size="icon" variant="ghost" onClick={() => remove(tpl.id)}>
                           <Trash2 className="h-4 w-4" />
