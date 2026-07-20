@@ -232,7 +232,9 @@ function CardActionsMenu({
         method: 'POST',
         body: JSON.stringify({ minutes }),
       });
-      toast.success(t('kanban.snooze.until', { until: formatSnoozeUntil(res.snoozeUntil, lang, t) }));
+      toast.success(
+        t('kanban.snooze.until', { until: formatSnoozeUntil(res.snoozeUntil, lang, t) }),
+      );
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('kanban.toast.snooze_error'));
@@ -332,7 +334,9 @@ function CardActionsMenu({
               {t('kanban.card.remove_assignment')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {members.length === 0 && <DropdownMenuLabel>{t('kanban.card.no_agents')}</DropdownMenuLabel>}
+            {members.length === 0 && (
+              <DropdownMenuLabel>{t('kanban.card.no_agents')}</DropdownMenuLabel>
+            )}
             {members.map((m) => (
               <DropdownMenuItem
                 key={m.userId}
@@ -352,10 +356,7 @@ function CardActionsMenu({
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={remove}
-          className="text-destructive focus:text-destructive"
-        >
+        <DropdownMenuItem onSelect={remove} className="text-destructive focus:text-destructive">
           <Trash2 className="h-3.5 w-3.5" />
           {t('kanban.card.delete')}
         </DropdownMenuItem>
@@ -456,36 +457,27 @@ function DraggableCard({
         )}
 
         {/* Forecast IA: probabilidade fechamento */}
-        {card.aiWinProbability != null && (() => {
-          const prob = Number(card.aiWinProbability);
-          const pct = Math.round(prob * 100);
-          const cls =
-            prob >= 0.7
-              ? 'bg-emerald-500'
-              : prob >= 0.4
-                ? 'bg-amber-500'
-                : 'bg-red-500';
-          return (
-            <div
-              className="mt-2 pl-2"
-              title={card.aiWinReasoning ?? t('kanban.forecast_ai')}
-            >
-              <div className="flex items-center justify-between gap-1.5 text-[10px]">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Sparkles className="h-2.5 w-2.5 text-indigo-500" />
-                  {t('kanban.forecast_ai')}
-                </span>
-                <span className="font-semibold tabular-nums">{pct}%</span>
+        {card.aiWinProbability != null &&
+          (() => {
+            const prob = Number(card.aiWinProbability);
+            const pct = Math.round(prob * 100);
+            const cls =
+              prob >= 0.7 ? 'bg-emerald-500' : prob >= 0.4 ? 'bg-amber-500' : 'bg-red-500';
+            return (
+              <div className="mt-2 pl-2" title={card.aiWinReasoning ?? t('kanban.forecast_ai')}>
+                <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Sparkles className="h-2.5 w-2.5 text-indigo-500" />
+                    {t('kanban.forecast_ai')}
+                  </span>
+                  <span className="font-semibold tabular-nums">{pct}%</span>
+                </div>
+                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
+                  <div className={`h-full ${cls}`} style={{ width: `${pct}%` }} />
+                </div>
               </div>
-              <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full ${cls}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
 
         {/* Etiquetas */}
         {card.labels.length > 0 && (
@@ -547,7 +539,9 @@ function DraggableCard({
         {isSnoozed && activeSnooze && (
           <div className="mt-2.5 -mx-3 -mb-3 rounded-b-xl border-t border-amber-200/60 bg-amber-100/60 px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-900">
             <Clock className="h-3 w-3" />
-            {t('kanban.snooze.until', { until: formatSnoozeUntil(activeSnooze.snoozeUntil, lang, t) })}
+            {t('kanban.snooze.until', {
+              until: formatSnoozeUntil(activeSnooze.snoozeUntil, lang, t),
+            })}
           </div>
         )}
       </div>
@@ -570,12 +564,7 @@ function DraggableCard({
       </div>
 
       <div className="absolute right-2 top-2" data-card-menu>
-        <CardActionsMenu
-          card={card}
-          members={members}
-          funnelId={funnelId}
-          isSnoozed={isSnoozed}
-        />
+        <CardActionsMenu card={card} members={members} funnelId={funnelId} isSnoozed={isSnoozed} />
       </div>
     </div>
   );
@@ -660,10 +649,7 @@ function StageColumn({
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: accent }}
-            />
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
             <h3 className="truncate text-sm font-semibold tracking-tight">{stage.name}</h3>
             <span className="rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
               {total}
@@ -689,7 +675,8 @@ function StageColumn({
         </div>
         {sumValue > 0 && (
           <p className="mt-1 text-[11px] font-medium text-muted-foreground">
-            {t('kanban.column_total')} <span className="text-foreground">{formatCurrency(sumValue)}</span>
+            {t('kanban.column_total')}{' '}
+            <span className="text-foreground">{formatCurrency(sumValue)}</span>
           </p>
         )}
       </div>
@@ -720,9 +707,7 @@ function StageColumn({
               className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
             <div className="mt-1.5 flex items-center justify-between gap-2">
-              <p className="text-[10px] text-muted-foreground">
-                {t('kanban.composer_hint')}
-              </p>
+              <p className="text-[10px] text-muted-foreground">{t('kanban.composer_hint')}</p>
               <div className="flex items-center gap-1">
                 <Button
                   size="sm"
@@ -849,8 +834,7 @@ export default function KanbanPage() {
     labels: Array<{ id: string; name: string; color: string }>;
   }>({
     queryKey: ['labels', funnelId],
-    queryFn: () =>
-      api(`/api/labels${funnelId ? `?funnelId=${funnelId}` : ''}`),
+    queryFn: () => api(`/api/labels${funnelId ? `?funnelId=${funnelId}` : ''}`),
     enabled: !!funnelId,
   });
 
@@ -985,9 +969,7 @@ export default function KanbanPage() {
       <div className="rounded-2xl border border-dashed bg-gradient-to-br from-muted/40 to-muted/10 p-12 text-center">
         <LayoutEmptyIcon />
         <h3 className="mt-3 font-semibold">{t('kanban.empty.title')}</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('kanban.empty.subtitle')}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{t('kanban.empty.subtitle')}</p>
         <div className="mt-4">
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
         </div>
@@ -1005,7 +987,12 @@ export default function KanbanPage() {
             funnelId={funnelId}
             onChange={setFunnelId}
           />
-          <Button size="sm" variant="outline" onClick={() => setManageOpen(true)} title={t('kanban.manage_funnel')}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setManageOpen(true)}
+            title={t('kanban.manage_funnel')}
+          >
             <Settings2 className="h-3.5 w-3.5" />
             {t('kanban.manage')}
           </Button>
@@ -1052,17 +1039,21 @@ export default function KanbanPage() {
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
           <div className="hidden md:flex items-center gap-4 pl-3 ml-1 border-l text-[11px] text-muted-foreground">
             <span>
-              <span className="font-semibold text-foreground">{totals.total}</span> {t('kanban.cards_label')}
+              <span className="font-semibold text-foreground">{totals.total}</span>{' '}
+              {t('kanban.cards_label')}
             </span>
             {totals.sumValue > 0 && (
               <span>
-                <span className="font-semibold text-emerald-600">{formatCurrency(totals.sumValue)}</span>{' '}
+                <span className="font-semibold text-emerald-600">
+                  {formatCurrency(totals.sumValue)}
+                </span>{' '}
                 {t('kanban.in_pipeline')}
               </span>
             )}
             {totals.unread > 0 && (
               <span>
-                <span className="font-semibold text-primary">{totals.unread}</span> {t('kanban.unread')}
+                <span className="font-semibold text-primary">{totals.unread}</span>{' '}
+                {t('kanban.unread')}
               </span>
             )}
             {totals.forecastedCount > 0 && totals.forecastValue > 0 && (
@@ -1110,11 +1101,7 @@ export default function KanbanPage() {
         </div>
       </div>
 
-      <SaveFilterDialog
-        open={saveFilterOpen}
-        onOpenChange={setSaveFilterOpen}
-        filters={filters}
-      />
+      <SaveFilterDialog open={saveFilterOpen} onOpenChange={setSaveFilterOpen} filters={filters} />
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 gap-4 overflow-x-auto pb-4 -mx-1 px-1">
@@ -1152,11 +1139,7 @@ export default function KanbanPage() {
         allLabels={labelsData?.labels ?? []}
       />
 
-      <ManageFunnelDialog
-        funnel={funnel ?? null}
-        open={manageOpen}
-        onOpenChange={setManageOpen}
-      />
+      <ManageFunnelDialog funnel={funnel ?? null} open={manageOpen} onOpenChange={setManageOpen} />
     </div>
   );
 }
@@ -1180,12 +1163,11 @@ function FunnelSwitcher({
           className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent"
         >
           {current && (
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: current.color }}
-            />
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: current.color }} />
           )}
-          <span className="truncate max-w-[180px]">{current?.name ?? t('kanban.select_funnel')}</span>
+          <span className="truncate max-w-[180px]">
+            {current?.name ?? t('kanban.select_funnel')}
+          </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
@@ -1231,10 +1213,7 @@ function FilterChips({
             }`}
           >
             {labelObj && (
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: labelObj.color }}
-              />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: labelObj.color }} />
             )}
             {labelObj ? labelObj.name : t('kanban.label_filter')}
             <ChevronDown className="h-3 w-3" />
@@ -1248,7 +1227,10 @@ function FilterChips({
           <DropdownMenuSeparator />
           {labels.length === 0 && <DropdownMenuLabel>{t('kanban.no_labels')}</DropdownMenuLabel>}
           {labels.map((l) => (
-            <DropdownMenuItem key={l.id} onSelect={() => setFilters((f) => ({ ...f, labelId: l.id }))}>
+            <DropdownMenuItem
+              key={l.id}
+              onSelect={() => setFilters((f) => ({ ...f, labelId: l.id }))}
+            >
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: l.color }} />
               {l.name}
             </DropdownMenuItem>
@@ -1270,24 +1252,20 @@ function FilterChips({
             {filters.unassigned
               ? t('kanban.no_agent')
               : memberObj
-                ? memberObj.user.name ?? memberObj.user.email
+                ? (memberObj.user.name ?? memberObj.user.email)
                 : t('role.agent')}
             <ChevronDown className="h-3 w-3" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           <DropdownMenuItem
-            onSelect={() =>
-              setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: null }))
-            }
+            onSelect={() => setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: null }))}
           >
             <X className="h-3.5 w-3.5" />
             {t('kanban.all_agents')}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() =>
-              setFilters((f) => ({ ...f, unassigned: true, assignedAgentId: null }))
-            }
+            onSelect={() => setFilters((f) => ({ ...f, unassigned: true, assignedAgentId: null }))}
           >
             <UserX className="h-3.5 w-3.5" />
             {t('kanban.unassigned')}
@@ -1446,7 +1424,9 @@ function SaveFilterDialog({
     } catch (err) {
       const code =
         err && typeof err === 'object' && 'code' in err ? (err as { code: string }).code : '';
-      toast.error(code === 'name_taken' ? t('kanban.filter.name_taken') : t('kanban.toast.save_error'));
+      toast.error(
+        code === 'name_taken' ? t('kanban.filter.name_taken') : t('kanban.toast.save_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -1457,9 +1437,7 @@ function SaveFilterDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('kanban.save_filter')}</DialogTitle>
-          <DialogDescription>
-            {t('kanban.save_filter_desc')}
-          </DialogDescription>
+          <DialogDescription>{t('kanban.save_filter_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
@@ -1493,7 +1471,7 @@ function CreateFunnelDialog({
   const [name, setName] = useState('');
   const [presetId, setPresetId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
-  const selectedPreset = presetId ? FUNNEL_PRESETS.find((p) => p.id === presetId) ?? null : null;
+  const selectedPreset = presetId ? (FUNNEL_PRESETS.find((p) => p.id === presetId) ?? null) : null;
   async function submit() {
     if (!name.trim()) return;
     setSubmitting(true);
@@ -1529,9 +1507,7 @@ function CreateFunnelDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('kanban.new_funnel')}</DialogTitle>
-          <DialogDescription>
-            {t('kanban.new_funnel_desc')}
-          </DialogDescription>
+          <DialogDescription>{t('kanban.new_funnel_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
@@ -1623,11 +1599,7 @@ function CreateCardDialog({
         <div className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor="card-title">{t('kanban.title_label')}</Label>
-            <Input
-              id="card-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+            <Input id="card-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="card-stage">{t('kanban.stage_label')}</Label>

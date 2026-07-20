@@ -171,11 +171,19 @@ export function InboundWebhooksSection() {
       <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
         <p>
           <strong>{t('c_integrations_inbound_webhooks_section.how_to_call')}</strong>{' '}
-          <code className="rounded bg-background px-1 py-0.5">POST {getApiBase()}/api/inbound/&lt;slug&gt;</code>
-          {' '}{t('c_integrations_inbound_webhooks_section.with_header')}{' '}
-          <code className="rounded bg-background px-1 py-0.5">X-Neura-Signature: sha256=&lt;{t('c_integrations_inbound_webhooks_section.hmac_desc')}&gt;</code>.
-          {' '}{t('c_integrations_inbound_webhooks_section.body_json_with')} <code className="rounded bg-background px-1 py-0.5">{'{ "action": "send_message", ... }'}</code>.
-          {' '}{t('c_integrations_inbound_webhooks_section.rate_limit')}
+          <code className="rounded bg-background px-1 py-0.5">
+            POST {getApiBase()}/api/inbound/&lt;slug&gt;
+          </code>{' '}
+          {t('c_integrations_inbound_webhooks_section.with_header')}{' '}
+          <code className="rounded bg-background px-1 py-0.5">
+            X-Neura-Signature: sha256=&lt;{t('c_integrations_inbound_webhooks_section.hmac_desc')}
+            &gt;
+          </code>
+          . {t('c_integrations_inbound_webhooks_section.body_json_with')}{' '}
+          <code className="rounded bg-background px-1 py-0.5">
+            {'{ "action": "send_message", ... }'}
+          </code>
+          . {t('c_integrations_inbound_webhooks_section.rate_limit')}
         </p>
       </div>
 
@@ -249,7 +257,12 @@ export function InboundWebhooksSection() {
                         className={`h-3.5 w-3.5 ${h.enabled ? 'text-emerald-600' : 'text-muted-foreground'}`}
                       />
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => remove(h)} title={t('action.delete')}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => remove(h)}
+                      title={t('action.delete')}
+                    >
                       <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
                     </Button>
                   </div>
@@ -290,9 +303,7 @@ export function InboundWebhooksSection() {
                     {h.secret !== '***' && (
                       <button
                         type="button"
-                        onClick={() =>
-                          setRevealedSecret((m) => ({ ...m, [h.id]: !m[h.id] }))
-                        }
+                        onClick={() => setRevealedSecret((m) => ({ ...m, [h.id]: !m[h.id] }))}
                         className="rounded p-1 text-muted-foreground hover:text-foreground"
                         title={
                           showSecret
@@ -436,11 +447,16 @@ function CreateInboundDialog({
                 {t('c_integrations_inbound_webhooks_section.created_title')}
               </p>
               <p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">
-                URL: <code className="rounded bg-background px-1 py-0.5">{inboundUrl(created.hook.slug)}</code>
+                URL:{' '}
+                <code className="rounded bg-background px-1 py-0.5">
+                  {inboundUrl(created.hook.slug)}
+                </code>
               </p>
             </div>
             <div>
-              <Label className="mb-1 text-xs">{t('c_integrations_inbound_webhooks_section.secret_copy_now')}</Label>
+              <Label className="mb-1 text-xs">
+                {t('c_integrations_inbound_webhooks_section.secret_copy_now')}
+              </Label>
               <div className="flex gap-2">
                 <Input value={created.fullSecret} readOnly className="font-mono text-xs" />
                 <Button
@@ -523,9 +539,7 @@ function CreateInboundDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={
-                  submitting || !name.trim() || (restrict && selected.size === 0)
-                }
+                disabled={submitting || !name.trim() || (restrict && selected.size === 0)}
               >
                 {submitting
                   ? t('c_integrations_inbound_webhooks_section.creating')
@@ -584,8 +598,8 @@ function SampleDialog({
             {t('c_integrations_inbound_webhooks_section.example_title', { name: hook.name })}
           </DialogTitle>
           <DialogDescription>
-            {t('c_integrations_inbound_webhooks_section.replace_prefix')} <code>&lt;SECRET&gt;</code>{' '}
-            {t('c_integrations_inbound_webhooks_section.by_secret_and')}{' '}
+            {t('c_integrations_inbound_webhooks_section.replace_prefix')}{' '}
+            <code>&lt;SECRET&gt;</code> {t('c_integrations_inbound_webhooks_section.by_secret_and')}{' '}
             <code>&lt;{t('c_integrations_inbound_webhooks_section.conv_id_placeholder')}&gt;</code>{' '}
             {t('c_integrations_inbound_webhooks_section.by_real_id')}
           </DialogDescription>
@@ -597,13 +611,7 @@ function SampleDialog({
             <pre className="overflow-x-auto rounded-md bg-muted p-3 text-[11px] font-mono">
               {curl}
             </pre>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={copyCurl}
-              className="mt-2"
-            >
+            <Button type="button" size="sm" variant="outline" onClick={copyCurl} className="mt-2">
               {copied ? (
                 <>
                   <ClipboardCheck className="h-3.5 w-3.5 text-emerald-600" />
@@ -619,12 +627,18 @@ function SampleDialog({
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 text-xs space-y-2">
-            <p className="font-semibold">{t('c_integrations_inbound_webhooks_section.actions_available')}</p>
+            <p className="font-semibold">
+              {t('c_integrations_inbound_webhooks_section.actions_available')}
+            </p>
             <ul className="space-y-1.5 text-[11px] text-muted-foreground">
               <li>
-                <code className="rounded bg-background px-1">send_message</code> — {t('c_integrations_inbound_webhooks_section.send_message_desc')}{' '}
-                <code className="rounded bg-background px-1">{'{ conversationId, text }'}</code> {t('c_integrations_inbound_webhooks_section.or')}{' '}
-                <code className="rounded bg-background px-1">{'{ inboxId, phoneNumber, text }'}</code>
+                <code className="rounded bg-background px-1">send_message</code> —{' '}
+                {t('c_integrations_inbound_webhooks_section.send_message_desc')}{' '}
+                <code className="rounded bg-background px-1">{'{ conversationId, text }'}</code>{' '}
+                {t('c_integrations_inbound_webhooks_section.or')}{' '}
+                <code className="rounded bg-background px-1">
+                  {'{ inboxId, phoneNumber, text }'}
+                </code>
               </li>
               <li>
                 <code className="rounded bg-background px-1">create_conversation</code> —{' '}

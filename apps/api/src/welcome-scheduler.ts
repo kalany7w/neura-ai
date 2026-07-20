@@ -18,9 +18,7 @@ async function tickFn(_job: Job): Promise<void> {
   try {
     // Busca conversas awaiting que passaram do timeout e não tiveram fallback texto ainda.
     // Usa cross-join com WelcomeFlow pra pegar fallbackTimeoutMinutes da inbox.
-    const candidates = await prisma.$queryRaw<
-      Array<{ id: string; workspaceId: string }>
-    >`
+    const candidates = await prisma.$queryRaw<Array<{ id: string; workspaceId: string }>>`
       SELECT c.id, c."workspaceId"
       FROM conversations c
       JOIN welcome_flows wf ON wf."inboxId" = c."inboxId"

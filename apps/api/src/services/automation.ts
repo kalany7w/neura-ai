@@ -68,7 +68,10 @@ function getField(payload: Record<string, unknown>, field: string): unknown {
   return cur;
 }
 
-function evalCondition(cond: Condition, payload: Record<string, unknown>): { matched: boolean; actual: string } {
+function evalCondition(
+  cond: Condition,
+  payload: Record<string, unknown>,
+): { matched: boolean; actual: string } {
   const raw = getField(payload, cond.field);
   const str = typeof raw === 'string' ? raw : raw == null ? '' : String(raw);
   const lower = str.toLowerCase();
@@ -488,7 +491,9 @@ async function recordRun(input: {
         trigger: input.trigger,
         status: input.status,
         resource: input.resource,
-        conditionsResult: (input.conditionsResult ?? undefined) as Prisma.InputJsonValue | undefined,
+        conditionsResult: (input.conditionsResult ?? undefined) as
+          | Prisma.InputJsonValue
+          | undefined,
         actionsResult: (input.actionsResult ?? undefined) as Prisma.InputJsonValue | undefined,
         errorMessage: input.errorMessage,
         durationMs: input.durationMs,

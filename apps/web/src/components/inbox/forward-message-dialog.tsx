@@ -42,7 +42,8 @@ export function ForwardMessageDialog({
   onForwarded,
 }: Props) {
   const { t } = useT();
-  const ids: string[] = messageIds && messageIds.length > 0 ? messageIds : messageId ? [messageId] : [];
+  const ids: string[] =
+    messageIds && messageIds.length > 0 ? messageIds : messageId ? [messageId] : [];
   const isBatch = ids.length > 1;
 
   const [search, setSearch] = useState('');
@@ -130,7 +131,9 @@ export function ForwardMessageDialog({
       }
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_inbox_forward_message_dialog.toast_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_forward_message_dialog.toast_error'),
+      );
     } finally {
       setSubmitting(false);
     }

@@ -57,7 +57,9 @@ export function parseScoreFromText(
   void firstChars;
 
   // Padrões numéricos: "5", "9/10", "nota 4", "10!", etc.
-  const numMatch = t.match(/(?:^|\s|nota\s+|score\s+|^)(\d{1,2})(?:\s*[\/]\s*\d{1,2})?(?:\s|$|[!.,;])/i);
+  const numMatch = t.match(
+    /(?:^|\s|nota\s+|score\s+|^)(\d{1,2})(?:\s*[\/]\s*\d{1,2})?(?:\s|$|[!.,;])/i,
+  );
   if (!numMatch) {
     // Sem número e sem emoji → não é score
     return null;

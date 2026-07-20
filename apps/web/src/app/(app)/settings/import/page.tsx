@@ -46,24 +46,89 @@ interface FunnelOpt {
 // procura nessas patterns (lowercase substring) no header.
 // `label` guarda a CHAVE de i18n — resolvida via t(f.label) no render.
 const CONTACT_FIELDS = [
-  { key: 'externalId', label: 'settings_import.field.external_id', patterns: ['id'], required: false },
+  {
+    key: 'externalId',
+    label: 'settings_import.field.external_id',
+    patterns: ['id'],
+    required: false,
+  },
   { key: 'name', label: 'common.name', patterns: ['nome', 'name', 'nombre'], required: false },
-  { key: 'phone', label: 'common.phone', patterns: ['telefone', 'phone', 'tel', 'celular', 'whatsapp'], required: false },
+  {
+    key: 'phone',
+    label: 'common.phone',
+    patterns: ['telefone', 'phone', 'tel', 'celular', 'whatsapp'],
+    required: false,
+  },
   { key: 'email', label: 'common.email', patterns: ['email', 'correo', 'e-mail'], required: false },
-  { key: 'tags', label: 'settings_import.field.tags_contact', patterns: ['tag', 'etiqueta'], required: false },
+  {
+    key: 'tags',
+    label: 'settings_import.field.tags_contact',
+    patterns: ['tag', 'etiqueta'],
+    required: false,
+  },
 ] as const;
 
 const LEAD_FIELDS = [
-  { key: 'externalId', label: 'settings_import.field.external_id_lead', patterns: ['id'], required: false },
-  { key: 'title', label: 'settings_import.field.title', patterns: ['title', 'titulo', 'name', 'nome', 'lead', 'oportunidade'], required: true },
-  { key: 'value', label: 'settings_import.field.value', patterns: ['valor', 'price', 'preço', 'precio', 'amount'], required: false },
-  { key: 'stageName', label: 'settings_import.field.stage', patterns: ['stage', 'status', 'etapa', 'fase'], required: false },
-  { key: 'responsibleEmail', label: 'settings_import.field.responsible_email', patterns: ['responsible email', 'responsável email', 'owner email', 'agente email'], required: false },
-  { key: 'responsibleName', label: 'settings_import.field.responsible_name', patterns: ['responsável', 'responsable', 'responsible', 'owner', 'agente', 'sale'], required: false },
-  { key: 'contactPhone', label: 'settings_import.field.contact_phone', patterns: ['contact phone', 'telefone', 'phone', 'tel', 'celular'], required: false },
-  { key: 'contactEmail', label: 'settings_import.field.contact_email', patterns: ['contact email', 'email do contato', 'cliente email'], required: false },
-  { key: 'contactExternalId', label: 'settings_import.field.contact_external_id', patterns: ['contact id', 'contato id'], required: false },
-  { key: 'tags', label: 'settings_import.field.tags', patterns: ['tag', 'etiqueta'], required: false },
+  {
+    key: 'externalId',
+    label: 'settings_import.field.external_id_lead',
+    patterns: ['id'],
+    required: false,
+  },
+  {
+    key: 'title',
+    label: 'settings_import.field.title',
+    patterns: ['title', 'titulo', 'name', 'nome', 'lead', 'oportunidade'],
+    required: true,
+  },
+  {
+    key: 'value',
+    label: 'settings_import.field.value',
+    patterns: ['valor', 'price', 'preço', 'precio', 'amount'],
+    required: false,
+  },
+  {
+    key: 'stageName',
+    label: 'settings_import.field.stage',
+    patterns: ['stage', 'status', 'etapa', 'fase'],
+    required: false,
+  },
+  {
+    key: 'responsibleEmail',
+    label: 'settings_import.field.responsible_email',
+    patterns: ['responsible email', 'responsável email', 'owner email', 'agente email'],
+    required: false,
+  },
+  {
+    key: 'responsibleName',
+    label: 'settings_import.field.responsible_name',
+    patterns: ['responsável', 'responsable', 'responsible', 'owner', 'agente', 'sale'],
+    required: false,
+  },
+  {
+    key: 'contactPhone',
+    label: 'settings_import.field.contact_phone',
+    patterns: ['contact phone', 'telefone', 'phone', 'tel', 'celular'],
+    required: false,
+  },
+  {
+    key: 'contactEmail',
+    label: 'settings_import.field.contact_email',
+    patterns: ['contact email', 'email do contato', 'cliente email'],
+    required: false,
+  },
+  {
+    key: 'contactExternalId',
+    label: 'settings_import.field.contact_external_id',
+    patterns: ['contact id', 'contato id'],
+    required: false,
+  },
+  {
+    key: 'tags',
+    label: 'settings_import.field.tags',
+    patterns: ['tag', 'etiqueta'],
+    required: false,
+  },
 ] as const;
 
 type FieldKey = (typeof CONTACT_FIELDS)[number]['key'] | (typeof LEAD_FIELDS)[number]['key'];
@@ -309,9 +374,7 @@ export default function ImportPage() {
                 reset();
               }}
               className={`rounded-lg border p-4 text-left transition ${
-                kind === 'contacts'
-                  ? 'border-primary bg-primary/5'
-                  : 'hover:border-foreground/30'
+                kind === 'contacts' ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
               }`}
             >
               <p className="font-semibold">{t('settings_import.kind_contacts_title')}</p>
@@ -326,9 +389,7 @@ export default function ImportPage() {
                 reset();
               }}
               className={`rounded-lg border p-4 text-left transition ${
-                kind === 'leads'
-                  ? 'border-primary bg-primary/5'
-                  : 'hover:border-foreground/30'
+                kind === 'leads' ? 'border-primary bg-primary/5' : 'hover:border-foreground/30'
               }`}
             >
               <p className="font-semibold">{t('settings_import.kind_leads_title')}</p>
@@ -365,11 +426,7 @@ export default function ImportPage() {
             </div>
             <div className="space-y-2">
               <Label>{t('settings_import.default_stage')} *</Label>
-              <Select
-                value={defaultStageId}
-                onValueChange={setDefaultStageId}
-                disabled={!funnelId}
-              >
+              <Select value={defaultStageId} onValueChange={setDefaultStageId} disabled={!funnelId}>
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
@@ -404,9 +461,7 @@ export default function ImportPage() {
           <Upload className="h-10 w-10 text-muted-foreground" />
           <div>
             <p className="font-semibold">{t('settings_import.upload_cta')}</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {t('settings_import.upload_hint')}
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">{t('settings_import.upload_hint')}</p>
           </div>
           <input
             id="csv-upload"
@@ -580,7 +635,9 @@ export default function ImportPage() {
               </div>
               <ul className="space-y-1 text-xs text-muted-foreground max-h-48 overflow-y-auto">
                 {result.errors.slice(0, 20).map((e, i) => (
-                  <li key={i}>{t('settings_import.error_row', { row: e.row, reason: e.reason })}</li>
+                  <li key={i}>
+                    {t('settings_import.error_row', { row: e.row, reason: e.reason })}
+                  </li>
                 ))}
               </ul>
             </div>

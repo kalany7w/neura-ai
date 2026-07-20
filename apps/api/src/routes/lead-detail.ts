@@ -130,9 +130,7 @@ leadDetailRouter.get('/conversations/:id/lead-detail', requireAuth, requireWorks
     // + as do funnel do card. Sem card, devolve tudo (qualquer label pode ser aplicada
     // pra criar card automaticamente via routesToFunnelId).
     allLabels: card
-      ? allLabels.filter(
-          (l) => l.routesToFunnelId === null || l.routesToFunnelId === card.funnelId,
-        )
+      ? allLabels.filter((l) => l.routesToFunnelId === null || l.routesToFunnelId === card.funnelId)
       : allLabels,
     funnels,
     temperature,

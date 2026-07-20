@@ -76,7 +76,10 @@ export async function dispatchOutbound(job: SendMessageJob, jobName = 'send'): P
     // Webchat é pull-based: agente envia → marca SENT direto. Widget pega no /poll.
     // Não precisa de worker externo nem rede saindo. Reactions/edit/revoke skip.
     if (job.kind === 'reaction' || job.kind === 'edit' || job.kind === 'revoke') {
-      logger.info({ messageId: job.messageId, kind: job.kind }, 'webchat: kind not supported, skip');
+      logger.info(
+        { messageId: job.messageId, kind: job.kind },
+        'webchat: kind not supported, skip',
+      );
       return;
     }
     await prisma.message.update({

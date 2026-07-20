@@ -105,9 +105,10 @@ export default function CalendarPage() {
   const todayDate = new Date();
   const isCurrentMonth = todayDate.getFullYear() === year && todayDate.getMonth() === month;
   // Dias da semana traduzidos (Dom/Seg/... ou Dom/Lun/...)
-  const weekdays = lang === 'es'
-    ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-    : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const weekdays =
+    lang === 'es'
+      ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+      : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   if (isLoading && !data) {
     return (
@@ -166,12 +167,15 @@ export default function CalendarPage() {
 
       <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
         {weekdays.map((d) => (
-          <div key={d} className="bg-card p-2 text-center text-xs font-semibold text-muted-foreground">
+          <div
+            key={d}
+            className="bg-card p-2 text-center text-xs font-semibold text-muted-foreground"
+          >
             {d}
           </div>
         ))}
         {cells.map((day, idx) => {
-          const dayEvents = day ? eventsByDay.get(day) ?? [] : [];
+          const dayEvents = day ? (eventsByDay.get(day) ?? []) : [];
           const isToday = isCurrentMonth && day === todayDate.getDate();
           return (
             <div key={idx} className={`bg-card min-h-24 p-1.5 ${day ? '' : 'bg-muted/30'}`}>

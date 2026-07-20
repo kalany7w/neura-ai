@@ -16,26 +16,31 @@
 ## File Structure
 
 ### API routes (Hono)
+
 - Create: `apps/api/src/routes/welcome-flows.ts` — CRUD do flow (GET/POST/PUT/DELETE), sub-CRUD options, endpoint de test
 - Modify: `apps/api/src/routes/labels.ts` — schema Zod ganha `routesToFunnelId` + `routesToStageId`
 - Modify: `apps/api/src/index.ts` — wire `welcomeFlowsRouter`
 
 ### Web pages (Next.js)
+
 - Create: `apps/web/src/app/(app)/settings/welcome-flows/page.tsx` — list por inbox + status + link "editar"
 - Create: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx` — editor completo
 
 ### Web components
+
 - Create: `apps/web/src/components/settings/welcome-flow-options-editor.tsx` — drag-drop list de options (extraído pra arquivo próprio porque é a parte mais complexa do editor)
 - Create: `apps/web/src/components/settings/welcome-flow-test-dialog.tsx` — modal pra "enviar teste pra meu número"
 - Modify: `apps/web/src/app/(app)/settings/labels/page.tsx` — adicionar campos routing no form
 - Modify: `apps/web/src/components/layout/sidebar.tsx` — adicionar "Fluxo de boas-vindas" em Configurações
 
 ### shadcn components a instalar
+
 - `textarea` — pra prompt multi-linha (não está em components/ui ainda)
 - `select` — pra dropdowns de funnel/stage (não está)
 - `switch` — pra toggle enabled (não está)
 
 ### Tests
+
 - Create: `apps/api/tests/welcome-flows-route.test.ts` — integration tests dos handlers (CRUD + test endpoint mockado)
 
 ---
@@ -43,6 +48,7 @@
 ## Task 1: Install shadcn components missing (textarea, select, switch)
 
 **Files:**
+
 - Auto-created: `apps/web/src/components/ui/textarea.tsx`, `select.tsx`, `switch.tsx`
 - Modified: `apps/web/package.json` (deps Radix Primitives novos)
 
@@ -84,6 +90,7 @@ git commit -m "chore(web): adiciona shadcn components textarea/select/switch pra
 ## Task 2: Routes welcome-flows.ts — CRUD do flow (GET/POST/PUT/DELETE)
 
 **Files:**
+
 - Create: `apps/api/src/routes/welcome-flows.ts`
 
 - [ ] **Step 1: Criar arquivo com handlers base**
@@ -116,25 +123,30 @@ const flowUpsertSchema = z.object({
  * GET /api/inboxes/:inboxId/welcome-flow
  * Retorna o flow da inbox + options ordenadas. Retorna 404 se não existir.
  */
-welcomeFlowsRouter.get('/inboxes/:inboxId/welcome-flow', requireAuth, requireWorkspace, async (c) => {
-  const workspaceId = c.get('workspaceId') as string;
-  const { inboxId } = c.req.param();
+welcomeFlowsRouter.get(
+  '/inboxes/:inboxId/welcome-flow',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { inboxId } = c.req.param();
 
-  // Garante que a inbox pertence ao workspace
-  const inbox = await prisma.inbox.findFirst({
-    where: { id: inboxId, workspaceId },
-    select: { id: true, name: true },
-  });
-  if (!inbox) return c.json({ error: 'inbox_not_found' }, 404);
+    // Garante que a inbox pertence ao workspace
+    const inbox = await prisma.inbox.findFirst({
+      where: { id: inboxId, workspaceId },
+      select: { id: true, name: true },
+    });
+    if (!inbox) return c.json({ error: 'inbox_not_found' }, 404);
 
-  const flow = await prisma.welcomeFlow.findUnique({
-    where: { inboxId },
-    include: { options: { orderBy: { position: 'asc' } } },
-  });
-  if (!flow) return c.json({ error: 'not_found', inbox }, 404);
+    const flow = await prisma.welcomeFlow.findUnique({
+      where: { inboxId },
+      include: { options: { orderBy: { position: 'asc' } } },
+    });
+    if (!flow) return c.json({ error: 'not_found', inbox }, 404);
 
-  return c.json({ flow, inbox });
-});
+    return c.json({ flow, inbox });
+  },
+);
 
 /**
  * POST /api/inboxes/:inboxId/welcome-flow
@@ -157,7 +169,8 @@ welcomeFlowsRouter.post(
 
     const body = await c.req.json().catch(() => null);
     const parsed = flowUpsertSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     try {
       const flow = await prisma.welcomeFlow.create({
@@ -201,7 +214,8 @@ welcomeFlowsRouter.put(
 
     const body = await c.req.json().catch(() => null);
     const parsed = flowUpsertSchema.partial().safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const flow = await prisma.welcomeFlow.findFirst({
       where: { inboxId, workspaceId },
@@ -293,6 +307,7 @@ git commit -m "feat(api): routes welcome-flows CRUD do flow (GET/POST/PUT/DELETE
 ## Task 3: Routes welcome-flows.ts — Options sub-CRUD
 
 **Files:**
+
 - Modify: `apps/api/src/routes/welcome-flows.ts` (adicionar handlers)
 
 - [ ] **Step 1: Adicionar schema e handlers de options**
@@ -338,7 +353,8 @@ welcomeFlowsRouter.post(
 
     const body = await c.req.json().catch(() => null);
     const parsed = optionUpsertSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     try {
       const option = await prisma.welcomeOption.create({
@@ -380,7 +396,8 @@ welcomeFlowsRouter.put(
 
     const body = await c.req.json().catch(() => null);
     const parsed = optionUpsertSchema.partial().safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const existing = await prisma.welcomeOption.findFirst({
       where: { id: optionId, flowId },
@@ -467,7 +484,8 @@ welcomeFlowsRouter.post(
     const body = await c.req.json().catch(() => null);
     const schema = z.object({ orderedIds: z.array(z.string()).min(1).max(10) });
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     // Update em transação: position negativa temporária pra evitar collision unique
     // depois aplica final.
@@ -527,6 +545,7 @@ git commit -m "feat(api): routes welcome-flows sub-CRUD de options + reorder"
 ## Task 4: Routes welcome-flows.ts — Test endpoint
 
 **Files:**
+
 - Modify: `apps/api/src/routes/welcome-flows.ts` (adicionar handler test)
 
 - [ ] **Step 1: Adicionar test endpoint**
@@ -562,7 +581,8 @@ welcomeFlowsRouter.post(
       phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'phoneNumber inválido (use E.164)'),
     });
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     // Upsert contato de teste (não cria duplicate)
     const contact = await prisma.contact.upsert({
@@ -623,6 +643,7 @@ git commit -m "feat(api): routes welcome-flows endpoint de test (envia mensagem 
 ## Task 5: Labels route — campos routing routesToFunnelId/routesToStageId
 
 **Files:**
+
 - Modify: `apps/api/src/routes/labels.ts`
 
 - [ ] **Step 1: Estender schema Zod**
@@ -690,6 +711,7 @@ git commit -m "feat(api): labels route ganha campos routesToFunnelId/routesToSta
 ## Task 6: Wire welcomeFlowsRouter em apps/api/src/index.ts
 
 **Files:**
+
 - Modify: `apps/api/src/index.ts`
 
 - [ ] **Step 1: Import e mount**
@@ -728,6 +750,7 @@ git commit -m "feat(api): wire welcomeFlowsRouter"
 ## Task 7: Tests unit/integration para welcome-flows route
 
 **Files:**
+
 - Create: `apps/api/tests/welcome-flows-route.test.ts`
 
 - [ ] **Step 1: Escrever testes integration**
@@ -910,6 +933,7 @@ git commit -m "test(api): welcome-flows route DB layer (constraints + cascade)"
 ## Task 8: Page /settings/welcome-flows — list por inbox
 
 **Files:**
+
 - Create: `apps/web/src/app/(app)/settings/welcome-flows/page.tsx`
 
 - [ ] **Step 1: Implementar página de listagem**
@@ -1073,6 +1097,7 @@ git commit -m "feat(web): página /settings/welcome-flows com lista por inbox"
 ## Task 9: Page editor — prompt + flags básicas
 
 **Files:**
+
 - Create: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx`
 
 - [ ] **Step 1: Implementar editor com prompt + flags**
@@ -1425,6 +1450,7 @@ git commit -m "feat(web): editor /settings/welcome-flows/:inboxId (prompt + flag
 ## Task 10: Options editor component (drag-drop)
 
 **Files:**
+
 - Create: `apps/web/src/components/settings/welcome-flow-options-editor.tsx`
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx` (mount component)
 
@@ -1774,6 +1800,7 @@ Em `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx`, antes do 
 ```
 
 E import no topo:
+
 ```typescript
 import { WelcomeFlowOptionsEditor } from '@/components/settings/welcome-flow-options-editor';
 ```
@@ -1796,6 +1823,7 @@ git commit -m "feat(web): options editor drag-drop com CRUD + keywords + routing
 ## Task 11: Test mode dialog
 
 **Files:**
+
 - Create: `apps/web/src/components/settings/welcome-flow-test-dialog.tsx`
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx` (botão pra abrir dialog)
 
@@ -1950,6 +1978,7 @@ git commit -m "feat(web): dialog 'enviar teste' que dispara welcome real pra nú
 ## Task 12: Labels page — campos routing no form
 
 **Files:**
+
 - Modify: `apps/web/src/app/(app)/settings/labels/page.tsx`
 
 - [ ] **Step 1: Estender schema Zod no front e form**
@@ -1971,7 +2000,9 @@ const schema = z.object({
 Adicionar `useQuery` pra funnels (mesma source que o welcome-flow editor):
 
 ```typescript
-const { data: funnelsData } = useQuery<{ funnels: { id: string; name: string; stages: { id: string; name: string }[] }[] }>({
+const { data: funnelsData } = useQuery<{
+  funnels: { id: string; name: string; stages: { id: string; name: string }[] }[];
+}>({
   queryKey: ['funnels-with-stages'],
   queryFn: () => api('/api/kanban/funnels?includeStages=true'),
 });
@@ -2032,7 +2063,13 @@ E imports:
 
 ```typescript
 import { useForm } from 'react-hook-form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 ```
 
 (`useForm` já está; só garantir `watch`/`setValue` no destructure.)
@@ -2069,6 +2106,7 @@ git commit -m "feat(web): labels form ganha selects de funil/etapa pra auto-rout
 ## Task 13: Sidebar — adicionar item "Fluxo de boas-vindas"
 
 **Files:**
+
 - Modify: `apps/web/src/components/layout/sidebar.tsx`
 
 - [ ] **Step 1: Adicionar nav item**
@@ -2141,6 +2179,7 @@ pnpm dev
 ```
 
 Em outra janela / no browser:
+
 1. Login em `http://localhost:7302`
 2. Ir pra `/settings/welcome-flows` — ver lista de inboxes
 3. Clicar uma inbox sem flow — ver editor vazio com defaults

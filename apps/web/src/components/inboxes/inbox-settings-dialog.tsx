@@ -130,9 +130,7 @@ export function InboxSettingsDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('c_inboxes_inbox_settings_dialog.title')}</DialogTitle>
-          <DialogDescription>
-            {t('c_inboxes_inbox_settings_dialog.description')}
-          </DialogDescription>
+          <DialogDescription>{t('c_inboxes_inbox_settings_dialog.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -199,9 +197,7 @@ export function InboxSettingsDialog({
                       id="bh-start"
                       type="time"
                       value={bizHours.start}
-                      onChange={(e) =>
-                        setBizHours((bh) => ({ ...bh, start: e.target.value }))
-                      }
+                      onChange={(e) => setBizHours((bh) => ({ ...bh, start: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -217,7 +213,9 @@ export function InboxSettingsDialog({
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">{t('c_inboxes_inbox_settings_dialog.week_days')}</Label>
+                  <Label className="text-xs">
+                    {t('c_inboxes_inbox_settings_dialog.week_days')}
+                  </Label>
                   <div className="flex flex-wrap gap-1">
                     {DAYS.map((d) => {
                       const active = bizHours.days.includes(d.value);

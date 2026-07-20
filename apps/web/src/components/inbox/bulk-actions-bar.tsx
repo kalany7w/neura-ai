@@ -2,15 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  Archive,
-  ArchiveRestore,
-  CircleDot,
-  Tag,
-  UserCheck,
-  UserMinus,
-  X,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, CircleDot, Tag, UserCheck, UserMinus, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
@@ -47,20 +39,14 @@ interface Props {
   onClear: () => void;
 }
 
-const STATUS_OPTS: Array<{ value: 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED'; labelKey: string }> = [
-  { value: 'OPEN', labelKey: 'c_inbox_bulk_actions_bar.status_open' },
-  { value: 'PENDING', labelKey: 'c_inbox_bulk_actions_bar.status_pending' },
-  { value: 'RESOLVED', labelKey: 'c_inbox_bulk_actions_bar.status_resolved' },
-];
+const STATUS_OPTS: Array<{ value: 'OPEN' | 'PENDING' | 'RESOLVED' | 'SNOOZED'; labelKey: string }> =
+  [
+    { value: 'OPEN', labelKey: 'c_inbox_bulk_actions_bar.status_open' },
+    { value: 'PENDING', labelKey: 'c_inbox_bulk_actions_bar.status_pending' },
+    { value: 'RESOLVED', labelKey: 'c_inbox_bulk_actions_bar.status_resolved' },
+  ];
 
-export function InboxBulkActionsBar({
-  selectedIds,
-  labels,
-  agents,
-  role,
-  tab,
-  onClear,
-}: Props) {
+export function InboxBulkActionsBar({ selectedIds, labels, agents, role, tab, onClear }: Props) {
   const qc = useQueryClient();
   const confirm = useConfirm();
   const { t } = useT();
@@ -90,11 +76,17 @@ export function InboxBulkActionsBar({
       }))
     )
       return;
-    run({ action: 'archive' }, t('c_inbox_bulk_actions_bar.archived_toast', { n: selectedIds.length }));
+    run(
+      { action: 'archive' },
+      t('c_inbox_bulk_actions_bar.archived_toast', { n: selectedIds.length }),
+    );
   }
 
   function unarchive() {
-    run({ action: 'unarchive' }, t('c_inbox_bulk_actions_bar.unarchived_toast', { n: selectedIds.length }));
+    run(
+      { action: 'unarchive' },
+      t('c_inbox_bulk_actions_bar.unarchived_toast', { n: selectedIds.length }),
+    );
   }
 
   if (selectedIds.length === 0) return null;
@@ -122,7 +114,9 @@ export function InboxBulkActionsBar({
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {agents.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('c_inbox_bulk_actions_bar.no_agents')}</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t('c_inbox_bulk_actions_bar.no_agents')}
+            </p>
           ) : (
             agents.map((a) => (
               <DropdownMenuItem
@@ -148,7 +142,9 @@ export function InboxBulkActionsBar({
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           <DropdownMenuLabel>{t('c_inbox_bulk_actions_bar.apply')}</DropdownMenuLabel>
           {labels.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('c_inbox_bulk_actions_bar.no_labels')}</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t('c_inbox_bulk_actions_bar.no_labels')}
+            </p>
           ) : (
             labels.map((l) => (
               <DropdownMenuItem
@@ -214,7 +210,12 @@ export function InboxBulkActionsBar({
         ))}
 
       <div className="ml-2 h-5 w-px bg-border" />
-      <Button size="sm" variant="ghost" onClick={onClear} title={t('c_inbox_bulk_actions_bar.clear_selection')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onClear}
+        title={t('c_inbox_bulk_actions_bar.clear_selection')}
+      >
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

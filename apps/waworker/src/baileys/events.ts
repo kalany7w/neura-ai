@@ -1,10 +1,4 @@
-import type {
-  WASocket,
-  ConnectionState,
-  proto,
-  WAMessage,
-  WAMessageKey,
-} from 'baileys';
+import type { WASocket, ConnectionState, proto, WAMessage, WAMessageKey } from 'baileys';
 import { DisconnectReason } from 'baileys';
 import QRCode from 'qrcode';
 import { prisma } from '../db.js';
@@ -82,10 +76,7 @@ export async function handleConnectionUpdate(
     const statusCode = errOutput?.statusCode;
     const isLoggedOut = statusCode === DisconnectReason.loggedOut;
 
-    logger.warn(
-      { inboxId: ctx.inboxId, statusCode, isLoggedOut },
-      'WhatsApp connection closed',
-    );
+    logger.warn({ inboxId: ctx.inboxId, statusCode, isLoggedOut }, 'WhatsApp connection closed');
 
     if (isLoggedOut) {
       await prisma.inbox.update({
@@ -321,10 +312,7 @@ async function mergeLegacyLidContact(
   );
 }
 
-async function persistInboundMessage(
-  ctx: MessagesContext,
-  msg: WAMessage,
-): Promise<void> {
+async function persistInboundMessage(ctx: MessagesContext, msg: WAMessage): Promise<void> {
   if (!msg.key.remoteJid) return;
   if (msg.key.remoteJid === 'status@broadcast') return; // ignora status
   if (msg.key.fromMe) {
@@ -401,8 +389,8 @@ async function persistInboundMessage(
     type === 'LOCATION' && typeof loc?.degreesLatitude === 'number' ? loc.degreesLatitude : null;
   const locationLon =
     type === 'LOCATION' && typeof loc?.degreesLongitude === 'number' ? loc.degreesLongitude : null;
-  const locationName = type === 'LOCATION' ? loc?.name ?? null : null;
-  const locationAddress = type === 'LOCATION' ? loc?.address ?? null : null;
+  const locationName = type === 'LOCATION' ? (loc?.name ?? null) : null;
+  const locationAddress = type === 'LOCATION' ? (loc?.address ?? null) : null;
 
   const txResult = await prisma.$transaction(async (tx) => {
     // Upsert contact
@@ -495,9 +483,7 @@ async function persistInboundMessage(
         locationName,
         locationAddress,
         status: 'DELIVERED',
-        sentAt: msg.messageTimestamp
-          ? new Date(Number(msg.messageTimestamp) * 1000)
-          : new Date(),
+        sentAt: msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000) : new Date(),
         metadata: Object.keys(interactiveMeta).length > 0 ? interactiveMeta : undefined,
       },
     });
@@ -570,8 +556,8 @@ async function persistInboundMessage(
     // Cura legado: se resolvemos o número real E havia um LID, funde o contato
     // antigo (gravado com o LID como telefone) no contato com número real.
     if (resolved.phoneNumber && lidDigits) {
-      void mergeLegacyLidContact(ctx.workspaceId, `+${lidDigits}`, txResult.contactId).catch((err) =>
-        logger.error({ err, lidDigits }, 'mergeLegacyLidContact failed'),
+      void mergeLegacyLidContact(ctx.workspaceId, `+${lidDigits}`, txResult.contactId).catch(
+        (err) => logger.error({ err, lidDigits }, 'mergeLegacyLidContact failed'),
       );
     }
     // Cache jid → conversation pra resolver presence.update sem hit DB (LRU)
@@ -605,7 +591,10 @@ async function persistInboundMessage(
         workspaceId: ctx.workspaceId,
         conversationId: txResult.conversationId,
       }).catch((err) =>
-        logger.error({ err, conversationId: txResult.conversationId }, 'enqueueWelcomeTrigger failed'),
+        logger.error(
+          { err, conversationId: txResult.conversationId },
+          'enqueueWelcomeTrigger failed',
+        ),
       );
     }
     // Conversa já recebeu welcome e está aguardando escolha → roteia reply pro parser.

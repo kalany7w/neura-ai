@@ -64,7 +64,8 @@ contactsRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     try {
       const contact = await prisma.contact.create({
@@ -132,7 +133,8 @@ contactsRouter.patch(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const existing = await prisma.contact.findFirst({
       where: { id: c.req.param('id'), workspaceId },
@@ -264,67 +266,62 @@ const bulkSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-contactsRouter.post(
-  '/bulk',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const parsed = bulkSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
-    const workspaceId = c.get('workspaceId') as string;
-    const role = c.get('role')!;
-    const actorId = c.get('userId');
-    const data = parsed.data;
+contactsRouter.post('/bulk', requireAuth, requireWorkspace, async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = bulkSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+  const workspaceId = c.get('workspaceId') as string;
+  const role = c.get('role')!;
+  const actorId = c.get('userId');
+  const data = parsed.data;
 
-    // Permissão: delete requer contact.delete; labels requer label.apply
-    if (data.action === 'delete' && role !== 'ADMIN') {
-      return c.json({ error: 'forbidden' }, 403);
-    }
+  // Permissão: delete requer contact.delete; labels requer label.apply
+  if (data.action === 'delete' && role !== 'ADMIN') {
+    return c.json({ error: 'forbidden' }, 403);
+  }
 
-    // Garante que todos os contatos pertencem ao workspace
-    const owned = await prisma.contact.findMany({
-      where: { id: { in: data.contactIds }, workspaceId },
+  // Garante que todos os contatos pertencem ao workspace
+  const owned = await prisma.contact.findMany({
+    where: { id: { in: data.contactIds }, workspaceId },
+    select: { id: true },
+  });
+  const ids = owned.map((o) => o.id);
+  if (ids.length === 0) return c.json({ affected: 0 });
+
+  let affected = 0;
+  if (data.action === 'delete') {
+    const res = await prisma.contact.deleteMany({ where: { id: { in: ids } } });
+    affected = res.count;
+  } else if (data.action === 'apply_label') {
+    const label = await prisma.label.findFirst({
+      where: { id: data.labelId, workspaceId },
       select: { id: true },
     });
-    const ids = owned.map((o) => o.id);
-    if (ids.length === 0) return c.json({ affected: 0 });
-
-    let affected = 0;
-    if (data.action === 'delete') {
-      const res = await prisma.contact.deleteMany({ where: { id: { in: ids } } });
-      affected = res.count;
-    } else if (data.action === 'apply_label') {
-      const label = await prisma.label.findFirst({
-        where: { id: data.labelId, workspaceId },
-        select: { id: true },
-      });
-      if (!label) return c.json({ error: 'label_not_found' }, 404);
-      const res = await prisma.contactLabel.createMany({
-        data: ids.map((id) => ({ contactId: id, labelId: label.id })),
-        skipDuplicates: true,
-      });
-      affected = res.count;
-    } else {
-      const res = await prisma.contactLabel.deleteMany({
-        where: { contactId: { in: ids }, labelId: data.labelId },
-      });
-      affected = res.count;
-    }
-
-    await audit({
-      workspaceId,
-      actorId,
-      action: `contact.bulk_${data.action}`,
-      metadata: {
-        count: ids.length,
-        affected,
-        labelId: 'labelId' in data ? data.labelId : undefined,
-      },
+    if (!label) return c.json({ error: 'label_not_found' }, 404);
+    const res = await prisma.contactLabel.createMany({
+      data: ids.map((id) => ({ contactId: id, labelId: label.id })),
+      skipDuplicates: true,
     });
-    return c.json({ affected });
-  },
-);
+    affected = res.count;
+  } else {
+    const res = await prisma.contactLabel.deleteMany({
+      where: { contactId: { in: ids }, labelId: data.labelId },
+    });
+    affected = res.count;
+  }
+
+  await audit({
+    workspaceId,
+    actorId,
+    action: `contact.bulk_${data.action}`,
+    metadata: {
+      count: ids.length,
+      affected,
+      labelId: 'labelId' in data ? data.labelId : undefined,
+    },
+  });
+  return c.json({ affected });
+});
 
 const mergeSchema = z.object({
   primaryId: z.string().min(1),
@@ -371,7 +368,11 @@ contactsRouter.post(
       actorId: c.get('userId'),
       action: 'contact.merged',
       resource: `Contact:${primary.id}`,
-      metadata: { mergedFrom: secondary.id, primaryName: primary.name, secondaryName: secondary.name },
+      metadata: {
+        mergedFrom: secondary.id,
+        primaryName: primary.name,
+        secondaryName: secondary.name,
+      },
     });
 
     return c.json({ ok: true, primary });
@@ -415,13 +416,7 @@ contactsRouter.delete(
 // - csat           — CsatResponse
 // - conv_started   — Conversation.createdAt (primeira conv ou nova após RESOLVED)
 // - conv_resolved  — Conversation.resolvedAt
-type JourneyEventKind =
-  | 'msg'
-  | 'note'
-  | 'card'
-  | 'csat'
-  | 'conv_started'
-  | 'conv_resolved';
+type JourneyEventKind = 'msg' | 'note' | 'card' | 'csat' | 'conv_started' | 'conv_resolved';
 
 interface JourneyEvent {
   id: string;
@@ -451,9 +446,7 @@ const journeyQuery = z.object({
 });
 
 contactsRouter.get('/:id/journey', requireAuth, requireWorkspace, async (c) => {
-  const parsed = journeyQuery.safeParse(
-    Object.fromEntries(new URL(c.req.url).searchParams),
-  );
+  const parsed = journeyQuery.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!parsed.success) return c.json({ error: 'invalid_query' }, 400);
 
   const workspaceId = c.get('workspaceId') as string;
@@ -677,10 +670,7 @@ contactsRouter.get('/:id/journey', requireAuth, requireWorkspace, async (c) => {
   // Conversation events (started + resolved)
   for (const conv of conversations) {
     if (allowedTypes.has('conv_started')) {
-      if (
-        (!since || conv.createdAt >= since) &&
-        (!until || conv.createdAt <= until)
-      ) {
+      if ((!since || conv.createdAt >= since) && (!until || conv.createdAt <= until)) {
         events.push({
           id: `conv-start:${conv.id}`,
           kind: 'conv_started',
@@ -692,10 +682,7 @@ contactsRouter.get('/:id/journey', requireAuth, requireWorkspace, async (c) => {
       }
     }
     if (allowedTypes.has('conv_resolved') && conv.resolvedAt) {
-      if (
-        (!since || conv.resolvedAt >= since) &&
-        (!until || conv.resolvedAt <= until)
-      ) {
+      if ((!since || conv.resolvedAt >= since) && (!until || conv.resolvedAt <= until)) {
         events.push({
           id: `conv-resolved:${conv.id}`,
           kind: 'conv_resolved',

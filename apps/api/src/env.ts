@@ -16,7 +16,12 @@ const apiEnvSchema = baseEnvSchema.extend({
   METRICS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
   BETTER_AUTH_SECRET: z.string().min(32),
   BETTER_AUTH_URL: z.string().url(),
-  TRUSTED_ORIGINS: z.string().transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean)),
+  TRUSTED_ORIGINS: z.string().transform((s) =>
+    s
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean),
+  ),
   ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
   RESEND_API_KEY: z.string().startsWith('re_'),
   RESEND_FROM: z.string().email(),

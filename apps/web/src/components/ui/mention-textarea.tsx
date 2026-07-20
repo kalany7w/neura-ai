@@ -75,33 +75,30 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, Props>(function
     setActiveIdx(0);
   }, [pickerQuery, pickerOpen]);
 
-  const detectMention = useCallback(
-    (next: string, caret: number) => {
-      // Procura "@" mais próximo do caret, sem espaço entre ele e o caret
-      let i = caret - 1;
-      while (i >= 0) {
-        const ch = next[i];
-        if (ch === '@') {
-          const before = i === 0 ? ' ' : next[i - 1] ?? ' ';
-          if (/[\s\n(]/.test(before)) {
-            const query = next.slice(i + 1, caret);
-            if (/^[a-z0-9_.]*$/i.test(query) && query.length <= 32) {
-              setPickerOpen(true);
-              setPickerQuery(query.toLowerCase());
-              setPickerStart(i);
-              return;
-            }
+  const detectMention = useCallback((next: string, caret: number) => {
+    // Procura "@" mais próximo do caret, sem espaço entre ele e o caret
+    let i = caret - 1;
+    while (i >= 0) {
+      const ch = next[i];
+      if (ch === '@') {
+        const before = i === 0 ? ' ' : (next[i - 1] ?? ' ');
+        if (/[\s\n(]/.test(before)) {
+          const query = next.slice(i + 1, caret);
+          if (/^[a-z0-9_.]*$/i.test(query) && query.length <= 32) {
+            setPickerOpen(true);
+            setPickerQuery(query.toLowerCase());
+            setPickerStart(i);
+            return;
           }
-          break;
         }
-        if (!ch || /\s/.test(ch)) break;
-        i -= 1;
+        break;
       }
-      setPickerOpen(false);
-      setPickerQuery('');
-    },
-    [],
-  );
+      if (!ch || /\s/.test(ch)) break;
+      i -= 1;
+    }
+    setPickerOpen(false);
+    setPickerQuery('');
+  }, []);
 
   function handleChange(e: ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value;
@@ -204,9 +201,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, Props>(function
                 )}
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-medium">{display}</span>
-                  <span className="truncate text-[11px] text-muted-foreground">
-                    @{t.slug}
-                  </span>
+                  <span className="truncate text-[11px] text-muted-foreground">@{t.slug}</span>
                 </div>
               </button>
             );

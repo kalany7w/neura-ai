@@ -43,7 +43,12 @@ export interface LeadDetail {
     currency: string;
     customAttrs: Record<string, unknown> | null;
     funnel: { id: string; name: string };
-    stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
+    stage: {
+      id: string;
+      name: string;
+      color: string;
+      outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+    };
     products: Array<{ id: string; name: string; price: string | null; quantity: number }>;
   } | null;
   customAttributeDefs: Array<{
@@ -62,13 +67,22 @@ export interface LeadDetail {
     options: { values?: string[] } | null;
   }>;
   allLabels: Array<{ id: string; name: string; color: string; scope: string }>;
-  funnels: Array<{ id: string; name: string; stages: Array<{ id: string; name: string; order: number }> }>;
+  funnels: Array<{
+    id: string;
+    name: string;
+    stages: Array<{ id: string; name: string; order: number }>;
+  }>;
   temperature: 'CALIENTE' | 'TIBIO' | 'FRIO';
 }
 
 function initialsFrom(s: string | null | undefined): string {
   if (!s) return '?';
-  return s.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+  return s
+    .split(/[\s.@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
 }
 
 export function ConversationSidePanel({ conversationId }: { conversationId: string }) {
@@ -114,7 +128,9 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
       qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
     },
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.move_error')),
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.move_error'),
+      ),
   });
 
   if (isLoading) {
@@ -180,7 +196,9 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
               disabled={moveStageMut.isPending}
             >
               {(data.funnels.find((f) => f.id === data.card!.funnel.id)?.stages ?? []).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </select>
             {data.card.value && (
@@ -225,7 +243,8 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           contactId={data.contact.id}
           trigger={
             <Button type="button" variant="outline" className="w-full">
-              <CalendarPlus className="mr-2 h-4 w-4" /> {t('c_inbox_conversation_side_panel.schedule_event')}
+              <CalendarPlus className="mr-2 h-4 w-4" />{' '}
+              {t('c_inbox_conversation_side_panel.schedule_event')}
             </Button>
           }
         />
@@ -244,14 +263,15 @@ function AiSummarySection({
   const { t } = useT();
   const qc = useQueryClient();
   const summarizeMut = useMutation({
-    mutationFn: () =>
-      api(`/api/conversations/${conversationId}/ai/summarize`, { method: 'POST' }),
+    mutationFn: () => api(`/api/conversations/${conversationId}/ai/summarize`, { method: 'POST' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
       toast.success(t('c_inbox_conversation_side_panel.summary_generated'));
     },
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.ai_error')),
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.ai_error'),
+      ),
   });
 
   return (
@@ -274,9 +294,13 @@ function AiSummarySection({
         </button>
       </div>
       {conversation.aiSummary ? (
-        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{conversation.aiSummary}</p>
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+          {conversation.aiSummary}
+        </p>
       ) : (
-        <p className="text-xs text-muted-foreground italic">{t('c_inbox_conversation_side_panel.no_summary')}</p>
+        <p className="text-xs text-muted-foreground italic">
+          {t('c_inbox_conversation_side_panel.no_summary')}
+        </p>
       )}
     </section>
   );
@@ -352,7 +376,9 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
     onError: (err) =>
-      toast.error(err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.save_attr_error')),
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.save_attr_error'),
+      ),
   });
 
   function updateField(key: string, value: unknown) {
@@ -379,7 +405,9 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
               >
                 <option value="">—</option>
                 {def.options.values.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
                 ))}
               </select>
             </div>
@@ -393,7 +421,9 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
                 type="number"
                 className="w-full rounded border bg-background px-2 py-1 text-sm"
                 value={typeof current === 'number' ? current : ''}
-                onChange={(e) => updateField(def.key, e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) =>
+                  updateField(def.key, e.target.value ? Number(e.target.value) : null)
+                }
               />
             </div>
           );
@@ -584,7 +614,9 @@ function CardAttrsSection({ defs, values, cardId, conversationId }: CardAttrsSec
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
     onError: (err) =>
       toast.error(
-        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.save_card_attr_error'),
+        err instanceof Error
+          ? err.message
+          : t('c_inbox_conversation_side_panel.save_card_attr_error'),
       ),
   });
 
@@ -693,7 +725,9 @@ function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrF
       onOptionsChanged();
       onChange(trimmed);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.add_option_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.add_option_error'),
+      );
     } finally {
       setSubmitting(false);
     }

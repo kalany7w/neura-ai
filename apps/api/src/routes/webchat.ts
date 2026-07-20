@@ -33,7 +33,11 @@ const webchatLimiter = new RateLimiterMemory({
   duration: 60,
 });
 
-function extractClientIp(headerForwarded: string | undefined, headerReal: string | undefined, headerCf: string | undefined): string | null {
+function extractClientIp(
+  headerForwarded: string | undefined,
+  headerReal: string | undefined,
+  headerCf: string | undefined,
+): string | null {
   // x-forwarded-for pode vir como "client, proxy1, proxy2" — pega o primeiro.
   if (headerForwarded) {
     const first = headerForwarded.split(',')[0]?.trim();
@@ -98,7 +102,11 @@ async function resolveInbox(slug: string): Promise<{
 // repetidas com mesmo token são no-op (só atualizam name/email se informados).
 
 const sessionSchema = z.object({
-  sessionToken: z.string().min(16).max(128).regex(/^[a-f0-9-]+$/i, 'token inválido'),
+  sessionToken: z
+    .string()
+    .min(16)
+    .max(128)
+    .regex(/^[a-f0-9-]+$/i, 'token inválido'),
   name: z.string().min(1).max(80).optional(),
   email: z.string().email().max(120).optional(),
 });
@@ -112,7 +120,8 @@ webchatRouter.post('/:widgetSlug/session', async (c) => {
     c.req.header('x-real-ip'),
     c.req.header('cf-connecting-ip'),
   );
-  const bucket = ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
+  const bucket =
+    ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
   if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);
@@ -291,7 +300,8 @@ webchatRouter.post('/:widgetSlug/messages', async (c) => {
     c.req.header('x-real-ip'),
     c.req.header('cf-connecting-ip'),
   );
-  const bucket = ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
+  const bucket =
+    ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
   if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);

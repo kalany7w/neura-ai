@@ -52,7 +52,12 @@ export function LoginForm() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">{t('c_forms_login_form.password')}</Label>
-        <Input id="password" type="password" autoComplete="current-password" {...register('password')} />
+        <Input
+          id="password"
+          type="password"
+          autoComplete="current-password"
+          {...register('password')}
+        />
         {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>

@@ -82,9 +82,7 @@ export function setupWebSocket(app: Hono) {
       const origin = c.req.header('Origin');
       const originOk =
         !origin ||
-        env.TRUSTED_ORIGINS.some(
-          (allowed) => origin === allowed || origin.startsWith(allowed),
-        );
+        env.TRUSTED_ORIGINS.some((allowed) => origin === allowed || origin.startsWith(allowed));
       if (!originOk) {
         logger.warn({ origin }, 'WS upgrade rejected: untrusted origin');
         return {

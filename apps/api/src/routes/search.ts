@@ -24,10 +24,7 @@ searchRouter.get('/', requireAuth, requireWorkspace, async (c) => {
     prisma.contact.findMany({
       where: {
         workspaceId,
-        OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { phoneNumber: { contains: q } },
-        ],
+        OR: [{ name: { contains: q, mode: 'insensitive' } }, { phoneNumber: { contains: q } }],
       },
       take: limit,
       orderBy: { updatedAt: 'desc' },

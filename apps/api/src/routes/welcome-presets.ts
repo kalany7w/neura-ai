@@ -198,10 +198,10 @@ welcomePresetsRouter.post(
         maxAttempts: 2,
         fallbackTimeoutMinutes: 2,
         fallbackLabelId: preset.fallbackLabelName
-          ? labelByName.get(preset.fallbackLabelName.toLowerCase())?.id ?? null
+          ? (labelByName.get(preset.fallbackLabelName.toLowerCase())?.id ?? null)
           : null,
         fallbackUserId: preset.fallbackUserName
-          ? userByName.get(preset.fallbackUserName.toLowerCase()) ?? null
+          ? (userByName.get(preset.fallbackUserName.toLowerCase()) ?? null)
           : null,
         options: {
           create: preset.options.map((opt) => {
@@ -218,7 +218,7 @@ welcomePresetsRouter.post(
               targetFunnelId: route.funnelId,
               targetStageId: route.stageId,
               targetUserId: opt.targetUserName
-                ? userByName.get(opt.targetUserName.toLowerCase()) ?? null
+                ? (userByName.get(opt.targetUserName.toLowerCase()) ?? null)
                 : null,
             };
           }),

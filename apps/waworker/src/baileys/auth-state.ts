@@ -65,11 +65,13 @@ async function writeKey(inboxId: string, keyName: string, value: unknown): Promi
 }
 
 async function deleteKey(inboxId: string, keyName: string): Promise<void> {
-  await prisma.waAuthKey.delete({
-    where: { inboxId_keyName: { inboxId, keyName } },
-  }).catch(() => {
-    // Já não existia
-  });
+  await prisma.waAuthKey
+    .delete({
+      where: { inboxId_keyName: { inboxId, keyName } },
+    })
+    .catch(() => {
+      // Já não existia
+    });
 }
 
 async function loadCreds(inboxId: string): Promise<AuthenticationCreds> {
@@ -126,7 +128,10 @@ async function migrateLegacyBlobIfNeeded(inboxId: string): Promise<void> {
     return;
   }
 
-  logger.info({ inboxId, categories: Object.keys(blob.keys) }, 'Migrating legacy auth blob to WaAuthKey rows');
+  logger.info(
+    { inboxId, categories: Object.keys(blob.keys) },
+    'Migrating legacy auth blob to WaAuthKey rows',
+  );
 
   // Move cada key pra row própria (write-through). Idempotente — upsert.
   let migrated = 0;
@@ -195,7 +200,9 @@ export async function makeEncryptedAuthState(inboxId: string): Promise<{
           return data;
         },
         set: async (data: {
-          [category in keyof SignalDataTypeMap]?: { [id: string]: SignalDataTypeMap[category] | null };
+          [category in keyof SignalDataTypeMap]?: {
+            [id: string]: SignalDataTypeMap[category] | null;
+          };
         }) => {
           // Write-through por key — sem debounce, sem janela de perda.
           const tasks: Promise<void>[] = [];
@@ -205,7 +212,9 @@ export async function makeEncryptedAuthState(inboxId: string): Promise<{
             for (const id in items) {
               const keyName = `${category}-${id}`;
               const value = items[id];
-              tasks.push(value === null ? deleteKey(inboxId, keyName) : writeKey(inboxId, keyName, value));
+              tasks.push(
+                value === null ? deleteKey(inboxId, keyName) : writeKey(inboxId, keyName, value),
+              );
             }
           }
           await Promise.all(tasks);
@@ -229,12 +238,14 @@ export async function flushPendingAuthState(_inboxId: string): Promise<void> {
  */
 export async function clearAuthState(inboxId: string): Promise<void> {
   await Promise.all([
-    prisma.waSession.update({
-      where: { inboxId },
-      data: { encryptedAuthState: null, qrCode: null, qrExpiresAt: null, phoneNumber: null },
-    }).catch(() => {
-      // Sessão pode não existir
-    }),
+    prisma.waSession
+      .update({
+        where: { inboxId },
+        data: { encryptedAuthState: null, qrCode: null, qrExpiresAt: null, phoneNumber: null },
+      })
+      .catch(() => {
+        // Sessão pode não existir
+      }),
     prisma.waAuthKey.deleteMany({ where: { inboxId } }),
   ]);
 }

@@ -21,10 +21,7 @@ export const csatWorker = new Worker<CsatSendJob>(
     const { workspaceId, conversationId, surveyId } = job.data;
     const result = await sendCsatSurvey(workspaceId, conversationId, surveyId);
     if (result.status === 'skipped') {
-      logger.info(
-        { conversationId, surveyId, reason: result.reason },
-        'csat send skipped',
-      );
+      logger.info({ conversationId, surveyId, reason: result.reason }, 'csat send skipped');
     }
   },
   { connection: bullConnection, concurrency: 3 },

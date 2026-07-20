@@ -111,11 +111,7 @@ export function DashboardTimeseriesChart() {
         </div>
       </div>
 
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="mt-4 h-48 w-full"
-        preserveAspectRatio="none"
-      >
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-4 h-48 w-full" preserveAspectRatio="none">
         {/* Gridlines */}
         {gridYs.map((y, i) => (
           <line

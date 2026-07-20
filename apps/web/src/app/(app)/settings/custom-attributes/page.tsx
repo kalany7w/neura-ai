@@ -119,7 +119,9 @@ export default function CustomAttrsPage() {
                         <th className="px-4 py-2.5">{t('settings_custom_attributes.col.label')}</th>
                         <th className="px-4 py-2.5">{t('settings_custom_attributes.col.key')}</th>
                         <th className="px-4 py-2.5">{t('settings_custom_attributes.col.type')}</th>
-                        <th className="px-4 py-2.5">{t('settings_custom_attributes.col.options')}</th>
+                        <th className="px-4 py-2.5">
+                          {t('settings_custom_attributes.col.options')}
+                        </th>
                         <th></th>
                       </tr>
                     </thead>
@@ -128,7 +130,9 @@ export default function CustomAttrsPage() {
                         <tr key={def.id} className="border-t">
                           <td className="px-4 py-2 font-medium">{def.label}</td>
                           <td className="px-4 py-2">
-                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{def.key}</code>
+                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                              {def.key}
+                            </code>
                           </td>
                           <td className="px-4 py-2">
                             <span
@@ -299,11 +303,17 @@ function CreateAttrDialog({
               <select
                 id="attr-applies"
                 value={appliesTo}
-                onChange={(e) => setAppliesTo(e.target.value as 'CONTACT' | 'CONVERSATION' | 'CARD')}
+                onChange={(e) =>
+                  setAppliesTo(e.target.value as 'CONTACT' | 'CONVERSATION' | 'CARD')
+                }
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="CONTACT">{t('settings_custom_attributes.form.applies.CONTACT')}</option>
-                <option value="CONVERSATION">{t('settings_custom_attributes.form.applies.CONVERSATION')}</option>
+                <option value="CONTACT">
+                  {t('settings_custom_attributes.form.applies.CONTACT')}
+                </option>
+                <option value="CONVERSATION">
+                  {t('settings_custom_attributes.form.applies.CONVERSATION')}
+                </option>
                 <option value="CARD">{t('settings_custom_attributes.form.applies.CARD')}</option>
               </select>
             </div>

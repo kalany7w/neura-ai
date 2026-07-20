@@ -11,7 +11,12 @@ export const uploadsRouter = new Hono<{
 const signSchema = z.object({
   filename: z.string().min(1).max(255),
   contentType: z.string().min(1).max(120),
-  size: z.number().int().positive().max(100 * 1024 * 1024).optional(), // 100 MB cap
+  size: z
+    .number()
+    .int()
+    .positive()
+    .max(100 * 1024 * 1024)
+    .optional(), // 100 MB cap
 });
 
 // POST /api/uploads/sign — gera presigned URL pra upload direto no MinIO

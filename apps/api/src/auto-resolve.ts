@@ -57,10 +57,7 @@ async function runAutoResolve(_job: Job): Promise<void> {
       select: { id: true, createdAt: true },
     });
     for (const p of pending) {
-      const secs = Math.max(
-        0,
-        Math.round((resolvedAt.getTime() - p.createdAt.getTime()) / 1000),
-      );
+      const secs = Math.max(0, Math.round((resolvedAt.getTime() - p.createdAt.getTime()) / 1000));
       await prisma.conversation.update({
         where: { id: p.id },
         data: { resolvedAt, resolutionSeconds: secs },

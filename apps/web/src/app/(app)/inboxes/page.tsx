@@ -157,9 +157,7 @@ export default function InboxesPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{t('inboxes.email_dialog.title')}</DialogTitle>
-                <DialogDescription>
-                  {t('inboxes.email_dialog.desc')}
-                </DialogDescription>
+                <DialogDescription>{t('inboxes.email_dialog.desc')}</DialogDescription>
               </DialogHeader>
               <EmailConnectForm
                 onCancel={() => setEmailOpen(false)}
@@ -212,9 +210,7 @@ export default function InboxesPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{t('inboxes.new_whatsapp')}</DialogTitle>
-                <DialogDescription>
-                  {t('inboxes.whatsapp_dialog.desc')}
-                </DialogDescription>
+                <DialogDescription>{t('inboxes.whatsapp_dialog.desc')}</DialogDescription>
               </DialogHeader>
               <CreateInboxForm onDone={() => setOpen(false)} />
             </DialogContent>
@@ -269,9 +265,7 @@ export default function InboxesPage() {
       ) : !data?.inboxes.length ? (
         <div className="rounded-lg border border-dashed bg-muted/30 p-12 text-center">
           <h3 className="font-semibold">{t('inboxes.empty.title')}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {t('inboxes.empty.subtitle')}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('inboxes.empty.subtitle')}</p>
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -305,21 +299,14 @@ function WebchatConnectForm({
   onDone,
   onCancel,
 }: {
-  onDone: (r: {
-    script: string;
-    slug: string;
-    primaryColor: string;
-    inboxName: string;
-  }) => void;
+  onDone: (r: { script: string; slug: string; primaryColor: string; inboxName: string }) => void;
   onCancel: () => void;
 }) {
   const { t } = useT();
   const [name, setName] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#6366f1');
   const [title, setTitle] = useState(t('inboxes.webchat.default_title'));
-  const [welcomeMessage, setWelcomeMessage] = useState(
-    t('inboxes.webchat.default_welcome'),
-  );
+  const [welcomeMessage, setWelcomeMessage] = useState(t('inboxes.webchat.default_welcome'));
   const [submitting, setSubmitting] = useState(false);
   async function submit() {
     if (!name.trim() || submitting) return;
@@ -407,9 +394,7 @@ function WebchatConnectForm({
           maxLength={500}
           className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
         />
-        <p className="text-[11px] text-muted-foreground">
-          {t('inboxes.webchat.welcome_help')}
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.webchat.welcome_help')}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={submitting}>
@@ -454,9 +439,7 @@ function WebchatScriptDialog({
     <Dialog open={!!result} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>
-            {t('inboxes.webchat_script.title', { name: result.inboxName })}
-          </DialogTitle>
+          <DialogTitle>{t('inboxes.webchat_script.title', { name: result.inboxName })}</DialogTitle>
           <DialogDescription>
             {t('inboxes.webchat_script.desc_1')}
             <code>&lt;script&gt;</code>
@@ -599,9 +582,7 @@ function EmailConnectForm({
           placeholder="suporte@empresa.com"
           autoComplete="off"
         />
-        <p className="text-[11px] text-muted-foreground">
-          {t('inboxes.email.from_help')}
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.email.from_help')}</p>
       </div>
       <div className="space-y-2">
         <label htmlFor="em-from-name" className="text-sm font-medium">
@@ -613,18 +594,13 @@ function EmailConnectForm({
           onChange={(e) => setFromName(e.target.value)}
           placeholder={t('inboxes.email.from_name_placeholder')}
         />
-        <p className="text-[11px] text-muted-foreground">
-          {t('inboxes.email.from_name_help')}
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.email.from_name_help')}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={submitting}>
           {t('action.cancel')}
         </Button>
-        <Button
-          onClick={submit}
-          disabled={submitting || !name.trim() || !fromAddress.trim()}
-        >
+        <Button onClick={submit} disabled={submitting || !name.trim() || !fromAddress.trim()}>
           {submitting ? t('inboxes.creating') : t('inboxes.email.create')}
         </Button>
       </div>
@@ -662,9 +638,7 @@ function EmailWebhookDialog({
     <Dialog open={!!webhook} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>
-            {t('inboxes.email_webhook.title', { name: webhook.inboxName })}
-          </DialogTitle>
+          <DialogTitle>{t('inboxes.email_webhook.title', { name: webhook.inboxName })}</DialogTitle>
           <DialogDescription>
             {t('inboxes.email_webhook.desc_1')}
             <strong>{webhook.fromAddress}</strong>
@@ -728,24 +702,20 @@ function EmailWebhookDialog({
             </p>
             <ul className="space-y-1.5 text-indigo-900/80 dark:text-indigo-200/80">
               <li>
-                <strong>Resend Inbound:</strong>{' '}
-                {t('inboxes.email_webhook.resend_a')}
+                <strong>Resend Inbound:</strong> {t('inboxes.email_webhook.resend_a')}
                 <code className="rounded bg-indigo-100 px-1 dark:bg-indigo-900">
                   {webhook.fromAddress}
                 </code>
                 {t('inboxes.email_webhook.resend_b')}
               </li>
               <li>
-                <strong>Postmark:</strong>{' '}
-                {t('inboxes.email_webhook.postmark')}
+                <strong>Postmark:</strong> {t('inboxes.email_webhook.postmark')}
               </li>
               <li>
-                <strong>AWS SES + Lambda:</strong>{' '}
-                {t('inboxes.email_webhook.ses')}
+                <strong>AWS SES + Lambda:</strong> {t('inboxes.email_webhook.ses')}
               </li>
               <li>
-                <strong>Cloudflare Email Workers:</strong>{' '}
-                {t('inboxes.email_webhook.cloudflare')}
+                <strong>Cloudflare Email Workers:</strong> {t('inboxes.email_webhook.cloudflare')}
                 <code className="rounded bg-indigo-100 px-1 dark:bg-indigo-900">
                   fetch(url, {`{ method: 'POST', headers, body: JSON }`})
                 </code>
@@ -819,18 +789,13 @@ function TelegramConnectForm({ onDone }: { onDone: () => void }) {
           placeholder="123456789:ABCdefGhIJKlmnoPQRstuVWxyZ"
           autoComplete="off"
         />
-        <p className="text-[11px] text-muted-foreground">
-          {t('inboxes.telegram.token_help')}
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.telegram.token_help')}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onDone} disabled={submitting}>
           {t('action.cancel')}
         </Button>
-        <Button
-          onClick={submit}
-          disabled={submitting || !name.trim() || !botToken.trim()}
-        >
+        <Button onClick={submit} disabled={submitting || !name.trim() || !botToken.trim()}>
           {submitting ? t('inboxes.telegram.connecting') : t('inboxes.telegram.connect')}
         </Button>
       </div>

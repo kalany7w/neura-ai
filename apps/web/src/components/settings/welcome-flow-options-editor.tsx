@@ -93,7 +93,9 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
       }),
     onError: (err) =>
       toast.error(
-        err instanceof Error ? err.message : t('c_settings_welcome_flow_options_editor.reorder_error'),
+        err instanceof Error
+          ? err.message
+          : t('c_settings_welcome_flow_options_editor.reorder_error'),
       ),
   });
 
@@ -153,7 +155,9 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">{t('c_settings_welcome_flow_options_editor.menu_options_title')}</h2>
+        <h2 className="font-semibold">
+          {t('c_settings_welcome_flow_options_editor.menu_options_title')}
+        </h2>
         <Button
           type="button"
           size="sm"
@@ -274,7 +278,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
 
       <div className="grid grid-cols-4 gap-2">
         <div className="space-y-1">
-          <Label className="text-xs">{t('c_settings_welcome_flow_options_editor.label_applied')}</Label>
+          <Label className="text-xs">
+            {t('c_settings_welcome_flow_options_editor.label_applied')}
+          </Label>
           <Select
             value={
               option.targetLabelId && visibleLabels.some((l) => l.id === option.targetLabelId)
@@ -284,7 +290,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
             onValueChange={(v) => onUpdate({ targetLabelId: v })}
           >
             <SelectTrigger>
-              <SelectValue placeholder={t('c_settings_welcome_flow_options_editor.choose_placeholder')} />
+              <SelectValue
+                placeholder={t('c_settings_welcome_flow_options_editor.choose_placeholder')}
+              />
             </SelectTrigger>
             <SelectContent>
               {visibleLabels.length === 0 ? (
@@ -320,7 +328,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
               <SelectValue placeholder={t('c_settings_welcome_flow_options_editor.none_masc')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">{t('c_settings_welcome_flow_options_editor.none_masc')}</SelectItem>
+              <SelectItem value="none">
+                {t('c_settings_welcome_flow_options_editor.none_masc')}
+              </SelectItem>
               {funnels.map((f) => (
                 <SelectItem key={f.id} value={f.id}>
                   {f.name}
@@ -340,7 +350,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">{t('c_settings_welcome_flow_options_editor.none_fem')}</SelectItem>
+              <SelectItem value="none">
+                {t('c_settings_welcome_flow_options_editor.none_fem')}
+              </SelectItem>
               {stages.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}
@@ -359,7 +371,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">{t('c_settings_welcome_flow_options_editor.nobody')}</SelectItem>
+              <SelectItem value="none">
+                {t('c_settings_welcome_flow_options_editor.nobody')}
+              </SelectItem>
               {members.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.name ?? m.email}
@@ -371,7 +385,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs">{t('c_settings_welcome_flow_options_editor.confirmation_message_label')}</Label>
+        <Label className="text-xs">
+          {t('c_settings_welcome_flow_options_editor.confirmation_message_label')}
+        </Label>
         <textarea
           value={option.confirmationText ?? ''}
           onChange={(e) => onUpdate({ confirmationText: e.target.value || null })}
@@ -382,13 +398,16 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
         />
         <p className="text-[10px] text-muted-foreground">
           {t('c_settings_welcome_flow_options_editor.hint_prefix')} <code>{'{{agent.name}}'}</code>{' '}
-          {t('c_settings_welcome_flow_options_editor.hint_agent_name')} <code>{'{{contact.name}}'}</code>
+          {t('c_settings_welcome_flow_options_editor.hint_agent_name')}{' '}
+          <code>{'{{contact.name}}'}</code>
           {t('c_settings_welcome_flow_options_editor.hint_suffix')}
         </p>
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs">{t('c_settings_welcome_flow_options_editor.keywords_label')}</Label>
+        <Label className="text-xs">
+          {t('c_settings_welcome_flow_options_editor.keywords_label')}
+        </Label>
         <div className="flex flex-wrap gap-1 rounded-md border bg-background p-2 min-h-10">
           {option.matchKeywords.map((k, i) => (
             <span

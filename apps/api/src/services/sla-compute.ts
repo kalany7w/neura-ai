@@ -27,10 +27,7 @@ export async function patchFirstResponse(
   });
   if (!conv) return {};
   if (conv.firstResponseAt) return {}; // já registrada
-  const seconds = Math.max(
-    0,
-    Math.round((outboundAt.getTime() - conv.createdAt.getTime()) / 1000),
-  );
+  const seconds = Math.max(0, Math.round((outboundAt.getTime() - conv.createdAt.getTime()) / 1000));
   return {
     firstResponseAt: outboundAt,
     firstResponseSeconds: seconds,
@@ -53,9 +50,6 @@ export async function patchResolution(
   });
   if (!conv) return {};
   if (conv.resolvedAt) return {}; // já resolvida — não sobrescreve
-  const seconds = Math.max(
-    0,
-    Math.round((at.getTime() - conv.createdAt.getTime()) / 1000),
-  );
+  const seconds = Math.max(0, Math.round((at.getTime() - conv.createdAt.getTime()) / 1000));
   return { resolvedAt: at, resolutionSeconds: seconds };
 }

@@ -50,7 +50,9 @@ export function CreateWorkspaceForm() {
       if (err instanceof ApiError && err.code === 'slug_taken') {
         toast.error(t('c_forms_create_workspace_form.slug_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : t('c_forms_create_workspace_form.create_error'));
+        toast.error(
+          err instanceof Error ? err.message : t('c_forms_create_workspace_form.create_error'),
+        );
       }
     } finally {
       setIsSubmitting(false);
@@ -83,11 +85,15 @@ export function CreateWorkspaceForm() {
       <div className="space-y-2">
         <Label htmlFor="slug">{t('c_forms_create_workspace_form.slug_label')}</Label>
         <Input id="slug" placeholder="minha-empresa" {...register('slug')} />
-        <p className="text-xs text-muted-foreground">{t('c_forms_create_workspace_form.slug_hint')}</p>
+        <p className="text-xs text-muted-foreground">
+          {t('c_forms_create_workspace_form.slug_hint')}
+        </p>
         {errors.slug && <p className="text-xs text-destructive">{t(errors.slug.message ?? '')}</p>}
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting || !name}>
-        {isSubmitting ? t('c_forms_create_workspace_form.creating') : t('c_forms_create_workspace_form.submit')}
+        {isSubmitting
+          ? t('c_forms_create_workspace_form.creating')
+          : t('c_forms_create_workspace_form.submit')}
       </Button>
     </form>
   );

@@ -36,7 +36,8 @@ templatesRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = templateSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     try {
       const tpl = await prisma.messageTemplate.create({

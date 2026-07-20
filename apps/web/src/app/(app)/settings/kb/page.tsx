@@ -252,7 +252,11 @@ export default function KbPage() {
       {stats && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <StatCard label={t('settings_kb.stat_total')} value={stats.total} />
-          <StatCard label={t('settings_kb.stat_published')} value={stats.published} accent="emerald" />
+          <StatCard
+            label={t('settings_kb.stat_published')}
+            value={stats.published}
+            accent="emerald"
+          />
           <StatCard label={t('settings_kb.stat_drafts')} value={stats.drafts} accent="amber" />
           <StatCard label={t('settings_kb.stat_archived')} value={stats.archived} />
           <StatCard
@@ -385,7 +389,9 @@ export default function KbPage() {
                           {a.status === 'PUBLISHED' && a.embeddingUpdatedAt && (
                             <span
                               title={t('settings_kb.embedding_generated_at', {
-                                date: new Date(a.embeddingUpdatedAt).toLocaleString(localeFor(lang)),
+                                date: new Date(a.embeddingUpdatedAt).toLocaleString(
+                                  localeFor(lang),
+                                ),
                               })}
                               className="inline-flex items-center gap-0.5 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300"
                             >
@@ -540,9 +546,7 @@ function SidebarItem({
       }`}
     >
       <span className="flex min-w-0 items-center gap-2">
-        {color && (
-          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
-        )}
+        {color && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />}
         <span className="truncate">{label}</span>
       </span>
       {count !== undefined && count > 0 && (

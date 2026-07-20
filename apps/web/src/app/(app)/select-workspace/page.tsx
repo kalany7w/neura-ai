@@ -109,8 +109,7 @@ export default function SelectWorkspacePage() {
           </div>
           <h1 className="text-2xl font-bold">{t('select_workspace.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            {t('select_workspace.greeting')}{' '}
-            <span className="font-medium">{userName}</span>.{' '}
+            {t('select_workspace.greeting')} <span className="font-medium">{userName}</span>.{' '}
             {t('select_workspace.access_info', { count: data.workspaces.length })}
           </p>
         </div>

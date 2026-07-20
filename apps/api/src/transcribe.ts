@@ -36,11 +36,7 @@ interface WhisperResponse {
   text?: string;
 }
 
-async function callWhisper(
-  buffer: Buffer,
-  filename: string,
-  mimeType: string,
-): Promise<string> {
+async function callWhisper(buffer: Buffer, filename: string, mimeType: string): Promise<string> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
 

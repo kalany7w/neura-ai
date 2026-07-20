@@ -77,9 +77,7 @@ labelsRouter.get('/', requireAuth, requireWorkspace, async (c) => {
   const labels = await prisma.label.findMany({
     where: {
       workspaceId,
-      ...(funnelId
-        ? { OR: [{ routesToFunnelId: null }, { routesToFunnelId: funnelId }] }
-        : {}),
+      ...(funnelId ? { OR: [{ routesToFunnelId: null }, { routesToFunnelId: funnelId }] } : {}),
     },
     orderBy: { name: 'asc' },
   });
@@ -94,7 +92,8 @@ labelsRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = labelSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const routingCheck = await validateRoutingFields(
       workspaceId,

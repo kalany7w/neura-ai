@@ -9,6 +9,7 @@
 **Tech Stack:** Prisma 6 + Hono + Zod + BullMQ (api), Next.js + react-query + shadcn (web), OpenAI (detecção). Vitest.
 
 **Decisões (confirmadas com Kalan)**:
+
 - Calendário próprio dentro do Neura (não Google Calendar)
 - Criação híbrida: manual (dialog) + sugestão IA (agente confirma)
 - Alerta: notificação in-app (sino existente), sem Discord/email/recordatorio anticipado por enquanto
@@ -18,9 +19,11 @@
 ## File Structure
 
 ### Schema
+
 - Modify: `packages/database/prisma/schema.prisma` — `CalendarEvent` model + `CalendarEventType` enum + `CalendarEventStatus` enum + relações back em Workspace/User/Conversation/Contact/Card
 
 ### API
+
 - Create: `apps/api/src/routes/calendar.ts` — CRUD eventos + GET por range
 - Create: `apps/api/src/calendar-scheduler.ts` — cron BullMQ que alerta eventos do dia
 - Create: `apps/api/src/services/ai-detect-schedule.ts` — detecta data/intenção de agendar no texto
@@ -29,6 +32,7 @@
 - Modify: `apps/api/src/redis-pub.ts` (ou onde processa message.new) — hook ai-detect-schedule
 
 ### Web
+
 - Create: `apps/web/src/app/(app)/calendar/page.tsx` — vista mensal
 - Create: `apps/web/src/components/calendar/schedule-event-dialog.tsx` — dialog criar/editar evento
 - Create: `apps/web/src/components/calendar/schedule-suggestion-banner.tsx` — banner sugestão IA no chat
@@ -37,6 +41,7 @@
 - Modify: `apps/web/src/components/layout/sidebar.tsx` — link "Calendário"
 
 ### Tests
+
 - Create: `apps/api/tests/calendar-route.test.ts` — DB layer + constraints
 
 ---
@@ -44,6 +49,7 @@
 ## Task 1: Schema migration — CalendarEvent
 
 **Files:**
+
 - Modify: `packages/database/prisma/schema.prisma`
 
 - [ ] **Step 1: Adicionar enums + model**
@@ -143,6 +149,7 @@ git commit -m "feat(db): adiciona CalendarEvent model + enums"
 ## Task 2: Routes calendar.ts — CRUD + list por range
 
 **Files:**
+
 - Create: `apps/api/src/routes/calendar.ts`
 
 - [ ] **Step 1: Criar route**
@@ -182,7 +189,9 @@ calendarRouter.get('/', requireAuth, requireWorkspace, async (c) => {
 
   const now = new Date();
   const from = fromStr ? new Date(fromStr) : new Date(now.getFullYear(), now.getMonth(), 1);
-  const to = toStr ? new Date(toStr) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const to = toStr
+    ? new Date(toStr)
+    : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
   const events = await prisma.calendarEvent.findMany({
     where: { workspaceId, eventDate: { gte: from, lte: to } },
@@ -273,7 +282,9 @@ calendarRouter.patch('/:id', requireAuth, requireWorkspace, async (c) => {
       ...(parsed.data.description !== undefined && { description: parsed.data.description }),
       ...(parsed.data.eventDate !== undefined && { eventDate: new Date(parsed.data.eventDate) }),
       ...(parsed.data.type !== undefined && { type: parsed.data.type }),
-      ...(parsed.data.assignedUserId !== undefined && { assignedUserId: parsed.data.assignedUserId }),
+      ...(parsed.data.assignedUserId !== undefined && {
+        assignedUserId: parsed.data.assignedUserId,
+      }),
       // status vem como campo separado se passado via body cru (não no eventSchema) — ver abaixo
     },
   });
@@ -342,6 +353,7 @@ git commit -m "feat(api): routes calendar CRUD + list por range"
 ## Task 3: Wire calendarRouter + notification kind
 
 **Files:**
+
 - Modify: `apps/api/src/index.ts`
 - Modify: `apps/api/src/services/notifications.ts`
 
@@ -350,7 +362,12 @@ git commit -m "feat(api): routes calendar CRUD + list por range"
 Em `apps/api/src/services/notifications.ts`, estender o type `NotifKind`:
 
 ```typescript
-type NotifKind = 'message.new' | 'conversation.assigned' | 'sla.critical' | 'card.outcome' | 'calendar.reminder';
+type NotifKind =
+  | 'message.new'
+  | 'conversation.assigned'
+  | 'sla.critical'
+  | 'card.outcome'
+  | 'calendar.reminder';
 ```
 
 - [ ] **Step 2: Wire router em index.ts**
@@ -379,6 +396,7 @@ git commit -m "feat(api): wire calendarRouter + notification kind calendar.remin
 ## Task 4: calendar-scheduler.ts — alerta do dia
 
 **Files:**
+
 - Create: `apps/api/src/calendar-scheduler.ts`
 
 - [ ] **Step 1: Implementar scheduler BullMQ**
@@ -513,6 +531,7 @@ git commit -m "feat(api): calendar-scheduler — alerta in-app no dia do evento 
 ## Task 5: Tests calendar route (DB layer)
 
 **Files:**
+
 - Create: `apps/api/tests/calendar-route.test.ts`
 
 - [ ] **Step 1: Escrever testes**
@@ -592,7 +611,13 @@ describe('CalendarEvent — DB layer', () => {
       data: { workspaceId, phoneNumber: '+595981777666', name: 'Temp' },
     });
     const ev = await prisma.calendarEvent.create({
-      data: { workspaceId, title: 'Test', eventDate: new Date(), contactId: contact2.id, createdBy: userId },
+      data: {
+        workspaceId,
+        title: 'Test',
+        eventDate: new Date(),
+        contactId: contact2.id,
+        createdBy: userId,
+      },
     });
     await prisma.contact.delete({ where: { id: contact2.id } });
     const refetch = await prisma.calendarEvent.findUnique({ where: { id: ev.id } });
@@ -615,7 +640,10 @@ describe('CalendarEvent — DB layer', () => {
     });
     expect(due.map((e) => e.id)).toContain(ev.id);
 
-    await prisma.calendarEvent.update({ where: { id: ev.id }, data: { reminderSentAt: new Date() } });
+    await prisma.calendarEvent.update({
+      where: { id: ev.id },
+      data: { reminderSentAt: new Date() },
+    });
     const dueAfter = await prisma.calendarEvent.findMany({
       where: { eventDate: { lte: new Date() }, status: 'SCHEDULED', reminderSentAt: null },
     });
@@ -649,6 +677,7 @@ git commit -m "test(api): calendar event DB layer (range query, SetNull, reminde
 ## Task 6: Service ai-detect-schedule + hook
 
 **Files:**
+
 - Create: `apps/api/src/services/ai-detect-schedule.ts`
 - Modify: `apps/api/src/redis-pub.ts`
 
@@ -742,7 +771,9 @@ Em `apps/api/src/redis-pub.ts`, localizar onde processa `message.new` (já tem h
 import { detectSchedule } from './services/ai-detect-schedule.js';
 
 // dentro do bloco `if (event === 'message.new')`, após CSAT detection:
-const msg = data.message as { direction?: string; content?: string; conversationId?: string } | undefined;
+const msg = data.message as
+  | { direction?: string; content?: string; conversationId?: string }
+  | undefined;
 if (msg?.direction === 'INBOUND' && msg.content && msg.conversationId) {
   void detectSchedule({
     workspaceId,
@@ -772,6 +803,7 @@ git commit -m "feat(api): ai-detect-schedule — detecta data no texto inbound +
 ## Task 7: Página /calendar (vista mensal)
 
 **Files:**
+
 - Create: `apps/web/src/app/(app)/calendar/page.tsx`
 
 - [ ] **Step 1: Criar página com grid de mês**
@@ -922,6 +954,7 @@ git commit -m "feat(web): página /calendar com vista mensal grid"
 ## Task 8: Dialog "Agendar" no side panel
 
 **Files:**
+
 - Create: `apps/web/src/components/calendar/schedule-event-dialog.tsx`
 - Modify: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
@@ -1086,6 +1119,7 @@ git commit -m "feat(web): dialog 'Agendar evento' no side panel do chat"
 ## Task 9: Banner sugestão IA no chat
 
 **Files:**
+
 - Create: `apps/web/src/components/calendar/schedule-suggestion-banner.tsx`
 - Modify: `apps/web/src/app/(app)/inbox/[id]/page.tsx`
 
@@ -1196,6 +1230,7 @@ git commit -m "feat(web): banner de sugestão IA pra agendar evento no chat"
 ## Task 10: Sidebar nav + build final
 
 **Files:**
+
 - Modify: `apps/web/src/components/layout/sidebar.tsx`
 
 - [ ] **Step 1: Adicionar link Calendário**

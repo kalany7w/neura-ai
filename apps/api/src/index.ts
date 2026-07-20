@@ -86,7 +86,10 @@ app.use(
   }),
 );
 
-app.use('*', honoLogger((msg) => logger.info(msg)));
+app.use(
+  '*',
+  honoLogger((msg) => logger.info(msg)),
+);
 
 // Métricas Prometheus — mede toda request (contagem + duração por rota/status).
 app.use('*', metricsMiddleware());
@@ -197,10 +200,7 @@ startScheduledMsgsScheduler().catch((err) =>
 );
 
 if (env.OPENAI_API_KEY) {
-  logger.info(
-    { model: env.WHISPER_MODEL, concurrency: 2 },
-    'Whisper transcribe worker started',
-  );
+  logger.info({ model: env.WHISPER_MODEL, concurrency: 2 }, 'Whisper transcribe worker started');
 } else {
   logger.warn(
     'OPENAI_API_KEY not set — Whisper worker idle (jobs will fail). Configure OPENAI_API_KEY pra ativar transcrição.',

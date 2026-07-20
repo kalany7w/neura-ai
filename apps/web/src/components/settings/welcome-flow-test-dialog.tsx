@@ -84,11 +84,7 @@ export function WelcomeFlowTestDialog({ flowId, flowEnabled, optionsCount }: Pro
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="phoneNumber">{t('welcome_test.number_label')}</Label>
-            <Input
-              id="phoneNumber"
-              placeholder="+5959991234567"
-              {...register('phoneNumber')}
-            />
+            <Input id="phoneNumber" placeholder="+5959991234567" {...register('phoneNumber')} />
             {errors.phoneNumber && (
               <p className="text-xs text-destructive">{t(errors.phoneNumber.message ?? '')}</p>
             )}

@@ -28,24 +28,29 @@ const flowUpsertSchema = z.object({
  * GET /api/inboxes/:inboxId/welcome-flow
  * Retorna o flow da inbox + options ordenadas. Retorna 404 se não existir.
  */
-welcomeFlowsRouter.get('/inboxes/:inboxId/welcome-flow', requireAuth, requireWorkspace, async (c) => {
-  const workspaceId = c.get('workspaceId') as string;
-  const { inboxId } = c.req.param();
+welcomeFlowsRouter.get(
+  '/inboxes/:inboxId/welcome-flow',
+  requireAuth,
+  requireWorkspace,
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const { inboxId } = c.req.param();
 
-  const inbox = await prisma.inbox.findFirst({
-    where: { id: inboxId, workspaceId },
-    select: { id: true, name: true },
-  });
-  if (!inbox) return c.json({ error: 'inbox_not_found' }, 404);
+    const inbox = await prisma.inbox.findFirst({
+      where: { id: inboxId, workspaceId },
+      select: { id: true, name: true },
+    });
+    if (!inbox) return c.json({ error: 'inbox_not_found' }, 404);
 
-  const flow = await prisma.welcomeFlow.findUnique({
-    where: { inboxId },
-    include: { options: { orderBy: { position: 'asc' } } },
-  });
-  if (!flow) return c.json({ error: 'not_found', inbox }, 404);
+    const flow = await prisma.welcomeFlow.findUnique({
+      where: { inboxId },
+      include: { options: { orderBy: { position: 'asc' } } },
+    });
+    if (!flow) return c.json({ error: 'not_found', inbox }, 404);
 
-  return c.json({ flow, inbox });
-});
+    return c.json({ flow, inbox });
+  },
+);
 
 /**
  * POST /api/inboxes/:inboxId/welcome-flow
@@ -68,9 +73,13 @@ welcomeFlowsRouter.post(
 
     const body = await c.req.json().catch(() => null);
     const parsed = flowUpsertSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
-    if (parsed.data.fallbackUserId && !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))) {
+    if (
+      parsed.data.fallbackUserId &&
+      !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))
+    ) {
       return c.json({ error: 'fallback_user_not_in_workspace' }, 400);
     }
 
@@ -116,9 +125,13 @@ welcomeFlowsRouter.put(
 
     const body = await c.req.json().catch(() => null);
     const parsed = flowUpsertSchema.partial().safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
-    if (parsed.data.fallbackUserId && !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))) {
+    if (
+      parsed.data.fallbackUserId &&
+      !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))
+    ) {
       return c.json({ error: 'fallback_user_not_in_workspace' }, 400);
     }
 
@@ -250,9 +263,13 @@ welcomeFlowsRouter.post(
 
     const body = await c.req.json().catch(() => null);
     const parsed = optionUpsertSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
-    if (parsed.data.targetUserId && !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))) {
+    if (
+      parsed.data.targetUserId &&
+      !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))
+    ) {
       return c.json({ error: 'target_user_not_in_workspace' }, 400);
     }
 
@@ -295,9 +312,13 @@ welcomeFlowsRouter.put(
 
     const body = await c.req.json().catch(() => null);
     const parsed = optionUpsertSchema.partial().safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
-    if (parsed.data.targetUserId && !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))) {
+    if (
+      parsed.data.targetUserId &&
+      !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))
+    ) {
       return c.json({ error: 'target_user_not_in_workspace' }, 400);
     }
 
@@ -333,9 +354,10 @@ welcomeFlowsRouter.put(
         'welcome_flow.option_update_failed',
       );
       const msg = err instanceof Error ? err.message : String(err);
-      const hint = msg.includes('confirmationText') || msg.includes('column')
-        ? 'schema desatualizado — verifique se a migration rodou no startup do api'
-        : undefined;
+      const hint =
+        msg.includes('confirmationText') || msg.includes('column')
+          ? 'schema desatualizado — verifique se a migration rodou no startup do api'
+          : undefined;
       return c.json({ error: 'update_failed', message: msg, hint }, 500);
     }
   },
@@ -395,7 +417,8 @@ welcomeFlowsRouter.post(
     const body = await c.req.json().catch(() => null);
     const schema = z.object({ orderedIds: z.array(z.string()).min(1).max(10) });
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     await prisma.$transaction(async (tx) => {
       // 1. mover todas pra position negativa (preserva ordem original)
@@ -459,7 +482,8 @@ welcomeFlowsRouter.post(
       phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'phoneNumber inválido (use E.164)'),
     });
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     // Upsert contato de teste
     const contact = await prisma.contact.upsert({

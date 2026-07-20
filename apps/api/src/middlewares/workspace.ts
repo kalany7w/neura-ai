@@ -59,10 +59,12 @@ export const requireWorkspace = createMiddleware<{ Variables: WorkspaceVars }>(a
     role = firstMembership.role;
     // Persiste pra próximas requests não precisarem do fallback (só pra sessões normais)
     if (!sessionId.startsWith('apikey:')) {
-      await prisma.session.update({
-        where: { id: sessionId },
-        data: { activeWorkspaceId: workspaceId },
-      }).catch(() => {});
+      await prisma.session
+        .update({
+          where: { id: sessionId },
+          data: { activeWorkspaceId: workspaceId },
+        })
+        .catch(() => {});
     }
   }
 

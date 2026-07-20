@@ -125,44 +125,46 @@ export default function ContactsPage() {
           <p className="text-muted-foreground">{t('page.contacts.subtitle')}</p>
         </div>
         <div className="flex gap-2">
-        <Button variant="outline" onClick={() => setImportOpen(true)}>
-          <Upload className="h-4 w-4" />
-          {t('contacts.import_csv')}
-        </Button>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4" />
-              {t('contacts.new')}
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t('contacts.new')}</DialogTitle>
-              <DialogDescription>{t('contacts.new_desc')}</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="phoneNumber">{t('contacts.phone_label')}</Label>
-                <Input
-                  id="phoneNumber"
-                  placeholder="+5511999999999"
-                  {...register('phoneNumber')}
-                />
-                {errors.phoneNumber && (
-                  <p className="text-xs text-destructive">{t(errors.phoneNumber.message ?? '')}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">{t('contacts.name_optional')}</Label>
-                <Input id="name" {...register('name')} />
-              </div>
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? t('contacts.creating') : t('action.create')}
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" />
+            {t('contacts.import_csv')}
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" />
+                {t('contacts.new')}
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t('contacts.new')}</DialogTitle>
+                <DialogDescription>{t('contacts.new_desc')}</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber">{t('contacts.phone_label')}</Label>
+                  <Input
+                    id="phoneNumber"
+                    placeholder="+5511999999999"
+                    {...register('phoneNumber')}
+                  />
+                  {errors.phoneNumber && (
+                    <p className="text-xs text-destructive">
+                      {t(errors.phoneNumber.message ?? '')}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">{t('contacts.name_optional')}</Label>
+                  <Input id="name" {...register('name')} />
+                </div>
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? t('contacts.creating') : t('action.create')}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 

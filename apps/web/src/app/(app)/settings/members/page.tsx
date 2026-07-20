@@ -129,17 +129,19 @@ export default function MembersPage() {
         title: isSelf
           ? t('settings_members.leave_title')
           : t('settings_members.remove_title', { name: member.user.name ?? member.user.email }),
-        description: isSelf
-          ? t('settings_members.leave_desc')
-          : t('settings_members.remove_desc'),
-        confirmLabel: isSelf ? t('settings_members.leave_confirm') : t('settings_members.remove_confirm'),
+        description: isSelf ? t('settings_members.leave_desc') : t('settings_members.remove_desc'),
+        confirmLabel: isSelf
+          ? t('settings_members.leave_confirm')
+          : t('settings_members.remove_confirm'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/workspaces/me/members/${member.userId}`, { method: 'DELETE' });
-      toast.success(isSelf ? t('settings_members.left_workspace') : t('settings_members.member_removed'));
+      toast.success(
+        isSelf ? t('settings_members.left_workspace') : t('settings_members.member_removed'),
+      );
       await qc.invalidateQueries({ queryKey: ['workspace', 'me'] });
       if (isSelf) window.location.href = '/login';
     } catch (err) {
@@ -205,63 +207,69 @@ export default function MembersPage() {
         )}
 
         {canManage && (
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{t('settings_members.pending_invites')}</CardTitle>
-            <CardDescription>
-              {t('settings_members.pending_invites_count', { n: invitesData?.invites.length ?? 0 })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!invitesData ? (
-              <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
-            ) : invitesData.invites.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('settings_members.no_pending_invites')}</p>
-            ) : (
-              <ul className="divide-y">
-                {invitesData.invites.map((inv) => (
-                  <li key={inv.id} className="flex items-center gap-3 py-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      <Mail className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{inv.email}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {t('settings_members.invited_ago', { time: formatRelativeTime(inv.createdAt, lang) })}
-                        {inv.expired && (
-                          <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0 text-[10px] font-medium text-red-700">
-                            {t('settings_members.expired')}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ROLE_BADGE[inv.role]}`}
-                    >
-                      {t(ROLE_LABEL_KEY[inv.role])}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => resendInvite(inv)}
-                      title={t('settings_members.resend_title')}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => revokeInvite(inv)}
-                      title={t('settings_members.revoke_invite_title')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>{t('settings_members.pending_invites')}</CardTitle>
+              <CardDescription>
+                {t('settings_members.pending_invites_count', {
+                  n: invitesData?.invites.length ?? 0,
+                })}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!invitesData ? (
+                <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
+              ) : invitesData.invites.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {t('settings_members.no_pending_invites')}
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {invitesData.invites.map((inv) => (
+                    <li key={inv.id} className="flex items-center gap-3 py-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{inv.email}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {t('settings_members.invited_ago', {
+                            time: formatRelativeTime(inv.createdAt, lang),
+                          })}
+                          {inv.expired && (
+                            <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0 text-[10px] font-medium text-red-700">
+                              {t('settings_members.expired')}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${ROLE_BADGE[inv.role]}`}
+                      >
+                        {t(ROLE_LABEL_KEY[inv.role])}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => resendInvite(inv)}
+                        title={t('settings_members.resend_title')}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => revokeInvite(inv)}
+                        title={t('settings_members.revoke_invite_title')}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         )}
       </div>
 
@@ -292,7 +300,11 @@ export default function MembersPage() {
                         {initialsFrom(m.user.name ?? m.user.email)}
                       </div>
                       <span
-                        title={isOnline ? t('settings_members.online_now') : t('settings_members.offline')}
+                        title={
+                          isOnline
+                            ? t('settings_members.online_now')
+                            : t('settings_members.offline')
+                        }
                         className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${
                           isOnline ? 'bg-emerald-500' : 'bg-slate-400'
                         }`}
@@ -322,14 +334,20 @@ export default function MembersPage() {
                             type="button"
                             disabled={isLastAdmin}
                             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 ${ROLE_BADGE[m.role]}`}
-                            title={isLastAdmin ? t('settings_members.last_admin_title') : t('settings_members.change_role_title')}
+                            title={
+                              isLastAdmin
+                                ? t('settings_members.last_admin_title')
+                                : t('settings_members.change_role_title')
+                            }
                           >
                             {t(ROLE_LABEL_KEY[m.role])}
                             {!isLastAdmin && <ChevronDown className="h-3 w-3" />}
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-64">
-                          <DropdownMenuLabel>{t('settings_members.role_in_workspace')}</DropdownMenuLabel>
+                          <DropdownMenuLabel>
+                            {t('settings_members.role_in_workspace')}
+                          </DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           {(['ADMIN', 'SUPERVISOR', 'AGENT'] as Role[]).map((r) => (
                             <DropdownMenuItem
@@ -370,7 +388,11 @@ export default function MembersPage() {
                         }
                         className="text-muted-foreground hover:text-destructive disabled:opacity-40"
                       >
-                        {isSelf ? <UserMinus className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        {isSelf ? (
+                          <UserMinus className="h-3.5 w-3.5" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                     )}
                   </li>

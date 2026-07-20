@@ -108,7 +108,9 @@ export default function WelcomeFlowEditorPage() {
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
-  const { data, isLoading, isError } = useQuery<FlowResponse | { error: string; inbox: { id: string; name: string } }>({
+  const { data, isLoading, isError } = useQuery<
+    FlowResponse | { error: string; inbox: { id: string; name: string } }
+  >({
     queryKey: ['welcome-flow', inboxId],
     queryFn: async () => {
       try {
@@ -187,8 +189,7 @@ export default function WelcomeFlowEditorPage() {
   // (Mesmo escopo multi-empresa que kanban: label de XAG não aparece em fluxo apontando pra Caltech.)
   const visibleFallbackLabels = (labelsData?.labels ?? []).filter(
     (l) =>
-      !l.routesToFunnelId ||
-      (fallbackFunnelId ? l.routesToFunnelId === fallbackFunnelId : true),
+      !l.routesToFunnelId || (fallbackFunnelId ? l.routesToFunnelId === fallbackFunnelId : true),
   );
 
   // Auto-reset fallbackLabelId quando muda o funnel e a label atual não está mais visível.
@@ -202,7 +203,14 @@ export default function WelcomeFlowEditorPage() {
     if (fallbackStageId && !fallbackStages.some((s) => s.id === fallbackStageId)) {
       setValue('fallbackStageId', null);
     }
-  }, [fallbackFunnelId, fallbackLabelId, fallbackStageId, visibleFallbackLabels, fallbackStages, setValue]);
+  }, [
+    fallbackFunnelId,
+    fallbackLabelId,
+    fallbackStageId,
+    visibleFallbackLabels,
+    fallbackStages,
+    setValue,
+  ]);
 
   async function onSave(values: FlowInput) {
     setSubmitting(true);
@@ -212,11 +220,17 @@ export default function WelcomeFlowEditorPage() {
         method,
         body: JSON.stringify(values),
       });
-      toast.success(hasFlow ? t('settings_welcome_flows_inboxid.flow_updated') : t('settings_welcome_flows_inboxid.flow_created'));
+      toast.success(
+        hasFlow
+          ? t('settings_welcome_flows_inboxid.flow_updated')
+          : t('settings_welcome_flows_inboxid.flow_created'),
+      );
       await qc.invalidateQueries({ queryKey: ['welcome-flow', inboxId] });
       await qc.invalidateQueries({ queryKey: ['welcome-flows-list'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('settings_welcome_flows_inboxid.save_error'));
+      toast.error(
+        err instanceof Error ? err.message : t('settings_welcome_flows_inboxid.save_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -227,7 +241,9 @@ export default function WelcomeFlowEditorPage() {
     return (
       <div className="space-y-4">
         <p className="text-destructive">{t('settings_welcome_flows_inboxid.load_error')}</p>
-        <Button onClick={() => router.push('/settings/welcome-flows')}>{t('settings_welcome_flows_inboxid.back')}</Button>
+        <Button onClick={() => router.push('/settings/welcome-flows')}>
+          {t('settings_welcome_flows_inboxid.back')}
+        </Button>
       </div>
     );
   }
@@ -235,7 +251,10 @@ export default function WelcomeFlowEditorPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Link href="/settings/welcome-flows" className="text-muted-foreground hover:text-foreground">
+        <Link
+          href="/settings/welcome-flows"
+          className="text-muted-foreground hover:text-foreground"
+        >
           <ChevronLeft className="h-5 w-5" />
         </Link>
         <div>
@@ -247,7 +266,9 @@ export default function WelcomeFlowEditorPage() {
       <form onSubmit={handleSubmit(onSave)} className="space-y-6">
         <div className="rounded-lg border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">{t('settings_welcome_flows_inboxid.general_settings')}</h2>
+            <h2 className="font-semibold">
+              {t('settings_welcome_flows_inboxid.general_settings')}
+            </h2>
             <div className="flex items-center gap-2">
               <Label htmlFor="enabled" className="text-sm">
                 {t('settings_welcome_flows_inboxid.active')}
@@ -278,7 +299,9 @@ export default function WelcomeFlowEditorPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="maxAttempts">{t('settings_welcome_flows_inboxid.max_attempts_label')}</Label>
+              <Label htmlFor="maxAttempts">
+                {t('settings_welcome_flows_inboxid.max_attempts_label')}
+              </Label>
               <Input
                 id="maxAttempts"
                 type="number"
@@ -291,7 +314,9 @@ export default function WelcomeFlowEditorPage() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fallbackTimeoutMinutes">{t('settings_welcome_flows_inboxid.timeout_label')}</Label>
+              <Label htmlFor="fallbackTimeoutMinutes">
+                {t('settings_welcome_flows_inboxid.timeout_label')}
+              </Label>
               <Input
                 id="fallbackTimeoutMinutes"
                 type="number"
@@ -325,7 +350,8 @@ export default function WelcomeFlowEditorPage() {
                     {l.name}
                     {l.routesToFunnelId && (
                       <span className="ml-2 text-[10px] text-muted-foreground">
-                        · {funnelsData?.funnels.find((f) => f.id === l.routesToFunnelId)?.name ?? ''}
+                        ·{' '}
+                        {funnelsData?.funnels.find((f) => f.id === l.routesToFunnelId)?.name ?? ''}
                       </span>
                     )}
                   </SelectItem>
@@ -353,7 +379,9 @@ export default function WelcomeFlowEditorPage() {
                   <SelectValue placeholder={t('settings_welcome_flows_inboxid.none_masc')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">{t('settings_welcome_flows_inboxid.none_masc')}</SelectItem>
+                  <SelectItem value="none">
+                    {t('settings_welcome_flows_inboxid.none_masc')}
+                  </SelectItem>
                   {funnelsData?.funnels.map((f) => (
                     <SelectItem key={f.id} value={f.id}>
                       {f.name}
@@ -370,10 +398,18 @@ export default function WelcomeFlowEditorPage() {
                 disabled={!fallbackFunnelId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={fallbackFunnelId ? t('settings_welcome_flows_inboxid.select_option') : t('settings_welcome_flows_inboxid.choose_funnel_first')} />
+                  <SelectValue
+                    placeholder={
+                      fallbackFunnelId
+                        ? t('settings_welcome_flows_inboxid.select_option')
+                        : t('settings_welcome_flows_inboxid.choose_funnel_first')
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">{t('settings_welcome_flows_inboxid.none_masc')}</SelectItem>
+                  <SelectItem value="none">
+                    {t('settings_welcome_flows_inboxid.none_masc')}
+                  </SelectItem>
                   {fallbackStages.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
@@ -410,7 +446,8 @@ export default function WelcomeFlowEditorPage() {
 
         {watch('enabled') && hasFlow && data.flow.options.length === 0 && (
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-            <strong>{t('settings_welcome_flows_inboxid.warning_label')}</strong> {t('settings_welcome_flows_inboxid.warning_no_options')}
+            <strong>{t('settings_welcome_flows_inboxid.warning_label')}</strong>{' '}
+            {t('settings_welcome_flows_inboxid.warning_no_options')}
           </div>
         )}
 

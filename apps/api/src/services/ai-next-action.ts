@@ -174,18 +174,13 @@ export async function suggestNextActions(input: NextActionInput): Promise<NextAc
     }
     const safe = nextActionsResponseSchema.safeParse(parsed);
     if (!safe.success) {
-      logger.warn(
-        { issues: safe.error.issues.slice(0, 3) },
-        'next-action: schema invalid',
-      );
+      logger.warn({ issues: safe.error.issues.slice(0, 3) }, 'next-action: schema invalid');
       return [];
     }
     // Filter actions cujo slug/name não bate com listas fornecidas (anti-alucinação)
     const validAgentSlugs = new Set(input.availableAgents.map((a) => a.slug));
     const validLabelNames = new Set(input.availableLabels.map((l) => l.name.toLowerCase()));
-    const validTemplateNames = new Set(
-      input.availableTemplates.map((t) => t.name.toLowerCase()),
-    );
+    const validTemplateNames = new Set(input.availableTemplates.map((t) => t.name.toLowerCase()));
     const validStageNames = new Set(input.availableStages.map((s) => s.name.toLowerCase()));
     return safe.data.actions.filter((a) => {
       if (a.kind === 'assign_agent') return validAgentSlugs.has(a.agentSlug);

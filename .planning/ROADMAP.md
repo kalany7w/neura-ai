@@ -14,21 +14,22 @@
 
 ## Resumo (atualizado 2026-05-13)
 
-| # | Fase | Estimativa | Status |
-|---|------|------------|--------|
-| 1 | Scaffold + auth + multi-tenant + email + audit log + permissões + CI | 6d | ✅ done |
-| 2 | Baileys worker (sessão única → multi) + WS msgs | 8d | ✅ done |
-| 3 | Mídia (MinIO + envio/recepção + thumbnails) | 5d | ✅ done (thumbnails pendentes) |
-| 4 | Inbox UI (conversas + atribuição + notas + templates) + WS atendimento | 5d | ✅ done (lista+chat+send+notas internas+templates com shortcuts/placeholders) |
-| 5 | Contatos + labels + custom attrs + WS labels/contato | 2.5d | ✅ done |
-| 6 | Kanban core (funis + stages + drag-drop + modal) + WS cards | 5d | ✅ done + auto-card creation |
-| 7 | Diferenciais kanban (busca + filtro etiqueta + SLA + preview msg + badges + atribuição inline) + WS SLA/unread | 6d | 🟡 SLA periódico + busca + filtro etiqueta + preview + badge done; atribuição inline pendente |
-| 8 | Filtros salvos + snooze + histórico contato + WS snooze | 3.5d | ⏳ schema pronto (SavedFilter, CardSnooze), implementação pendente |
-| 9 | Real-time hardening + observabilidade (reconnect + stress + Pino + alertas) | 5d | 🟡 reconnect WS done; observability básica (Pino) done; stress test + alertas pendentes |
-| 10 | Deploy Coolify produção (api.neura-ai.net + app.neura-ai.net) | 2.5d | ✅ done (Dockerfile + compose + DEPLOY.md prontos; falta provisionar no Coolify) |
-| **Total** | | **48.5d (~10 semanas)** | **~85% done** |
+| #         | Fase                                                                                                           | Estimativa              | Status                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------- |
+| 1         | Scaffold + auth + multi-tenant + email + audit log + permissões + CI                                           | 6d                      | ✅ done                                                                                       |
+| 2         | Baileys worker (sessão única → multi) + WS msgs                                                                | 8d                      | ✅ done                                                                                       |
+| 3         | Mídia (MinIO + envio/recepção + thumbnails)                                                                    | 5d                      | ✅ done (thumbnails pendentes)                                                                |
+| 4         | Inbox UI (conversas + atribuição + notas + templates) + WS atendimento                                         | 5d                      | ✅ done (lista+chat+send+notas internas+templates com shortcuts/placeholders)                 |
+| 5         | Contatos + labels + custom attrs + WS labels/contato                                                           | 2.5d                    | ✅ done                                                                                       |
+| 6         | Kanban core (funis + stages + drag-drop + modal) + WS cards                                                    | 5d                      | ✅ done + auto-card creation                                                                  |
+| 7         | Diferenciais kanban (busca + filtro etiqueta + SLA + preview msg + badges + atribuição inline) + WS SLA/unread | 6d                      | 🟡 SLA periódico + busca + filtro etiqueta + preview + badge done; atribuição inline pendente |
+| 8         | Filtros salvos + snooze + histórico contato + WS snooze                                                        | 3.5d                    | ⏳ schema pronto (SavedFilter, CardSnooze), implementação pendente                            |
+| 9         | Real-time hardening + observabilidade (reconnect + stress + Pino + alertas)                                    | 5d                      | 🟡 reconnect WS done; observability básica (Pino) done; stress test + alertas pendentes       |
+| 10        | Deploy Coolify produção (api.neura-ai.net + app.neura-ai.net)                                                  | 2.5d                    | ✅ done (Dockerfile + compose + DEPLOY.md prontos; falta provisionar no Coolify)              |
+| **Total** |                                                                                                                | **48.5d (~10 semanas)** | **~85% done**                                                                                 |
 
 Pendências pra próxima sessão:
+
 - Notas internas + templates de resposta (Fase 4)
 - Thumbnails (sharp + ffmpeg) na recepção de mídia (Fase 3)
 - Atribuição inline no card kanban (Fase 7)
@@ -43,6 +44,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Base rodando localmente, login/signup funcionando com email, multi-tenant isolado, audit log ativo, CI verde.
 
 **Entregáveis**:
+
 - Monorepo pnpm + turborepo (`apps/api`, `apps/web`, `apps/waworker`, `packages/database`, `packages/shared`, `packages/ui`)
 - `apps/api` Hono com healthcheck + Better Auth + Prisma + Pino
 - `apps/web` Next.js 15 com login/signup + dashboard vazio + design system (shadcn instalado)
@@ -59,6 +61,7 @@ Pendências pra próxima sessão:
   - Integration: signup → cria account, login retorna sessão válida, isolamento (User A não lê dados Account 2)
 
 **Critérios aceite**:
+
 - `pnpm dev` sobe api + web localmente
 - `pnpm build` builda os 3 apps sem erro
 - Signup → email Resend chega → confirma → cria account + user como admin
@@ -76,6 +79,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Conectar números WhatsApp via QR, receber/enviar texto, multi-sessão, mensagens chegam na UI em real-time.
 
 **Entregáveis**:
+
 - `apps/waworker` Node + Baileys com suporte multi-sessão (worker process com N sessões)
 - Endpoints internos do worker: `POST /sessions`, `GET /sessions/:id/qr`, `DELETE /sessions/:id`, `GET /sessions/:id/status`
 - Auth state Baileys persistido em Postgres tabela `WaSession` com encrypted_state (AES-256-GCM, chave em `.env`)
@@ -94,6 +98,7 @@ Pendências pra próxima sessão:
   - E2E mínimo (Playwright): criar inbox → ver QR → mockar evento "conectado" → confirmar UI atualiza
 
 **Critérios aceite**:
+
 - QR aparece na UI em tempo real (sem refresh)
 - Escaneia QR → status muda pra "conectado" em todos browsers abertos
 - Cliente manda msg pelo celular → aparece no DB em <2s → aparece na UI sem refresh em <1s adicional
@@ -109,6 +114,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Envio e recepção de imagem, vídeo, áudio, documento, com storage MinIO.
 
 **Entregáveis**:
+
 - MinIO no docker-compose (bucket `neura-media` por account, key/secret no Coolify)
 - Upload presigned URL (web pede URL → api gera assinada → web sobe direto no MinIO)
 - Worker baixa mídia recebida do WhatsApp em **streaming** (não buffer inteiro) → sobe no MinIO → salva `media_url` no `Message`
@@ -124,6 +130,7 @@ Pendências pra próxima sessão:
   - E2E: agente envia imagem → MinIO armazena → cliente recebe (mockado)
 
 **Critérios aceite**:
+
 - Cliente manda foto → thumbnail aparece em <3s + lightbox abre em alta
 - Cliente manda áudio → player toca no chat
 - Agente envia imagem (drag-drop) → upload em background sem travar UI → cliente recebe
@@ -137,6 +144,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Tela de atendimento ao vivo. Responder, atribuir, notas, templates. Tudo em tempo real.
 
 **Entregáveis**:
+
 - Tela `/inbox`: lista de conversas (paginada 25), filtros (status, agente, inbox, sem-agente, busca)
 - Conversa aberta: histórico (lazy load), input rich text + anexos, indicador "digitando" do cliente
 - Atribuir agente (dropdown com permissão por role) → mudar status (open/pending/resolved/snoozed)
@@ -152,6 +160,7 @@ Pendências pra próxima sessão:
   - E2E: 2 browsers, agente A atribui conversa a agente B → agente B vê em <1s sem refresh
 
 **Critérios aceite**:
+
 - Agente abre inbox, vê 25 conversas paginadas, abre uma, responde, msg sai pra WhatsApp
 - Atribui pra outro agente → outro agente vê notificação em real-time
 - Filtra "sem agente" → só não-atribuídas
@@ -166,6 +175,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Cadastro robusto de contatos, etiquetas, atributos customizados, com sync real-time.
 
 **Entregáveis**:
+
 - Tela `/contacts`: lista paginada, busca (nome/telefone/email), filtro por label
 - Criação/edição: nome, telefone (validação E.164), email, avatar, custom attrs
 - Labels CRUD (cor + nome + `applies_to: contact|conversation|both`) por account
@@ -180,6 +190,7 @@ Pendências pra próxima sessão:
   - Integration: merge contatos unifica conversations
 
 **Critérios aceite**:
+
 - Criar contato manual + automático (msg de novo número cria contato)
 - Aplicar "VIP" no contato → vê o label nos próximos cards do kanban
 - Buscar por nome ou telefone <500ms (índice no banco)
@@ -192,6 +203,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Funis com stages, cards = conversas, drag-drop, modal de edição, atualização real-time entre browsers.
 
 **Entregáveis**:
+
 - Schema: `Funnel`, `Stage` (com `is_won|is_lost`), `Card` (linkado a `Conversation`), `CardLabel`, `CardProduct`
 - Tela `/kanban`: seletor de funil, board com stages, cards
 - Drag-drop card entre stages (@dnd-kit, mutação otimista + revert se 4xx)
@@ -207,6 +219,7 @@ Pendências pra próxima sessão:
   - E2E: 2 browsers, mover card no A → reflete no B em <1s
 
 **Critérios aceite**:
+
 - Cria funil "Vendas" com stages "Lead → Qualificação → Proposta → Fechado"
 - Conversa nova de inbox X cria card auto no stage Lead do funil X (regra configurável)
 - Drag-drop persiste + mostra em outros browsers em <1s sem refresh
@@ -219,6 +232,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Features que faltam no fazer.ai e fazem diferença real no dia a dia.
 
 **Entregáveis**:
+
 - **Busca textual** no board: input filtra cards por título, nome contato, telefone, label, número da conversa
 - **Filtro por etiqueta clicável**: chip de label no card → click → toggle no filtro
 - **SLA visual**: cor da borda do card escalona por tempo sem resposta do agente (verde <15min, amarelo 15-30min, vermelho 30-60min, piscando >1h). Limiares configuráveis por funil.
@@ -232,6 +246,7 @@ Pendências pra próxima sessão:
   - E2E: card sem resposta agente por X tempo → muda cor sem refresh
 
 **Critérios aceite**:
+
 - Busca "joão" filtra board em tempo real
 - Clica label "VIP" → board mostra só cards com VIP
 - Card 45min sem resposta agente fica vermelho sozinho (sem refresh)
@@ -243,6 +258,7 @@ Pendências pra próxima sessão:
 ## Fase 8 — Filtros salvos + snooze + histórico contato + WS (3.5d)
 
 **Entregáveis**:
+
 - Filtros salvos: combinação atual (busca + labels + agente + status + funil) salva com nome ("Meus em espera > 1h"). Per user.
 - Snooze: clica card → "lembrar X" → opções (em 1h / amanhã 9h / próx segunda / custom) → card esconde até hora → reaparece com badge "snooze terminou"
 - Histórico do contato: clica contato → modal com todas conversations anteriores (timeline ordenada)
@@ -253,6 +269,7 @@ Pendências pra próxima sessão:
   - E2E: snooze card → some → reaparece com badge
 
 **Critérios aceite**:
+
 - Salvar "Sem agente", recarregar página, aplicar filtro → mesmos critérios
 - Snooze pra +2min → card some → reaparece em 2-2.5min com badge laranja
 - Histórico mostra todas conversations do contato em ordem cronológica
@@ -264,6 +281,7 @@ Pendências pra próxima sessão:
 **Objetivo**: Endurecer o real-time (cada fase já implementou sua parte; agora resilência), adicionar observabilidade pra operação em produção.
 
 **Entregáveis**:
+
 - Reconexão WS automática com backoff (1s, 2s, 4s, 8s, 30s; jitter pra não cascatear)
 - Refetch delta após reconexão (cliente envia `last_event_id` ou timestamp → servidor retorna diff)
 - Worker reconciliador 30s: percorre estado vs DB, publica eventos perdidos
@@ -279,6 +297,7 @@ Pendências pra próxima sessão:
   - Stress: 100 msgs em 10s → todas aparecem com latência <2s
 
 **Critérios aceite**:
+
 - 2 browsers: ação num reflete no outro em <1s
 - Desconecta wifi 30s → reconecta → estado completo restaura sem refresh manual
 - Stress 100 msgs/10s → 100% aparece, latência p95 <2s
@@ -289,6 +308,7 @@ Pendências pra próxima sessão:
 ## Fase 10 — Deploy Coolify produção (2.5d)
 
 **Entregáveis**:
+
 - Coolify projeto `neura-ai`
 - 3 apps: `api` (api.neura-ai.net), `web` (app.neura-ai.net), `waworker` (interno, sem domínio)
 - Postgres + Redis + MinIO como services no Coolify
@@ -303,6 +323,7 @@ Pendências pra próxima sessão:
   - Smoke test pós-deploy: curl `/health` retorna 200, login flow E2E
 
 **Critérios aceite**:
+
 - `https://api.neura-ai.net/health` retorna 200 com cert válido
 - `https://app.neura-ai.net` carrega login
 - Fluxo end-to-end: signup → confirma email → cria account → conecta inbox (escaneia QR) → cliente manda msg → aparece na UI em real-time

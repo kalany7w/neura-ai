@@ -29,14 +29,16 @@ export const kbRouter = new Hono<{
 // ============================================
 
 function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .normalize('NFD')
-    // Remove diacríticos (combining marks U+0300..U+036F).
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80);
+  return (
+    input
+      .toLowerCase()
+      .normalize('NFD')
+      // Remove diacríticos (combining marks U+0300..U+036F).
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+  );
 }
 
 const EXCERPT_LEN = 220;
@@ -81,7 +83,10 @@ async function ensureUniqueSlug(
 
 const categorySchema = z.object({
   name: z.string().min(1).max(60),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   position: z.number().int().min(0).max(9999).optional(),
 });
 
@@ -103,7 +108,8 @@ kbRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = categorySchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const userId = c.get('userId');
     const slug = await ensureUniqueSlug(workspaceId, 'kb_categories', slugify(parsed.data.name));
@@ -261,7 +267,8 @@ kbRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = articleSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const userId = c.get('userId');
     if (parsed.data.categoryId) {
@@ -452,35 +459,30 @@ interface SearchRow {
   score: number; // 0..1 (1 = match perfeito)
 }
 
-kbRouter.post(
-  '/search',
-  requireAuth,
-  requireWorkspace,
-  requirePermission('kb.use'),
-  async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const parsed = searchSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
-    const workspaceId = c.get('workspaceId') as string;
-    const { query, limit } = parsed.data;
+kbRouter.post('/search', requireAuth, requireWorkspace, requirePermission('kb.use'), async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = searchSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+  const workspaceId = c.get('workspaceId') as string;
+  const { query, limit } = parsed.data;
 
-    const queryVec = await generateEmbedding(query);
+  const queryVec = await generateEmbedding(query);
 
-    let rows: SearchRow[];
-    if (queryVec) {
-      const literal = formatVectorLiteral(queryVec);
-      // Cosine distance via operador `<=>` (pgvector). Resultado em [0, 2].
-      // Convertemos pra score [0, 1]: score = 1 - (distance / 2).
-      const raw = await prisma.$queryRaw<
-        Array<{
-          id: string;
-          title: string;
-          slug: string;
-          excerpt: string | null;
-          categoryId: string | null;
-          distance: number;
-        }>
-      >(Prisma.sql`
+  let rows: SearchRow[];
+  if (queryVec) {
+    const literal = formatVectorLiteral(queryVec);
+    // Cosine distance via operador `<=>` (pgvector). Resultado em [0, 2].
+    // Convertemos pra score [0, 1]: score = 1 - (distance / 2).
+    const raw = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        slug: string;
+        excerpt: string | null;
+        categoryId: string | null;
+        distance: number;
+      }>
+    >(Prisma.sql`
         SELECT "id", "title", "slug", "excerpt", "categoryId",
                ("embedding" <=> ${literal}::vector) AS distance
         FROM "kb_articles"
@@ -490,38 +492,37 @@ kbRouter.post(
         ORDER BY "embedding" <=> ${literal}::vector
         LIMIT ${limit}
       `);
-      rows = raw.map((r) => ({
-        id: r.id,
-        title: r.title,
-        slug: r.slug,
-        excerpt: r.excerpt,
-        categoryId: r.categoryId,
-        score: Math.max(0, Math.min(1, 1 - Number(r.distance) / 2)),
-      }));
-    } else {
-      // Fallback: busca literal por título/body (sem IA).
-      const articles = await prisma.kbArticle.findMany({
-        where: {
-          workspaceId,
-          status: 'PUBLISHED',
-          OR: [
-            { title: { contains: query, mode: 'insensitive' } },
-            { body: { contains: query, mode: 'insensitive' } },
-          ],
-        },
-        orderBy: { updatedAt: 'desc' },
-        take: limit,
-        select: { id: true, title: true, slug: true, excerpt: true, categoryId: true },
-      });
-      rows = articles.map((a) => ({ ...a, score: 0 }));
-    }
-
-    return c.json({
-      results: rows,
-      semantic: queryVec !== null,
+    rows = raw.map((r) => ({
+      id: r.id,
+      title: r.title,
+      slug: r.slug,
+      excerpt: r.excerpt,
+      categoryId: r.categoryId,
+      score: Math.max(0, Math.min(1, 1 - Number(r.distance) / 2)),
+    }));
+  } else {
+    // Fallback: busca literal por título/body (sem IA).
+    const articles = await prisma.kbArticle.findMany({
+      where: {
+        workspaceId,
+        status: 'PUBLISHED',
+        OR: [
+          { title: { contains: query, mode: 'insensitive' } },
+          { body: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+      select: { id: true, title: true, slug: true, excerpt: true, categoryId: true },
     });
-  },
-);
+    rows = articles.map((a) => ({ ...a, score: 0 }));
+  }
+
+  return c.json({
+    results: rows,
+    semantic: queryVec !== null,
+  });
+});
 
 kbRouter.post('/articles/:id/view', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;

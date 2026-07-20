@@ -88,16 +88,41 @@ const groups: NavGroup[] = [
     label: 'sidebar.group.settings',
     items: [
       { href: '/settings/templates', label: 'sidebar.templates', icon: FileText },
-      { href: '/settings/welcome-flows', label: 'sidebar.welcome_flows', icon: MessageSquarePlus, roles: ['ADMIN', 'SUPERVISOR'] },
+      {
+        href: '/settings/welcome-flows',
+        label: 'sidebar.welcome_flows',
+        icon: MessageSquarePlus,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
       { href: '/settings/kb', label: 'sidebar.kb', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/labels', label: 'sidebar.labels', icon: Tag, roles: ['ADMIN'] },
-      { href: '/settings/members', label: 'sidebar.members', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },
+      {
+        href: '/settings/members',
+        label: 'sidebar.members',
+        icon: UserCog,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
       { href: '/settings/automations', label: 'sidebar.automations', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/sla', label: 'sidebar.sla', icon: Timer, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/csat', label: 'sidebar.csat', icon: Smile, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/integrations', label: 'sidebar.integrations', icon: Zap, roles: ['ADMIN'] },
+      {
+        href: '/settings/csat',
+        label: 'sidebar.csat',
+        icon: Smile,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
+      {
+        href: '/settings/integrations',
+        label: 'sidebar.integrations',
+        icon: Zap,
+        roles: ['ADMIN'],
+      },
       { href: '/settings/import', label: 'sidebar.import', icon: Upload, roles: ['ADMIN'] },
-      { href: '/settings/custom-attributes', label: 'sidebar.custom_attributes', icon: Tag, roles: ['ADMIN'] },
+      {
+        href: '/settings/custom-attributes',
+        label: 'sidebar.custom_attributes',
+        icon: Tag,
+        roles: ['ADMIN'],
+      },
       { href: '/settings/api-keys', label: 'sidebar.api_keys', icon: Key, roles: ['ADMIN'] },
       { href: '/settings/audit', label: 'sidebar.audit', icon: ScrollText, roles: ['ADMIN'] },
     ],
@@ -270,8 +295,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
               <ul className="space-y-0.5">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
-                  const active =
-                    pathname === item.href || pathname.startsWith(item.href + '/');
+                  const active = pathname === item.href || pathname.startsWith(item.href + '/');
                   return (
                     <li key={item.href}>
                       <Link
@@ -314,7 +338,9 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
               {initials || '?'}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.name ?? t('c_layout_sidebar.no_name')}</p>
+              <p className="truncate text-sm font-medium">
+                {user.name ?? t('c_layout_sidebar.no_name')}
+              </p>
               <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
             </div>
           </Link>

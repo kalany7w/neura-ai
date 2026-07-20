@@ -16,6 +16,7 @@ api.neura-ai.net      → api (Hono + WS, container interno :7301)
 ## ENV obrigatórias (Coolify Application → Environment Variables)
 
 Gerar secrets antes:
+
 ```sh
 openssl rand -hex 32  # pra BETTER_AUTH_SECRET
 openssl rand -hex 32  # pra ENCRYPTION_KEY

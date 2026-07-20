@@ -7,11 +7,7 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.j
 import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
 import { encrypt } from '../services/crypto.js';
-import {
-  getMe,
-  setWebhook,
-  deleteWebhook,
-} from '../services/telegram-client.js';
+import { getMe, setWebhook, deleteWebhook } from '../services/telegram-client.js';
 import { decrypt } from '../services/crypto.js';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
@@ -25,79 +21,94 @@ const createInboxSchema = z.object({
 });
 
 // POST /api/inboxes — cria inbox (admin)
-inboxesRouter.post('/', requireAuth, requireWorkspace, requirePermission('inbox.create'), async (c) => {
-  const body = await c.req.json().catch(() => null);
-  const parsed = createInboxSchema.safeParse(body);
-  if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+inboxesRouter.post(
+  '/',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.create'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = createInboxSchema.safeParse(body);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
-  const workspaceId = c.get('workspaceId') as string;
-  const actorId = c.get('userId');
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
 
-  const inbox = await prisma.inbox.create({
-    data: {
+    const inbox = await prisma.inbox.create({
+      data: {
+        workspaceId,
+        name: parsed.data.name,
+        type: 'WHATSAPP',
+        status: 'DISCONNECTED',
+      },
+    });
+    await audit({
       workspaceId,
-      name: parsed.data.name,
-      type: 'WHATSAPP',
-      status: 'DISCONNECTED',
-    },
-  });
-  await audit({
-    workspaceId,
-    actorId,
-    action: 'inbox.created',
-    resource: `Inbox:${inbox.id}`,
-    metadata: { name: inbox.name },
-  });
-  return c.json({ inbox }, 201);
-});
+      actorId,
+      action: 'inbox.created',
+      resource: `Inbox:${inbox.id}`,
+      metadata: { name: inbox.name },
+    });
+    return c.json({ inbox }, 201);
+  },
+);
 
 // GET /api/inboxes — lista inboxes do workspace
-inboxesRouter.get('/', requireAuth, requireWorkspace, requirePermission('inbox.list'), async (c) => {
-  const workspaceId = c.get('workspaceId') as string;
-  const includeWelcomeFlow = c.req.query('includeWelcomeFlow') === 'true';
+inboxesRouter.get(
+  '/',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('inbox.list'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const includeWelcomeFlow = c.req.query('includeWelcomeFlow') === 'true';
 
-  const inboxes = await prisma.inbox.findMany({
-    where: { workspaceId },
-    orderBy: { createdAt: 'asc' },
-    include: {
-      waSession: {
-        select: {
-          phoneNumber: true,
-          qrCode: true,
-          qrExpiresAt: true,
-          lastConnectedAt: true,
+    const inboxes = await prisma.inbox.findMany({
+      where: { workspaceId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        waSession: {
+          select: {
+            phoneNumber: true,
+            qrCode: true,
+            qrExpiresAt: true,
+            lastConnectedAt: true,
+          },
         },
-      },
-      ...(includeWelcomeFlow
-        ? {
-            welcomeFlow: {
-              select: {
-                id: true,
-                enabled: true,
-                _count: { select: { options: true } },
+        ...(includeWelcomeFlow
+          ? {
+              welcomeFlow: {
+                select: {
+                  id: true,
+                  enabled: true,
+                  _count: { select: { options: true } },
+                },
               },
-            },
-          }
-        : {}),
-    },
-  });
+            }
+          : {}),
+      },
+    });
 
-  if (!includeWelcomeFlow) return c.json({ inboxes });
+    if (!includeWelcomeFlow) return c.json({ inboxes });
 
-  // Mapa pra flatten _count → optionsCount, mantendo todos os demais campos.
-  const mapped = inboxes.map((i) => {
-    const wf = (i as typeof i & {
-      welcomeFlow?: { id: string; enabled: boolean; _count: { options: number } } | null;
-    }).welcomeFlow;
-    return {
-      ...i,
-      welcomeFlow: wf
-        ? { id: wf.id, enabled: wf.enabled, optionsCount: wf._count.options }
-        : null,
-    };
-  });
-  return c.json({ inboxes: mapped });
-});
+    // Mapa pra flatten _count → optionsCount, mantendo todos os demais campos.
+    const mapped = inboxes.map((i) => {
+      const wf = (
+        i as typeof i & {
+          welcomeFlow?: { id: string; enabled: boolean; _count: { options: number } } | null;
+        }
+      ).welcomeFlow;
+      return {
+        ...i,
+        welcomeFlow: wf
+          ? { id: wf.id, enabled: wf.enabled, optionsCount: wf._count.options }
+          : null,
+      };
+    });
+    return c.json({ inboxes: mapped });
+  },
+);
 
 // GET /api/inboxes/:id — detalhe + QR atual
 inboxesRouter.get(
@@ -147,7 +158,8 @@ inboxesRouter.patch(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = patchInboxSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const id = c.req.param('id');
     const existing = await prisma.inbox.findFirst({ where: { id, workspaceId } });
@@ -184,17 +196,11 @@ inboxesRouter.post(
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
     const { redis } = await import('../redis.js');
-    await redis.publish(
-      'worker:commands',
-      JSON.stringify({ cmd: 'session.stop', inboxId: id }),
-    );
+    await redis.publish('worker:commands', JSON.stringify({ cmd: 'session.stop', inboxId: id }));
     // Pequeno delay pra worker processar stop antes do start
     setTimeout(() => {
       redis
-        .publish(
-          'worker:commands',
-          JSON.stringify({ cmd: 'session.start', inboxId: id }),
-        )
+        .publish('worker:commands', JSON.stringify({ cmd: 'session.start', inboxId: id }))
         .catch(() => {});
     }, 1500);
     return c.json({ ok: true });
@@ -214,10 +220,7 @@ inboxesRouter.post(
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
     const { redis } = await import('../redis.js');
-    await redis.publish(
-      'worker:commands',
-      JSON.stringify({ cmd: 'session.stop', inboxId: id }),
-    );
+    await redis.publish('worker:commands', JSON.stringify({ cmd: 'session.stop', inboxId: id }));
     return c.json({ ok: true });
   },
 );
@@ -237,10 +240,7 @@ inboxesRouter.delete(
 
     // Para sessão antes de deletar
     const { redis } = await import('../redis.js');
-    await redis.publish(
-      'worker:commands',
-      JSON.stringify({ cmd: 'session.stop', inboxId: id }),
-    );
+    await redis.publish('worker:commands', JSON.stringify({ cmd: 'session.stop', inboxId: id }));
     await prisma.inbox.delete({ where: { id } });
     await audit({
       workspaceId,
@@ -258,7 +258,11 @@ inboxesRouter.delete(
 
 const telegramConnectSchema = z.object({
   name: z.string().min(1).max(80),
-  botToken: z.string().min(20).max(80).regex(/^\d+:[A-Za-z0-9_-]+$/, 'Token inválido (formato: 123456:ABC-xyz)'),
+  botToken: z
+    .string()
+    .min(20)
+    .max(80)
+    .regex(/^\d+:[A-Za-z0-9_-]+$/, 'Token inválido (formato: 123456:ABC-xyz)'),
 });
 
 // POST /api/inboxes/telegram/connect — cria inbox tipo TELEGRAM e configura webhook
@@ -270,7 +274,8 @@ inboxesRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = telegramConnectSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const workspaceId = c.get('workspaceId') as string;
     const actorId = c.get('userId');
@@ -340,16 +345,19 @@ inboxesRouter.post(
       metadata: { botUsername: botInfo.username },
     });
 
-    return c.json({
-      inbox: {
-        id: inbox.id,
-        name: inbox.name,
-        type: inbox.type,
-        status: 'CONNECTED',
-        botUsername: botInfo.username,
-        botName: botInfo.first_name,
+    return c.json(
+      {
+        inbox: {
+          id: inbox.id,
+          name: inbox.name,
+          type: inbox.type,
+          status: 'CONNECTED',
+          botUsername: botInfo.username,
+          botName: botInfo.first_name,
+        },
       },
-    }, 201);
+      201,
+    );
   },
 );
 
@@ -417,7 +425,8 @@ inboxesRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = emailConnectSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const workspaceId = c.get('workspaceId') as string;
     const actorId = c.get('userId');
@@ -562,7 +571,8 @@ inboxesRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = webchatConnectSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const workspaceId = c.get('workspaceId') as string;
     const actorId = c.get('userId');
@@ -592,8 +602,7 @@ inboxesRouter.post(
       metadata: { widgetSlug },
     });
 
-    const baseUrl =
-      env.PUBLIC_API_URL || env.APP_URL || '';
+    const baseUrl = env.PUBLIC_API_URL || env.APP_URL || '';
     const appBase = env.APP_URL || baseUrl;
 
     return c.json(
@@ -727,10 +736,7 @@ inboxesRouter.post(
 
     // Publica comando pro worker iniciar sessão
     const { redis } = await import('../redis.js');
-    await redis.publish(
-      'worker:commands',
-      JSON.stringify({ cmd: 'session.start', inboxId: id }),
-    );
+    await redis.publish('worker:commands', JSON.stringify({ cmd: 'session.start', inboxId: id }));
     return c.json({ ok: true, status: 'requested' });
   },
 );

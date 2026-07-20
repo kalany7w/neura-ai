@@ -17,11 +17,7 @@ export const s3 = new S3Client({
 
 export const BUCKET = env.MINIO_BUCKET;
 
-export async function putMedia(
-  key: string,
-  buffer: Buffer,
-  contentType: string,
-): Promise<string> {
+export async function putMedia(key: string, buffer: Buffer, contentType: string): Promise<string> {
   await s3.send(
     new PutObjectCommand({
       Bucket: BUCKET,

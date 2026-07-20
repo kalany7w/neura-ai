@@ -75,9 +75,13 @@ export default function SlaPage() {
   function scopeLabel(p: SlaPolicy): string {
     if (p.scope === 'default') return t('settings_sla.scope_default');
     if (p.scope === 'inbox')
-      return t('settings_sla.scope_inbox', { name: inboxMap.get(p.scopeId ?? '') ?? p.scopeId ?? '' });
+      return t('settings_sla.scope_inbox', {
+        name: inboxMap.get(p.scopeId ?? '') ?? p.scopeId ?? '',
+      });
     if (p.scope === 'label')
-      return t('settings_sla.scope_label', { name: labelMap.get(p.scopeId ?? '')?.name ?? p.scopeId ?? '' });
+      return t('settings_sla.scope_label', {
+        name: labelMap.get(p.scopeId ?? '')?.name ?? p.scopeId ?? '',
+      });
     return p.scope;
   }
 
@@ -408,7 +412,11 @@ function SlaPolicyDialog({
               {t('action.cancel')}
             </Button>
             <Button onClick={submit} disabled={submitting || !name.trim()}>
-              {submitting ? t('action.saving') : editing ? t('action.save') : t('settings_sla.create_policy')}
+              {submitting
+                ? t('action.saving')
+                : editing
+                  ? t('action.save')
+                  : t('settings_sla.create_policy')}
             </Button>
           </div>
         </div>

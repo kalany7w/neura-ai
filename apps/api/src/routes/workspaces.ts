@@ -128,7 +128,8 @@ workspacesRouter.patch(
     const actorId = c.get('userId');
     const body = await c.req.json().catch(() => null);
     const parsed = patchSettingsSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const ws = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -208,11 +209,7 @@ workspacesRouter.get('/me/presence', requireAuth, requireWorkspace, async (c) =>
   const minScore = Date.now() - PRESENCE_TTL_MS;
   // Limpa scores velhos antes de listar (housekeeping leve, fire-and-forget)
   void redis.zremrangebyscore(`presence:agents:${workspaceId}`, 0, minScore - 1);
-  const online = await redis.zrangebyscore(
-    `presence:agents:${workspaceId}`,
-    minScore,
-    '+inf',
-  );
+  const online = await redis.zrangebyscore(`presence:agents:${workspaceId}`, minScore, '+inf');
   return c.json({ online });
 });
 
@@ -223,9 +220,7 @@ workspacesRouter.get('/me/mention-targets', requireAuth, requireWorkspace, async
     where: { workspaceId },
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
   });
-  const targets = buildMentionTargets(
-    members.map((m) => ({ userId: m.userId, user: m.user })),
-  );
+  const targets = buildMentionTargets(members.map((m) => ({ userId: m.userId, user: m.user })));
   // Enriquece com avatar pro picker
   const userMap = new Map(members.map((m) => [m.userId, m.user]));
   return c.json({
@@ -426,7 +421,8 @@ workspacesRouter.patch(
 
     const body = await c.req.json().catch(() => null);
     const parsed = patchMemberSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const target = await prisma.membership.findUnique({
       where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
@@ -439,7 +435,10 @@ workspacesRouter.patch(
         where: { workspaceId, role: 'ADMIN' },
       });
       if (adminCount <= 1) {
-        return c.json({ error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' }, 409);
+        return c.json(
+          { error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' },
+          409,
+        );
       }
     }
 
@@ -480,7 +479,10 @@ workspacesRouter.delete(
         where: { workspaceId, role: 'ADMIN' },
       });
       if (adminCount <= 1) {
-        return c.json({ error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' }, 409);
+        return c.json(
+          { error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' },
+          409,
+        );
       }
     }
 

@@ -2,14 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Download,
-  FileSpreadsheet,
-  Upload,
-  X,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
@@ -40,7 +33,10 @@ interface ParsedRow {
 const E164 = /^\+\d{8,15}$/;
 
 function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.replaceAll('\r\n', '\n').split('\n').filter((l) => l.trim() !== '');
+  const lines = text
+    .replaceAll('\r\n', '\n')
+    .split('\n')
+    .filter((l) => l.trim() !== '');
   if (lines.length === 0) return { headers: [], rows: [] };
   const split = (line: string): string[] => {
     // Suporta vírgula ou ponto-e-vírgula como separador
@@ -123,9 +119,16 @@ export function ImportContactsDialog({
 
       // Detecta colunas — aceita phoneNumber, phone, telefone, fone, número
       const phoneIdx = headers.findIndex((h) =>
-        ['phonenumber', 'phone', 'telefone', 'fone', 'numero', 'número', 'celular', 'whatsapp'].includes(
-          h,
-        ),
+        [
+          'phonenumber',
+          'phone',
+          'telefone',
+          'fone',
+          'numero',
+          'número',
+          'celular',
+          'whatsapp',
+        ].includes(h),
       );
       const nameIdx = headers.findIndex((h) =>
         ['name', 'nome', 'contato', 'contact', 'fullname'].includes(h),
@@ -169,7 +172,11 @@ export function ImportContactsDialog({
       toast.success(t('c_contacts_import_contacts_dialog.toast_imported', { n: res.imported }));
       await qc.invalidateQueries({ queryKey: ['contacts'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t('c_contacts_import_contacts_dialog.toast_import_error'));
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('c_contacts_import_contacts_dialog.toast_import_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -205,17 +212,33 @@ export function ImportContactsDialog({
             <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                <h3 className="font-semibold">{t('c_contacts_import_contacts_dialog.import_done')}</h3>
+                <h3 className="font-semibold">
+                  {t('c_contacts_import_contacts_dialog.import_done')}
+                </h3>
               </div>
               <div className="grid grid-cols-3 gap-3 text-sm">
-                <Stat label={t('c_contacts_import_contacts_dialog.stat_imported')} value={result.imported} color="text-emerald-700" />
-                <Stat label={t('c_contacts_import_contacts_dialog.stat_skipped')} value={result.skipped} color="text-slate-600" />
-                <Stat label={t('c_contacts_import_contacts_dialog.stat_total')} value={result.total} color="text-foreground" />
+                <Stat
+                  label={t('c_contacts_import_contacts_dialog.stat_imported')}
+                  value={result.imported}
+                  color="text-emerald-700"
+                />
+                <Stat
+                  label={t('c_contacts_import_contacts_dialog.stat_skipped')}
+                  value={result.skipped}
+                  color="text-slate-600"
+                />
+                <Stat
+                  label={t('c_contacts_import_contacts_dialog.stat_total')}
+                  value={result.total}
+                  color="text-foreground"
+                />
               </div>
               {result.errors.length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs text-destructive">
-                    {t('c_contacts_import_contacts_dialog.errors_summary', { n: result.errors.length })}
+                    {t('c_contacts_import_contacts_dialog.errors_summary', {
+                      n: result.errors.length,
+                    })}
                   </summary>
                   <ul className="mt-2 max-h-32 overflow-y-auto rounded-md border bg-background p-2 text-[11px]">
                     {result.errors.map((e, i) => (
@@ -251,7 +274,9 @@ export function ImportContactsDialog({
                 className="cursor-pointer rounded-lg border-2 border-dashed bg-muted/20 px-6 py-10 text-center hover:bg-muted/40"
               >
                 <FileSpreadsheet className="mx-auto h-10 w-10 text-muted-foreground" />
-                <p className="mt-3 font-semibold">{t('c_contacts_import_contacts_dialog.dropzone')}</p>
+                <p className="mt-3 font-semibold">
+                  {t('c_contacts_import_contacts_dialog.dropzone')}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {t('c_contacts_import_contacts_dialog.max_rows')}
                 </p>
@@ -340,7 +365,9 @@ export function ImportContactsDialog({
                 </table>
                 {parsedRows.length > 100 && (
                   <p className="border-t bg-muted/30 p-2 text-center text-[11px] text-muted-foreground">
-                    {t('c_contacts_import_contacts_dialog.showing_first', { total: parsedRows.length })}
+                    {t('c_contacts_import_contacts_dialog.showing_first', {
+                      total: parsedRows.length,
+                    })}
                   </p>
                 )}
               </div>

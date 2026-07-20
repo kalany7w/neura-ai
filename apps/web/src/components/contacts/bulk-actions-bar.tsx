@@ -80,23 +80,24 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           <DropdownMenuLabel>{t('c_contacts_bulk_actions_bar.apply')}</DropdownMenuLabel>
           {labels.length === 0 ? (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">{t('c_contacts_bulk_actions_bar.no_labels')}</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t('c_contacts_bulk_actions_bar.no_labels')}
+            </p>
           ) : (
             labels.map((l) => (
               <DropdownMenuItem
                 key={l.id}
                 onSelect={() => run({ action: 'apply_label', labelId: l.id })}
               >
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: l.color }}
-                />
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: l.color }} />
                 {l.name}
               </DropdownMenuItem>
             ))
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuLabel>{t('c_contacts_bulk_actions_bar.remove_label_header')}</DropdownMenuLabel>
+          <DropdownMenuLabel>
+            {t('c_contacts_bulk_actions_bar.remove_label_header')}
+          </DropdownMenuLabel>
           {labels.map((l) => (
             <DropdownMenuItem
               key={`u-${l.id}`}
@@ -112,12 +113,22 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Button size="sm" variant="ghost" onClick={remove} title={t('c_contacts_bulk_actions_bar.delete_selected')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={remove}
+        title={t('c_contacts_bulk_actions_bar.delete_selected')}
+      >
         <Trash2 className="h-3.5 w-3.5 text-destructive" />
       </Button>
 
       <div className="ml-2 h-5 w-px bg-border" />
-      <Button size="sm" variant="ghost" onClick={onClear} title={t('c_contacts_bulk_actions_bar.clear_selection')}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onClear}
+        title={t('c_contacts_bulk_actions_bar.clear_selection')}
+      >
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>
