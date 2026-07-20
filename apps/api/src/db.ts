@@ -1,6 +1,7 @@
 import { prisma as basePrisma } from '@neura/database';
 import { tenantContext } from './tenant-context.js';
 import { logger } from './logger.js';
+import { GUARDED_MODELS, LIST_OPS, hasWorkspaceScope } from './tenant-scope.js';
 
 /**
  * Guard de isolamento multi-tenant (defense-in-depth).
@@ -12,65 +13,12 @@ import { logger } from './logger.js';
  * direto nem via relação), loga um aviso. Em prod é só log (nunca quebra); com
  * TENANT_STRICT=true (CI/dev) lança — pra pegar o bug cedo, quando os avisos
  * estiverem limpos.
+ *
+ * A heurística (GUARDED_MODELS/LIST_OPS/hasWorkspaceScope) vive em tenant-scope.ts
+ * (puro, testável sem infra).
  */
 
-// Modelos com coluna workspaceId cujas listagens DEVEM scopear. Excluídos:
-// Membership/Invite (acessados por userId/token), ApiKey/WaAuthKey (auth/worker,
-// fora de request de workspace).
-const GUARDED_MODELS = new Set<string>([
-  'AuditLog',
-  'AutomationRule',
-  'AutomationRun',
-  'CalendarEvent',
-  'Card',
-  'CardNote',
-  'Contact',
-  'Conversation',
-  'ConversationNote',
-  'CsatResponse',
-  'CsatSurvey',
-  'CustomAttributeDef',
-  'Funnel',
-  'InboundWebhook',
-  'Inbox',
-  'KbArticle',
-  'KbCategory',
-  'Label',
-  'MessageTemplate',
-  'Notification',
-  'SavedFilter',
-  'ScheduledMessage',
-  'SlaPolicy',
-  'Webhook',
-  'WelcomeFlow',
-]);
-
-// Operações que retornam/afetam MÚLTIPLOS registros — onde a falta de scope
-// vaza dados de outros tenants. findUnique/create ficam de fora (por chave única
-// ou já têm workspaceId no data).
-const LIST_OPS = new Set<string>([
-  'findMany',
-  'findFirst',
-  'findFirstOrThrow',
-  'updateMany',
-  'deleteMany',
-  'count',
-  'aggregate',
-  'groupBy',
-]);
-
 const STRICT = process.env.TENANT_STRICT === 'true';
-
-/** Recursivo: o `where` menciona workspaceId em qualquer nível (direto/relação/AND/OR)? */
-function hasWorkspaceScope(where: unknown): boolean {
-  if (!where || typeof where !== 'object') return false;
-  if (Array.isArray(where)) return where.some(hasWorkspaceScope);
-  for (const [k, v] of Object.entries(where as Record<string, unknown>)) {
-    if (k === 'workspaceId') return true;
-    if (v && typeof v === 'object' && hasWorkspaceScope(v)) return true;
-  }
-  return false;
-}
 
 const extended = basePrisma.$extends({
   name: 'tenant-isolation-guard',
