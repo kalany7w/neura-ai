@@ -56,6 +56,7 @@ import { telegramOutboundWorker } from './telegram-outbound.js';
 import { emailOutboundWorker } from './email-outbound.js';
 import { csatWorker } from './csat-worker.js';
 import { welcomeWorker } from './welcome-worker.js';
+import { webhookWorker } from './webhook-worker.js';
 import { startWelcomeScheduler } from './welcome-scheduler.js';
 import { sendAlert } from './services/alert.js';
 import { registry, metricsMiddleware } from './metrics.js';
@@ -213,5 +214,6 @@ void telegramOutboundWorker;
 void emailOutboundWorker;
 void csatWorker;
 void welcomeWorker;
+void webhookWorker;
 
 export { app };
