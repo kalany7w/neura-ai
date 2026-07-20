@@ -81,7 +81,21 @@ export default function DashboardPage() {
   });
 
   if (isLoading || !data) {
-    return <p className="text-sm text-muted-foreground">{t('dashboard.loading')}</p>;
+    return (
+      <div className="space-y-6" aria-busy="true" aria-label={t('dashboard.loading')}>
+        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-lg border bg-muted/40" />
+          ))}
+        </div>
+        <div className="h-64 animate-pulse rounded-lg border bg-muted/40" />
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="h-40 animate-pulse rounded-lg border bg-muted/40 lg:col-span-2" />
+          <div className="h-40 animate-pulse rounded-lg border bg-muted/40" />
+        </div>
+      </div>
+    );
   }
 
   const { inbox, workspace, pipeline, recentConversations } = data;

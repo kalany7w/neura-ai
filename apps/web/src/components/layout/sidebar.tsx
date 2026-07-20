@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   MessageCircle,
@@ -151,6 +152,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
   const role = workspace?.role;
   const hasMultiple = (workspaces?.length ?? 0) > 1;
   const { t } = useT();
+  const queryClient = useQueryClient();
 
   async function switchWorkspace(wsId: string) {
     if (wsId === activeWorkspaceId) return;
@@ -160,8 +162,9 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
         body: JSON.stringify({ workspaceId: wsId }),
       });
       toast.success(t('workspace.switched'));
+      // Limpa o cache (dados são por-workspace) e revalida — sem reload de página.
+      queryClient.clear();
       router.refresh();
-      window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('workspace.switch_error'));
     }
