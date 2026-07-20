@@ -97,6 +97,7 @@ export function NotificationsBell() {
           type="button"
           className="relative rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
           title={t('c_layout_notifications_bell.title')}
+          aria-label={t('c_layout_notifications_bell.title')}
         >
           <Bell className="h-5 w-5" />
           {unread > 0 && (
