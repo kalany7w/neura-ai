@@ -31,6 +31,10 @@ describe('assertHostnameAllowed', () => {
     'http://[fc00::1]/x', // ULA v6
     'http://[fe80::1]/x', // link-local v6
     'http://[2001:db8::1]/x', // documentação v6
+    'http://[::ffff:10.0.0.1]/x', // IPv4-mapped privado (normaliza pra ::ffff:a00:1)
+    'http://[::ffff:169.254.169.254]/x', // IPv4-mapped metadata do cloud
+    'http://[::ffff:192.168.0.1]/x', // IPv4-mapped LAN
+    'http://[64:ff9b::10.0.0.1]/x', // NAT64 embutindo IP privado
     'ftp://example.com/x', // esquema não-http
     'redis://10.0.0.1:6379', // esquema não-http
   ];
@@ -48,6 +52,7 @@ describe('assertHostnameAllowed', () => {
     'http://172.15.0.1/x', // fora do range 172.16-31
     'http://172.32.0.1/x',
     'http://[2606:4700:4700::1111]/x', // IPv6 público (Cloudflare DNS)
+    'http://[::ffff:8.8.8.8]/x', // IPv4-mapped de IP público → permitido
   ];
   for (const url of allowed) {
     it(`permite ${url}`, () => {

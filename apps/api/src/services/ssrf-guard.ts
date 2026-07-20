@@ -40,13 +40,31 @@ function isPrivateIPv4(ip: string): boolean {
   return false;
 }
 
+/**
+ * Extrai o IPv4 embutido num IPv6 mapeado/traduzido: IPv4-mapped `::ffff:…` (na
+ * forma decimal `::ffff:a.b.c.d` OU hex `::ffff:XXXX:YYYY` — que é como `new URL()`
+ * normaliza a decimal) e NAT64 `64:ff9b::…`. Retorna null se não houver IPv4 embutido.
+ * Sem isso, `http://[::ffff:10.0.0.1]/` (normalizado pra `::ffff:a00:1`) furava o guard.
+ */
+function embeddedIPv4(lowerV6: string): string | null {
+  const dec = lowerV6.match(/^(?:::ffff:|64:ff9b::)(\d+\.\d+\.\d+\.\d+)$/);
+  if (dec) return dec[1]!;
+  const hex = lowerV6.match(/^(?:::ffff:|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1]!, 16);
+    const lo = parseInt(hex[2]!, 16);
+    return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+  }
+  return null;
+}
+
 /** Retorna true se o IPv6 cai num range privado/reservado. */
 function isPrivateIPv6(ip: string): boolean {
   const lower = ip.toLowerCase();
   if (lower === '::1' || lower === '::') return true; // loopback / unspecified
-  // IPv4-mapped (::ffff:a.b.c.d) → checa o IPv4 embutido
-  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIPv4(mapped[1]!);
+  // IPv4 embutido (mapped ::ffff:… decimal/hex, ou NAT64 64:ff9b::…) → checa o IPv4
+  const embedded = embeddedIPv4(lower);
+  if (embedded) return isPrivateIPv4(embedded);
   if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7 ULA
   if (lower.startsWith('fe80')) return true; // link-local
   if (lower.startsWith('2001:db8')) return true; // documentação
