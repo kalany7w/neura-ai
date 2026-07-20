@@ -1,5 +1,8 @@
 import { createHmac } from 'node:crypto';
+import { Queue, UnrecoverableError } from 'bullmq';
+import { Redis } from 'ioredis';
 import { prisma } from '../db.js';
+import { env } from '../env.js';
 import { logger } from '../logger.js';
 import { assertPublicUrl } from './ssrf-guard.js';
 
@@ -28,17 +31,54 @@ interface DispatchPayload {
   data: Record<string, unknown>;
 }
 
+export const QUEUE_WEBHOOK = 'webhook';
+
+export interface WebhookJob {
+  webhookId: string;
+  url: string;
+  secret: string | null;
+  event: string;
+  body: string;
+}
+
+// Conexão dedicada (BullMQ exige maxRetriesPerRequest=null). Fila própria pra não
+// criar ciclo de import com queue.ts (que importa redis-pub → webhooks).
+const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
+
+/**
+ * Fila de entrega de webhooks — com retry + backoff. O failed set do BullMQ
+ * funciona como DLQ (14 dias / últimos 1000): inspecionável e reprocessável.
+ */
+export const webhookQueue = new Queue<WebhookJob>(QUEUE_WEBHOOK, {
+  connection: bullConnection,
+  defaultJobOptions: {
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 3_000 },
+    removeOnComplete: { age: 60 * 60, count: 1_000 },
+    removeOnFail: { age: 14 * 24 * 60 * 60, count: 1_000 },
+  },
+});
+
 function sign(secret: string, body: string): string {
   return createHmac('sha256', secret).update(body).digest('hex');
 }
 
-async function fireOne(
-  webhookId: string,
-  url: string,
-  secret: string | null,
-  body: string,
-  event: string,
-): Promise<{ ok: boolean; status: number; error?: string }> {
+/**
+ * Entrega UMA notificação. Consumido pelo webhook-worker. LANÇA em falha pra o
+ * BullMQ retentar; SSRF é erro PERMANENTE (UnrecoverableError → não retenta).
+ * Em sucesso, atualiza o webhook (limpa lastError).
+ */
+export async function deliverWebhook(job: WebhookJob): Promise<void> {
+  const { webhookId, url, secret, body, event } = job;
+
+  try {
+    await assertPublicUrl(url);
+  } catch (err) {
+    throw new UnrecoverableError(
+      `SSRF bloqueado: ${err instanceof Error ? err.message : 'destino inválido'}`,
+    );
+  }
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Neura-Event': event,
@@ -46,33 +86,25 @@ async function fireOne(
   };
   if (secret) headers['X-Neura-Signature'] = 'sha256=' + sign(secret, body);
 
-  // Guarda SSRF: resolve DNS e rejeita se o destino for interno/privado.
-  try {
-    await assertPublicUrl(url);
-  } catch (err) {
-    return { ok: false, status: 0, error: err instanceof Error ? err.message : 'blocked' };
-  }
-
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10_000);
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body,
-      signal: ctrl.signal,
-    });
-    return { ok: res.ok, status: res.status };
-  } catch (err) {
-    return { ok: false, status: 0, error: err instanceof Error ? err.message : 'unknown' };
+    const res = await fetch(url, { method: 'POST', headers, body, signal: ctrl.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await prisma.webhook
+      .update({
+        where: { id: webhookId },
+        data: { lastFiredAt: new Date(), lastStatus: res.status, lastError: null },
+      })
+      .catch(() => {});
   } finally {
     clearTimeout(t);
   }
 }
 
 /**
- * Dispara o evento pra todos os webhooks ativos do workspace que assinam este evento.
- * Fire-and-forget — não bloqueia o request principal.
+ * Enfileira o evento pra todos os webhooks ativos do workspace que o assinam.
+ * Cada webhook vira um job independente (retry/DLQ por-entrega). Fire-and-forget.
  */
 export function dispatchWebhook(payload: DispatchPayload): void {
   setImmediate(async () => {
@@ -94,20 +126,18 @@ export function dispatchWebhook(payload: DispatchPayload): void {
       });
 
       await Promise.all(
-        hooks.map(async (h) => {
-          const result = await fireOne(h.id, h.url, h.secret, body, payload.event);
-          await prisma.webhook.update({
-            where: { id: h.id },
-            data: {
-              lastFiredAt: new Date(),
-              lastStatus: result.status,
-              lastError: result.ok ? null : (result.error ?? `HTTP ${result.status}`),
-            },
-          });
-        }),
+        hooks.map((h) =>
+          webhookQueue.add('deliver', {
+            webhookId: h.id,
+            url: h.url,
+            secret: h.secret,
+            event: payload.event,
+            body,
+          }),
+        ),
       );
     } catch (err) {
-      logger.error({ err, event: payload.event }, 'webhook dispatch failed');
+      logger.error({ err, event: payload.event }, 'webhook enqueue failed');
     }
   });
 }

@@ -6,7 +6,7 @@ import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
-import { WEBHOOK_EVENTS } from '../services/webhooks.js';
+import { WEBHOOK_EVENTS, webhookQueue } from '../services/webhooks.js';
 import { assertHostnameAllowed, SsrfBlockedError } from '../services/ssrf-guard.js';
 
 export const integrationsRouter = new Hono<{
@@ -379,5 +379,61 @@ integrationsRouter.post(
     } finally {
       clearTimeout(t);
     }
+  },
+);
+
+// GET /api/integrations/webhooks/dlq — entregas que esgotaram os retries (DLQ),
+// filtradas pros webhooks deste workspace.
+integrationsRouter.get(
+  '/webhooks/dlq',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.read'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const wsHooks = await prisma.webhook.findMany({ where: { workspaceId }, select: { id: true } });
+    const wsIds = new Set(wsHooks.map((w) => w.id));
+    const failed = await webhookQueue.getFailed(0, 200);
+    const jobs = failed
+      .filter((j) => wsIds.has(j.data.webhookId))
+      .map((j) => ({
+        jobId: j.id,
+        webhookId: j.data.webhookId,
+        event: j.data.event,
+        reason: j.failedReason,
+        attempts: j.attemptsMade,
+        failedAt: j.finishedOn ? new Date(j.finishedOn).toISOString() : null,
+      }));
+    return c.json({ failed: jobs, total: jobs.length });
+  },
+);
+
+// POST /api/integrations/webhooks/dlq/retry — reprocessa os falhados do workspace.
+integrationsRouter.post(
+  '/webhooks/dlq/retry',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const wsHooks = await prisma.webhook.findMany({ where: { workspaceId }, select: { id: true } });
+    const wsIds = new Set(wsHooks.map((w) => w.id));
+    const failed = await webhookQueue.getFailed(0, 500);
+    let retried = 0;
+    for (const j of failed) {
+      if (wsIds.has(j.data.webhookId)) {
+        await j.retry();
+        retried++;
+      }
+    }
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'webhook.dlq_retried',
+      resource: `Workspace:${workspaceId}`,
+      metadata: { retried },
+    });
+    return c.json({ retried });
   },
 );
