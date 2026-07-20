@@ -30,6 +30,7 @@ describe('assertHostnameAllowed', () => {
     'http://[::1]/x', // loopback v6
     'http://[fc00::1]/x', // ULA v6
     'http://[fe80::1]/x', // link-local v6
+    'http://[2001:db8::1]/x', // documentação v6
     'ftp://example.com/x', // esquema não-http
     'redis://10.0.0.1:6379', // esquema não-http
   ];
@@ -46,6 +47,7 @@ describe('assertHostnameAllowed', () => {
     'https://api.stripe.com/v1/webhooks',
     'http://172.15.0.1/x', // fora do range 172.16-31
     'http://172.32.0.1/x',
+    'http://[2606:4700:4700::1111]/x', // IPv6 público (Cloudflare DNS)
   ];
   for (const url of allowed) {
     it(`permite ${url}`, () => {
@@ -87,5 +89,15 @@ describe('assertPublicUrl', () => {
       { address: '127.0.0.1', family: 4 },
     ]);
     await expect(assertPublicUrl('https://mixed.example.com/x')).rejects.toThrow(SsrfBlockedError);
+  });
+
+  it('bloqueia se o DNS não retornar endereços', async () => {
+    lookupMock.mockResolvedValue([]);
+    await expect(assertPublicUrl('https://empty.example.com/x')).rejects.toThrow(SsrfBlockedError);
+  });
+
+  it('bloqueia se o DNS retornar algo que não é IP (fail-closed)', async () => {
+    lookupMock.mockResolvedValue([{ address: 'not-an-ip', family: 4 }]);
+    await expect(assertPublicUrl('https://weird.example.com/x')).rejects.toThrow(SsrfBlockedError);
   });
 });
