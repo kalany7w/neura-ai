@@ -66,7 +66,7 @@ export default function CalendarPage() {
   const activeWorkspaceId = wsData?.activeWorkspaceId ?? null;
   const activeWorkspace = wsData?.workspaces.find((w) => w.id === activeWorkspaceId);
 
-  const { data } = useQuery<{ events: CalEvent[] }>({
+  const { data, isLoading } = useQuery<{ events: CalEvent[] }>({
     // activeWorkspaceId na key: troca de empresa → nova key → refetch limpo
     // (não mostra eventos da empresa anterior nem que por 1 frame).
     queryKey: ['calendar', activeWorkspaceId, year, month],
@@ -108,6 +108,19 @@ export default function CalendarPage() {
   const weekdays = lang === 'es'
     ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
     : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  if (isLoading && !data) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border">
+          {Array.from({ length: 42 }).map((_, i) => (
+            <div key={i} className="min-h-24 animate-pulse bg-muted/40" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
