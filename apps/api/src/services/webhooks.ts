@@ -4,7 +4,7 @@ import { Redis } from 'ioredis';
 import { prisma } from '../db.js';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
-import { assertPublicUrl } from './ssrf-guard.js';
+import { assertPublicUrl, ssrfSafeFetch } from './ssrf-guard.js';
 
 export const WEBHOOK_EVENTS = [
   'message.new',
@@ -91,7 +91,8 @@ export async function deliverWebhook(job: WebhookJob): Promise<void> {
   try {
     // redirect: 'manual' — seguir redirect re-abriria a porta de SSRF (um host
     // público validado pode responder 302 pra IP interno/metadata sem re-validação).
-    const res = await fetch(url, {
+    // ssrfSafeFetch — re-valida os IPs na conexão (anti DNS rebinding).
+    const res = await ssrfSafeFetch(url, {
       method: 'POST',
       headers,
       body,

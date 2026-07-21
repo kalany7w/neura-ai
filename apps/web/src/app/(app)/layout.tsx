@@ -12,7 +12,7 @@ import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { DesktopNotificationsProvider } from '@/components/desktop-notifications-provider';
 import { OfflineBanner } from '@/components/offline-banner';
-import { I18nProvider } from '@/lib/i18n';
+import { I18nProvider, useT } from '@/lib/i18n';
 
 interface WorkspaceListItem {
   id: string;
@@ -20,6 +20,21 @@ interface WorkspaceListItem {
   slug: string;
   role: 'ADMIN' | 'SUPERVISOR' | 'AGENT';
   currency?: string;
+}
+
+// Componente separado pra poder usar useT (o I18nProvider é montado pelo AppLayout).
+function MobileMenuButton({ onOpen }: { onOpen: () => void }) {
+  const { t } = useT();
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-md p-1.5 hover:bg-muted lg:hidden"
+      aria-label={t('layout.open_menu')}
+    >
+      <Menu className="h-5 w-5" />
+    </button>
+  );
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -33,6 +48,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  // Drawer aberto: Esc fecha e o body não rola por trás (scroll-lock).
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileNavOpen]);
 
   const { data: workspaces, isLoading: workspacesLoading } = useQuery<{
     workspaces: WorkspaceListItem[];
@@ -115,14 +145,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <OfflineBanner />
             <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <button
-                  type="button"
-                  onClick={() => setMobileNavOpen(true)}
-                  className="rounded-md p-1.5 hover:bg-muted lg:hidden"
-                  aria-label="Abrir menu"
-                >
-                  <Menu className="h-5 w-5" />
-                </button>
+                <MobileMenuButton onOpen={() => setMobileNavOpen(true)} />
                 <GlobalSearch />
               </div>
               <NotificationsBell />

@@ -7,7 +7,7 @@ import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.j
 import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
 import { WEBHOOK_EVENTS, webhookQueue } from '../services/webhooks.js';
-import { assertHostnameAllowed, SsrfBlockedError } from '../services/ssrf-guard.js';
+import { assertHostnameAllowed, SsrfBlockedError, ssrfSafeFetch } from '../services/ssrf-guard.js';
 
 export const integrationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -345,6 +345,7 @@ integrationsRouter.post(
     try {
       const { assertPublicUrl } = await import('../services/ssrf-guard.js');
       await assertPublicUrl(webhook.url);
+      // (o fetch abaixo usa ssrfSafeFetch — re-validação dos IPs na conexão)
     } catch (err) {
       const errMsg = err instanceof SsrfBlockedError ? err.message : 'blocked';
       return c.json({ ok: false, status: 0, error: errMsg }, 400);
@@ -355,7 +356,7 @@ integrationsRouter.post(
     try {
       // redirect: 'manual' — mesma razão do dispatch real: seguir redirect
       // contornaria o assertPublicUrl (302 pra IP interno/metadata).
-      const res = await fetch(webhook.url, {
+      const res = await ssrfSafeFetch(webhook.url, {
         method: 'POST',
         headers,
         body,
@@ -396,7 +397,9 @@ integrationsRouter.get(
   '/webhooks/dlq',
   requireAuth,
   requireWorkspace,
-  requirePermission('workspace.read'),
+  // workspace.update (ADMIN) — webhooks são infra do workspace; AGENT não deve
+  // enumerar entregas falhadas (metadata de integrações). Igual ao retry.
+  requirePermission('workspace.update'),
   async (c) => {
     const workspaceId = c.get('workspaceId') as string;
     const wsHooks = await prisma.webhook.findMany({ where: { workspaceId }, select: { id: true } });

@@ -14,11 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const schema = z.object({
-  name: z.string().min(2).max(80),
+  name: z.string().min(2, 'validation.name_short').max(80, 'validation.name_long'),
   slug: z
     .string()
-    .min(2)
-    .max(40)
+    .min(2, 'validation.name_short')
+    .max(40, 'validation.name_long')
     .regex(/^[a-z0-9-]+$/, 'validation.slug_chars'),
 });
 type Input = z.infer<typeof schema>;

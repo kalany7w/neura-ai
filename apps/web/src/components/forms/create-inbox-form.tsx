@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { WelcomeFlowWizardDialog } from '@/components/inbox/welcome-flow-wizard-dialog';
 
 const schema = z.object({
-  name: z.string().min(1).max(80),
+  name: z.string().min(1, 'validation.name_required').max(80, 'validation.name_long'),
 });
 type Input = z.infer<typeof schema>;
 

@@ -831,6 +831,11 @@ kanbanRouter.post(
       include: { stage: { select: { name: true, outcome: true } } },
     });
     if (!card) return c.json({ error: 'not_found' }, 404);
+    // AGENT só enxerga cards atribuídos a ele (card.read_assigned) — sem este
+    // guard podia gastar IA em qualquer card do workspace.
+    if (c.get('role') === 'AGENT' && card.assignedAgentId !== c.get('userId')) {
+      return c.json({ error: 'permission_denied' }, 403);
+    }
 
     let contactName: string | null = null;
     let messages: Array<{
