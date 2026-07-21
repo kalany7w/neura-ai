@@ -2,6 +2,11 @@
 # Sobe à parte do app. Pra o Prometheus alcançar a API por 'api:7301', conecte
 # na rede do compose principal (ver README) ou ajuste o target em
 # prometheus/prometheus.yml pro host/IP correto.
+#
+# SEGURANÇA: nenhum serviço expõe porta pública. O Prometheus não tem auth
+# nenhuma e o Grafana guarda as métricas do negócio — na VPS, o acesso ao
+# Grafana é via Coolify/Caddy (domínio + HTTPS), nunca por porta no host.
+# Localmente, o Grafana fica em loopback 127.0.0.1:7621.
 services:
   prometheus:
     image: prom/prometheus:v3.1.0
@@ -12,25 +17,30 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=15d'
-    ports:
-      - '9090:9090'
+    # SEM ports: — só o Grafana consome (http://prometheus:9090 via rede Docker).
 
   grafana:
     image: grafana/grafana:11.4.0
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # Obrigatória — sem default. `admin/admin` acessível é conta admin aberta.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?defina GRAFANA_PASSWORD antes de subir o monitoring}
       GF_USERS_ALLOW_SIGN_UP: 'false'
       # Interpolado nos contact points de alerta (provisioning/alerting). Mesmo
       # webhook Discord/Slack do ALERT_WEBHOOK_URL do app.
-      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Placeholder default: URL vazia é erro FATAL de provisioning (Grafana
+      # crash-loopa). O placeholder passa na validação e só 404a se um alerta
+      # disparar antes de configurar o webhook real.
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-https://discord.com/api/webhooks/0/placeholder-configure-me}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports:
-      - '3000:3000'
+      # Loopback + porta alta não-padrão (registrada no port registry). Na VPS,
+      # preferir remover e rotear via Coolify Caddy com domínio.
+      - '127.0.0.1:7621:3000'
     depends_on:
       - prometheus
 

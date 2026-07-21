@@ -89,7 +89,18 @@ export async function deliverWebhook(job: WebhookJob): Promise<void> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10_000);
   try {
-    const res = await fetch(url, { method: 'POST', headers, body, signal: ctrl.signal });
+    // redirect: 'manual' — seguir redirect re-abriria a porta de SSRF (um host
+    // público validado pode responder 302 pra IP interno/metadata sem re-validação).
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body,
+      signal: ctrl.signal,
+      redirect: 'manual',
+    });
+    if (res.status >= 300 && res.status < 400) {
+      throw new UnrecoverableError(`Redirect (HTTP ${res.status}) não permitido em webhook`);
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     await prisma.webhook
       .update({
