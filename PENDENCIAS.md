@@ -21,8 +21,7 @@ Atualizado em 2026-07-21 (revisão do PR #12 `fix/maju-security-hardening` + fix
       grande de um workspace atrasa os outros. A ordem POR CONVERSA foi resolvida
       (serialização por chat), mas fairness entre inboxes + métrica/alerta de
       profundidade da fila (`getWaitingCount()` no /health) ficam pra depois.
-- [ ] **Duplicação de envio no retry do outbound** (pré-existente): sendMessage OK
-      + update no DB falha → job re-tenta → mensagem duplicada no WhatsApp. Precisa
+- [ ] **Duplicação de envio no retry do outbound** (pré-existente): sendMessage OK + update no DB falha → job re-tenta → mensagem duplicada no WhatsApp. Precisa
       idempotência (marcar job como enviado no Redis antes do update).
 - [ ] **Anúncios de screen reader do dnd-kit em inglês** no kanban (a11y i18n) —
       o coordinateGetter foi corrigido; falta `accessibility={{ announcements }}`
