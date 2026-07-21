@@ -33,6 +33,10 @@ function makeApp(fake: { userId: string; sessionId: string; apiKeyWorkspaceId?: 
 }
 
 beforeAll(async () => {
+  // welcomeFlow primeiro (cascata pra welcome_options, que tem Restrict pra
+  // label) — sobra de outro arquivo de teste bloqueia o workspace.deleteMany
+  // por FK (mesmo padrão do auto-routing.test.ts).
+  await prisma.welcomeFlow.deleteMany();
   await prisma.session.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.workspace.deleteMany();
