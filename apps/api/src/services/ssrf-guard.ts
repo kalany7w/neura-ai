@@ -127,9 +127,11 @@ export async function assertPublicUrl(rawUrl: string): Promise<void> {
   }
 }
 
+// Assinatura do LookupFunction do undici: address é obrigatório no callback
+// (em erro passamos '' — o valor só é lido quando err é null).
 type LookupCb = (
   err: NodeJS.ErrnoException | null,
-  address?: string | Array<{ address: string; family: number }>,
+  address: string | Array<{ address: string; family: number }>,
   family?: number,
 ) => void;
 
@@ -144,14 +146,14 @@ export const ssrfSafeDispatcher = new Agent({
   connect: {
     lookup(hostname: string, options: { all?: boolean }, callback: LookupCb): void {
       dnsLookupCb(hostname, { all: true, verbatim: true }, (err, addresses) => {
-        if (err) return callback(err);
+        if (err) return callback(err, '');
         const list = addresses as Array<{ address: string; family: number }>;
         if (list.length === 0) {
-          return callback(new SsrfBlockedError('Host sem endereços'));
+          return callback(new SsrfBlockedError('Host sem endereços'), '');
         }
         for (const a of list) {
           if (isPrivateIp(a.address)) {
-            return callback(new SsrfBlockedError('Host resolve pra IP privado/reservado'));
+            return callback(new SsrfBlockedError('Host resolve pra IP privado/reservado'), '');
           }
         }
         if (options.all) return callback(null, list);
