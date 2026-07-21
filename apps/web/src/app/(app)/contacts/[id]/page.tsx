@@ -48,6 +48,7 @@ import {
 import { MentionTextarea, type MentionTarget } from '@/components/ui/mention-textarea';
 import { renderMentions } from '@/lib/render-mentions';
 import { useT, formatMoney, formatDateShort, localeFor, type Lang } from '@/lib/i18n';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 
 interface LabelItem {
   id: string;
@@ -151,6 +152,7 @@ type Tab = 'overview' | 'conversations' | 'cards' | 'notes' | 'journey';
 export default function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { t, lang } = useT();
+  const workspaceCurrency = useWorkspaceCurrency();
   const qc = useQueryClient();
   const router = useRouter();
   const confirm = useConfirm();
@@ -495,7 +497,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   </div>
                   {card.value && Number(card.value) > 0 && (
                     <span className="font-semibold text-emerald-600">
-                      {formatMoney(Number(card.value), lang)}
+                      {formatMoney(Number(card.value), lang, workspaceCurrency)}
                     </span>
                   )}
                 </Link>

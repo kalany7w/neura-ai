@@ -26,6 +26,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useT, formatMoney, formatRelativeTime, localeFor, type Lang } from '@/lib/i18n';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -424,6 +425,7 @@ function CardDetailBody({
             <MetaField icon={TrendingUp} label={t('c_kanban_card_detail_sheet.meta_value')}>
               <ValueEditor
                 value={card.value ? Number(card.value) : null}
+                currency={card.currency ?? undefined}
                 onSave={(v) => patch({ value: v })}
               />
             </MetaField>
@@ -699,12 +701,15 @@ function DescriptionField({ value, onSave }: { value: string; onSave: (v: string
 
 function ValueEditor({
   value,
+  currency,
   onSave,
 }: {
   value: number | null;
+  currency?: string;
   onSave: (v: number | null) => void;
 }) {
   const { t, lang } = useT();
+  const workspaceCurrency = useWorkspaceCurrency();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value?.toString() ?? '');
 
@@ -762,7 +767,9 @@ function ValueEditor({
       className="flex w-full items-center justify-between rounded-md border border-transparent bg-background px-2 py-1.5 text-sm hover:border-input hover:bg-muted/40"
     >
       {value !== null && value > 0 ? (
-        <span className="font-semibold text-emerald-600">{formatMoney(value, lang)}</span>
+        <span className="font-semibold text-emerald-600">
+          {formatMoney(value, lang, currency ?? workspaceCurrency)}
+        </span>
       ) : (
         <span className="text-muted-foreground">{t('c_kanban_card_detail_sheet.no_value')}</span>
       )}

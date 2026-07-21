@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { requireAuth, type AuthVars } from '../middlewares/auth.js';
+import { clientIp } from '../rate-limit.js';
 import { audit } from '../services/audit.js';
 
 export const invitesRouter = new Hono<{ Variables: AuthVars }>();
@@ -16,7 +17,7 @@ invitesRouter.post('/accept', requireAuth, async (c) => {
 
   const userId = c.get('userId');
   const sessionId = c.get('sessionId');
-  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+  const ip = clientIp(c);
   const ua = c.req.header('user-agent');
 
   const user = await prisma.user.findUnique({

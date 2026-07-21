@@ -63,11 +63,28 @@ export const aiLimiter = new RateLimiterRedis({
   blockDuration: 60,
 });
 
+/**
+ * IP do cliente pra chaves de rate limit. Usa o ÚLTIMO hop do x-forwarded-for:
+ * o Caddy/Coolify APPENDA o IP real que ele viu — o primeiro token é fornecido
+ * pelo cliente e é spoofável (rotacionar o header driblaria o bucket).
+ */
+export function clientIp(c: { req: { header(name: string): string | undefined } }): string {
+  const xff = c.req.header('x-forwarded-for');
+  if (xff) {
+    const parts = xff
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last;
+  }
+  return c.req.header('x-real-ip') ?? 'unknown';
+}
+
 export function rateLimit(limiter: RateLimiterRedis) {
   return createMiddleware(async (c, next) => {
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
     try {
-      await limiter.consume(ip);
+      await limiter.consume(clientIp(c));
       await next();
     } catch {
       return c.json({ error: 'rate_limited' }, 429);
