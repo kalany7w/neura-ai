@@ -68,8 +68,18 @@ class RealtimeClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.ws?.close();
-    this.ws = null;
+    if (this.ws) {
+      // Desarma os handlers antes do close: o onclose do socket antigo dispara
+      // assíncrono e, se um connect() novo já rodou (troca de workspace),
+      // clobraria o estado e agendaria um reconnect fantasma.
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    useRealtimeStore.getState().setState('closed');
   }
 
   on(listener: Listener): () => void {

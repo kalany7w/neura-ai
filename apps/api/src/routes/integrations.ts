@@ -353,21 +353,30 @@ integrationsRouter.post(
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 10_000);
     try {
+      // redirect: 'manual' — mesma razão do dispatch real: seguir redirect
+      // contornaria o assertPublicUrl (302 pra IP interno/metadata).
       const res = await fetch(webhook.url, {
         method: 'POST',
         headers,
         body,
         signal: ctrl.signal,
+        redirect: 'manual',
       });
+      const redirected = res.status >= 300 && res.status < 400;
+      const ok = res.ok && !redirected;
       await prisma.webhook.update({
         where: { id },
         data: {
           lastFiredAt: new Date(),
           lastStatus: res.status,
-          lastError: res.ok ? null : `HTTP ${res.status}`,
+          lastError: ok ? null : redirected ? 'redirect não permitido' : `HTTP ${res.status}`,
         },
       });
-      return c.json({ ok: res.ok, status: res.status });
+      return c.json(
+        redirected
+          ? { ok: false, status: res.status, error: 'redirect não permitido' }
+          : { ok: res.ok, status: res.status },
+      );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'unknown';
       await prisma.webhook.update({

@@ -20,10 +20,12 @@ cd monitoring
 docker compose -f docker-compose.monitoring.yml up -d
 ```
 
-- Grafana: http://localhost:3000 (admin / `GRAFANA_PASSWORD`, default `admin`).
-  O datasource Prometheus e o dashboard **"Neura AI — API"** (pasta _Neura_) já
-  entram provisionados.
-- Prometheus: http://localhost:9090.
+- Grafana: http://127.0.0.1:7621 (admin / `GRAFANA_PASSWORD` — **obrigatória**,
+  o compose recusa subir sem ela). O datasource Prometheus e o dashboard
+  **"Neura AI — API"** (pasta _Neura_) já entram provisionados.
+- Prometheus: sem porta no host (não tem autenticação) — o Grafana acessa via
+  rede Docker (`http://prometheus:9090`). Na VPS, acesso ao Grafana é via
+  Coolify/Caddy com domínio, não por porta exposta.
 
 ## Conectar o Prometheus à API
 

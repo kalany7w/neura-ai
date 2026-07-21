@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
+import { realtimeClient } from '@/lib/ws-client';
 import {
   LayoutDashboard,
   MessageCircle,
@@ -178,9 +180,11 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
   const hasMultiple = (workspaces?.length ?? 0) > 1;
   const { t } = useT();
   const queryClient = useQueryClient();
+  const [isSwitching, setIsSwitching] = useState(false);
 
   async function switchWorkspace(wsId: string) {
-    if (wsId === activeWorkspaceId) return;
+    if (wsId === activeWorkspaceId || isSwitching) return;
+    setIsSwitching(true);
     try {
       await api('/api/workspaces/switch', {
         method: 'POST',
@@ -189,9 +193,15 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
       toast.success(t('workspace.switched'));
       // Limpa o cache (dados são por-workspace) e revalida — sem reload de página.
       queryClient.clear();
+      // O servidor escopa as subscriptions do WS no upgrade (activeWorkspaceId da
+      // sessão) — reconecta pra sair dos canais do workspace antigo e entrar nos novos.
+      realtimeClient.disconnect();
+      realtimeClient.connect();
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('workspace.switch_error'));
+    } finally {
+      setIsSwitching(false);
     }
   }
 

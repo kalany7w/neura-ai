@@ -15,7 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector/pgvector:pg16 (igual prod) — a migration phase34_knowledge_base
+        # faz CREATE EXTENSION vector; postgres:16-alpine não tem a extensão.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
