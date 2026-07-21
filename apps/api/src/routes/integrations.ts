@@ -363,6 +363,7 @@ integrationsRouter.post(
         signal: ctrl.signal,
         redirect: 'manual',
       });
+      void res.body?.cancel().catch(() => {});
       const redirected = res.status >= 300 && res.status < 400;
       const ok = res.ok && !redirected;
       await prisma.webhook.update({

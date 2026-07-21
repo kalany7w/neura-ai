@@ -68,7 +68,7 @@ function sign(secret: string, body: string): string {
  * BullMQ retentar; SSRF é erro PERMANENTE (UnrecoverableError → não retenta).
  * Em sucesso, atualiza o webhook (limpa lastError).
  */
-export async function deliverWebhook(job: WebhookJob): Promise<void> {
+export async function deliverWebhook(job: WebhookJob, deliveryId?: string): Promise<void> {
   const { webhookId, url, secret, body, event } = job;
 
   try {
@@ -82,7 +82,8 @@ export async function deliverWebhook(job: WebhookJob): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Neura-Event': event,
-    'X-Neura-Delivery': webhookId + '-' + Date.now(),
+    // Estável entre retries (job.id do BullMQ) — permite dedup no receptor.
+    'X-Neura-Delivery': webhookId + '-' + (deliveryId ?? Date.now()),
   };
   if (secret) headers['X-Neura-Signature'] = 'sha256=' + sign(secret, body);
 
@@ -99,6 +100,8 @@ export async function deliverWebhook(job: WebhookJob): Promise<void> {
       signal: ctrl.signal,
       redirect: 'manual',
     });
+    // Descarta o body — sem consumir/cancelar, o undici segura a conexão.
+    void res.body?.cancel().catch(() => {});
     if (res.status >= 300 && res.status < 400) {
       throw new UnrecoverableError(`Redirect (HTTP ${res.status}) não permitido em webhook`);
     }

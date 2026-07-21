@@ -1,6 +1,8 @@
 # Pendências — Neura AI
 
-Atualizado em 2026-07-21 (revisão do PR #12 `fix/maju-security-hardening` + fixes aplicados).
+Atualizado em 2026-07-21 (revisão do PR #12 `fix/maju-security-hardening` + fixes
+aplicados em duas rodadas — a 2ª cobriu ws.ts/AGENT realtime, membership,
+métricas, telegram dedup, body limit, graceful shutdown e afins).
 
 ## Antes do merge do PR #12 (checklist de deploy — decisão do Kalan)
 
@@ -21,6 +23,15 @@ Atualizado em 2026-07-21 (revisão do PR #12 `fix/maju-security-hardening` + fix
       grande de um workspace atrasa os outros. A ordem POR CONVERSA foi resolvida
       (serialização por chat), mas fairness entre inboxes + métrica/alerta de
       profundidade da fila (`getWaitingCount()` no /health) ficam pra depois.
+      Nota da 2ª rodada: um burst de ≥3 msgs pro MESMO chat ocupa os 3 slots do
+      worker dormindo na espera da cadeia (head-of-line blocking) — a solução
+      definitiva é fila por-chat (BullMQ groups) em vez do lock in-memory.
+- [ ] **Serialização do outbound é por-processo**: o lock por chat é um Map em
+      memória — se o waworker um dia escalar pra >1 réplica, a garantia de ordem
+      cai (precisaria lock via Redis/BullMQ groups). Hoje é instância única.
+- [ ] **Escopo de AGENT no realtime usa cache TTL 30s**: mudança de atribuição
+      invalida na hora via evento, mas um take-over manual no DB (fora da API)
+      pode levar até 30s pra refletir no WS. Aceitável; documentado.
 - [ ] **Duplicação de envio no retry do outbound** (pré-existente): sendMessage OK + update no DB falha → job re-tenta → mensagem duplicada no WhatsApp. Precisa
       idempotência (marcar job como enviado no Redis antes do update).
 - [ ] **Anúncios de screen reader do dnd-kit em inglês** no kanban (a11y i18n) —

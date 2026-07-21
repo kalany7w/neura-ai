@@ -145,7 +145,7 @@ type LookupCb = (
 export const ssrfSafeDispatcher = new Agent({
   connect: {
     lookup(hostname: string, options: { all?: boolean }, callback: LookupCb): void {
-      dnsLookupCb(hostname, { all: true, verbatim: true }, (err, addresses) => {
+      dnsLookupCb(hostname, { all: true, order: 'verbatim' }, (err, addresses) => {
         if (err) return callback(err, '');
         const list = addresses as Array<{ address: string; family: number }>;
         if (list.length === 0) {

@@ -69,6 +69,10 @@ export const aiLimiter = new RateLimiterRedis({
  * pelo cliente e é spoofável (rotacionar o header driblaria o bucket).
  */
 export function clientIp(c: { req: { header(name: string): string | undefined } }): string {
+  // Atrás de Cloudflare, cf-connecting-ip é o IP real (o último hop do XFF
+  // seria o edge da CF — todos os clientes cairiam no mesmo bucket).
+  const cf = c.req.header('cf-connecting-ip');
+  if (cf?.trim()) return cf.trim();
   const xff = c.req.header('x-forwarded-for');
   if (xff) {
     const parts = xff

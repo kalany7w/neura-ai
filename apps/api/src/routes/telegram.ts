@@ -11,6 +11,8 @@ import { timingSafeEqual } from 'node:crypto';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
+import { RateLimiterRedis } from 'rate-limiter-flexible';
+import { redis } from '../redis.js';
 import { aiQueue } from '../queue.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
 import { enqueueWelcomeProcess } from '../welcome-worker.js';
@@ -27,8 +29,23 @@ function secretsMatch(provided: string | undefined, expected: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+// Rate limit por slug ANTES do lookup ($queryRaw JSONB sem índice) — mesmo
+// padrão do inbound.ts; sem isto, slug-guessing batia direto no Postgres.
+const telegramLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:tg-inbound',
+  points: 120, // Telegram entrega em burst; folga acima do inbound genérico
+  duration: 60,
+  blockDuration: 60,
+});
+
 telegramRouter.post('/webhook/:slug', async (c) => {
   const slug = c.req.param('slug');
+  try {
+    await telegramLimiter.consume(slug);
+  } catch {
+    return c.json({ error: 'rate_limited' }, 429);
+  }
 
   // Acha inbox pelo slug (channelConfig.webhookSlug)
   // Prisma JSONB query: usa $queryRaw porque path filter precisa SQL nativo
@@ -95,9 +112,37 @@ async function processUpdate(
 ): Promise<void> {
   const msg = update.message ?? update.edited_message;
   if (!msg) return;
+  const isEdit = !update.message && !!update.edited_message;
 
   // Mapeia tipo do conteúdo
   const { contentType, contentText } = inferContent(msg);
+
+  // edited_message: atualiza a mensagem existente em vez de criar duplicata
+  // (todo edit do usuário virava mensagem nova + unread + webhooks de novo).
+  if (isEdit) {
+    const existing = await prisma.message.findFirst({
+      where: {
+        telegramMessageId: msg.message_id,
+        conversation: { workspaceId, inboxId },
+      },
+      select: { id: true, conversationId: true },
+    });
+    if (existing) {
+      await prisma.message.update({
+        where: { id: existing.id },
+        data: { content: contentText, editedAt: new Date() },
+      });
+      await publishEvent(workspaceId, 'messages', 'message.edited', {
+        messageId: existing.id,
+        conversationId: existing.conversationId,
+        content: contentText,
+        editedAt: new Date(),
+      });
+      return;
+    }
+    // edit de mensagem que nunca vimos (ex.: anterior à conexão) → segue o
+    // fluxo normal e entra como mensagem nova.
+  }
 
   // Upsert Contact por telegramChatId
   const chatId = String(msg.chat.id);
@@ -115,9 +160,10 @@ async function processUpdate(
     create: {
       workspaceId,
       telegramChatId: chatId,
-      name: displayName,
+      name: displayName.slice(0, 120),
     },
-    update: { name: displayName },
+    // Nome vem do perfil do próprio remetente (renomear é legítimo); só capa o tamanho.
+    update: { name: displayName.slice(0, 120) },
   });
 
   // Find/create Conversation OPEN/PENDING/SNOOZED
