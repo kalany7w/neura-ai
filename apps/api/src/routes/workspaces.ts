@@ -499,7 +499,24 @@ workspacesRouter.delete(
       prisma.membership.delete({
         where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
       }),
+      // Sessões do removido apontando pra este workspace perdem o vínculo na
+      // hora — sem isto ele mantinha WS/HTTP no workspace até a sessão expirar.
+      prisma.session.updateMany({
+        where: { userId: targetUserId, activeWorkspaceId: workspaceId },
+        data: { activeWorkspaceId: null },
+      }),
     ]);
+
+    // Derruba os WS abertos do removido neste workspace (canal interno :control —
+    // publish direto no Redis; não é evento de domínio, não passa por webhooks).
+    await redis.publish(
+      `workspace:${workspaceId}:control`,
+      JSON.stringify({
+        event: 'member.removed',
+        payload: { userId: targetUserId },
+        ts: Date.now(),
+      }),
+    );
 
     await audit({
       workspaceId,

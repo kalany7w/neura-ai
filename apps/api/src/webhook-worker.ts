@@ -16,7 +16,8 @@ const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 export const webhookWorker = new Worker<WebhookJob>(
   QUEUE_WEBHOOK,
   async (job: Job<WebhookJob>) => {
-    await deliverWebhook(job.data);
+    // job.id como delivery-id: estável entre retries → o receptor consegue dedupar.
+    await deliverWebhook(job.data, job.id);
   },
   { connection: bullConnection, concurrency: 10 },
 );

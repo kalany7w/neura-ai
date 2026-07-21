@@ -16,7 +16,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { RateLimiterRedis } from 'rate-limiter-flexible';
+import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
 import { prisma } from '../db.js';
 import { publishEvent } from '../redis-pub.js';
 import { redis } from '../redis.js';
@@ -31,11 +31,14 @@ export const webchatRouter = new Hono();
 // anônima sem IP compartilha bucket — aceito porque é cenário degradado raro).
 // Redis (não memória): sobrevive a restart e vale pra todas as instâncias —
 // endpoint público, limite in-memory multiplicava por instância.
+// insuranceLimiter: com Redis fora, cai no limite em memória em vez de
+// bloquear o webchat público inteiro (fail-closed de disponibilidade).
 const webchatLimiter = new RateLimiterRedis({
   storeClient: redis,
   keyPrefix: 'rl:webchat',
   points: 30,
   duration: 60,
+  insuranceLimiter: new RateLimiterMemory({ points: 30, duration: 60 }),
 });
 
 function extractClientIp(

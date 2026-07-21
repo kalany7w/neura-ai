@@ -32,6 +32,8 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
+import { RateLimiterRedis } from 'rate-limiter-flexible';
+import { redis } from '../redis.js';
 import { aiQueue } from '../queue.js';
 import { enqueueWelcomeProcess } from '../welcome-worker.js';
 import {
@@ -83,8 +85,23 @@ function pickField(obj: z.infer<typeof payloadSchema>, ...keys: string[]): strin
   return undefined;
 }
 
+// Rate limit por slug ANTES do lookup ($queryRaw JSONB sem índice) — mesmo
+// padrão do inbound.ts.
+const inboundEmailLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:email-inbound',
+  points: 60,
+  duration: 60,
+  blockDuration: 60,
+});
+
 inboundEmailRouter.post('/:slug', async (c) => {
   const slug = c.req.param('slug');
+  try {
+    await inboundEmailLimiter.consume(slug);
+  } catch {
+    return c.json({ error: 'rate_limited' }, 429);
+  }
 
   // Lookup inbox por slug (channelConfig.inboundSlug)
   const inboxes = await prisma.$queryRaw<
@@ -163,7 +180,11 @@ async function processInbound(
 
   const textBody = pickField(payload, 'TextBody', 'text');
   const htmlBody = pickField(payload, 'HtmlBody', 'html');
-  const content = (textBody ?? (htmlBody ? htmlToPlainText(htmlBody) : '')).slice(0, 50_000);
+  // Capa o HTML ANTES do parse (htmlToPlainText num body ilimitado = CPU/mem).
+  const content = (textBody ?? (htmlBody ? htmlToPlainText(htmlBody.slice(0, 500_000)) : '')).slice(
+    0,
+    50_000,
+  );
   if (!content.trim()) {
     logger.warn({ inboxId, from: fromParsed.address }, 'inbound email: empty body');
     return;
@@ -182,9 +203,11 @@ async function processInbound(
     create: {
       workspaceId,
       email: fromParsed.address,
-      name: fromName,
+      name: (fromName ?? fromParsed.address).slice(0, 120),
     },
-    update: { name: fromName },
+    // NÃO sobrescreve o nome a cada e-mail: o From é forjável (sem SPF/DKIM
+    // aqui) — qualquer um que saiba o e-mail do contato renomearia o contato.
+    update: {},
   });
 
   // Threading: se inReplyTo casa com algum emailMessageId nosso, reusa a conversa.
