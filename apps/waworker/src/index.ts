@@ -1,4 +1,5 @@
 import './instrument.js'; // Sentry init — precisa ser o primeiro import
+import * as Sentry from '@sentry/node';
 import { createServer } from 'node:http';
 import { logger } from './logger.js';
 import { env } from './env.js';
@@ -39,9 +40,15 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 process.on('uncaughtException', (err) => {
-  void sendAlert('fatal', 'uncaughtException no waworker — reiniciando', { error: err.message });
-  // Deixa o alerta tentar sair, depois encerra pro container reiniciar limpo.
-  setTimeout(() => process.exit(1), 1_000);
+  // Deixa o alerta (fetch timeout 5s) e o flush do Sentry saírem antes do exit
+  // — com exit em 1s fixo o alerta fatal quase nunca chegava. Teto de 6s.
+  const finish = (): void => process.exit(1);
+  const cap = setTimeout(finish, 6_000);
+  cap.unref?.();
+  void Promise.allSettled([
+    sendAlert('fatal', 'uncaughtException no waworker — reiniciando', { error: err.message }),
+    Sentry.flush(2_000),
+  ]).then(finish);
 });
 
 /**

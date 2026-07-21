@@ -1,9 +1,11 @@
 import './instrument.js'; // Sentry init — precisa ser o primeiro import
+import * as Sentry from '@sentry/node';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { auth } from './auth.js';
+import { loginLimiter, clientIp } from './rate-limit.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { healthRouter } from './routes/health.js';
@@ -70,8 +72,15 @@ process.on('unhandledRejection', (reason) => {
   });
 });
 process.on('uncaughtException', (err) => {
-  void sendAlert('fatal', 'uncaughtException na API — reiniciando', { error: err.message });
-  setTimeout(() => process.exit(1), 1_000);
+  // Espera o alerta (fetch timeout 5s) e o flush do Sentry saírem antes do exit
+  // — com exit em 1s fixo o alerta fatal quase nunca chegava. Teto de 6s.
+  const finish = (): void => process.exit(1);
+  const cap = setTimeout(finish, 6_000);
+  cap.unref?.();
+  void Promise.allSettled([
+    sendAlert('fatal', 'uncaughtException na API — reiniciando', { error: err.message }),
+    Sentry.flush(2_000),
+  ]).then(finish);
 });
 
 const app = new Hono();
@@ -110,7 +119,26 @@ app.get('/', (c) => {
 });
 
 // Better Auth handler (signup, login, verify email, reset password, etc.)
-app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+// Endpoints de credencial ganham brute-force guard (loginLimiter, por IP) —
+// o handler do Better Auth não passa pelo requireAuth e ficava sem limite.
+const AUTH_RATE_LIMITED = new Set([
+  '/api/auth/sign-in/email',
+  '/api/auth/sign-up/email',
+  '/api/auth/forget-password',
+]);
+app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
+  if (c.req.method === 'POST' && AUTH_RATE_LIMITED.has(c.req.path)) {
+    try {
+      await loginLimiter.consume(clientIp(c));
+    } catch {
+      return c.json(
+        { error: 'rate_limited', message: 'Muitas tentativas. Aguarde um instante.' },
+        429,
+      );
+    }
+  }
+  return auth.handler(c.req.raw);
+});
 
 // Healthcheck
 app.route('/health', healthRouter);

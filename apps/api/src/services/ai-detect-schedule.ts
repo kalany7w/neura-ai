@@ -1,6 +1,7 @@
 import { env } from '../env.js';
 import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
+import { UNTRUSTED_DATA_RULE, fenceUntrusted } from './ai-safety.js';
 
 interface DetectResult {
   hasSchedule: boolean;
@@ -24,9 +25,13 @@ export async function detectSchedule(params: {
   if (text.trim().length < 8) return;
 
   const today = new Date().toISOString().slice(0, 10);
-  const prompt = `Hoje é ${today}. Analise a mensagem do cliente e detecte se há intenção de agendar algo com data.
+  // Mensagem do cliente é conteúdo NÃO CONFIÁVEL — vai cercada (fence) e com a
+  // regra anti prompt-injection, como nos demais endpoints de IA.
+  const prompt = `${UNTRUSTED_DATA_RULE}
 
-Mensagem: "${text}"
+Hoje é ${today}. Analise a mensagem do cliente (dentro de <dados_conversa>) e detecte se há intenção de agendar algo com data.
+
+${fenceUntrusted(text)}
 
 Responda APENAS um JSON válido:
 {"hasSchedule": boolean, "suggestedDate": "YYYY-MM-DD" ou null, "suggestedTitle": "titulo curto" ou null, "suggestedType": "APPLICATION"|"MAINTENANCE"|"REPAIR"|"SALE_FOLLOWUP"|"OTHER" ou null}

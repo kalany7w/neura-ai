@@ -58,9 +58,44 @@ async function humanTypingPause(
   }
 }
 
+/**
+ * Serialização POR CHAT (inbox+destino): com concurrency 3 e a pausa de
+ * digitação aleatória (0,7–6,5s), duas mensagens da MESMA conversa em slots
+ * paralelos chegariam fora de ordem com frequência (a 2ª curta ultrapassa a
+ * 1ª longa). Chats diferentes seguem paralelos; o mesmo chat vira fila FIFO.
+ * (Retry com backoff ainda pode inverter — inerente ao retry; janela rara.)
+ */
+const chatChains = new Map<string, Promise<unknown>>();
+function withChatLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = chatChains.get(key) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  chatChains.set(key, tail);
+  void tail.then(() => {
+    if (chatChains.get(key) === tail) chatChains.delete(key);
+  });
+  return run;
+}
+
 export const outboundWorker = new Worker<SendMessageJob>(
   QUEUE_OUTBOUND,
-  async (job: Job<SendMessageJob>) => {
+  (job: Job<SendMessageJob>) =>
+    withChatLock(`${job.data.inboxId}:${job.data.to}`, () => processOutbound(job)),
+  {
+    connection: bullConnection,
+    // Concorrência menor + limiter global: teto de segurança anti-ban que soma
+    // ao limiter por-inbox do lado da API (30/min). Números diferentes seguem
+    // paralelos, mas a vazão total do worker fica suave.
+    concurrency: 3,
+    limiter: { max: 8, duration: 1000 },
+  },
+);
+
+async function processOutbound(job: Job<SendMessageJob>): Promise<void> {
+  {
     const {
       inboxId,
       workspaceId,
@@ -338,16 +373,8 @@ export const outboundWorker = new Worker<SendMessageJob>(
       waMessageId,
       sentAt,
     });
-  },
-  {
-    connection: bullConnection,
-    // Concorrência menor + limiter global: teto de segurança anti-ban que soma
-    // ao limiter por-inbox do lado da API (30/min). Números diferentes seguem
-    // paralelos, mas a vazão total do worker fica suave.
-    concurrency: 3,
-    limiter: { max: 8, duration: 1000 },
-  },
-);
+  }
+}
 
 outboundWorker.on('completed', (job) => {
   logger.info({ jobId: job.id, messageId: job.data.messageId }, 'Outbound message sent');

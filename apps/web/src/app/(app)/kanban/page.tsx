@@ -41,6 +41,7 @@ import { api, ApiError } from '@/lib/api';
 import { useT, localeFor, type Lang } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -589,6 +590,7 @@ function StageColumn({
 }) {
   const qc = useQueryClient();
   const { t } = useT();
+  const workspaceCurrency = useWorkspaceCurrency();
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = cards.length;
   const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
@@ -676,7 +678,7 @@ function StageColumn({
         {sumValue > 0 && (
           <p className="mt-1 text-[11px] font-medium text-muted-foreground">
             {t('kanban.column_total')}{' '}
-            <span className="text-foreground">{formatCurrency(sumValue)}</span>
+            <span className="text-foreground">{formatCurrency(sumValue, workspaceCurrency)}</span>
           </p>
         )}
       </div>
@@ -778,6 +780,7 @@ export default function KanbanPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
   const { t } = useT();
+  const workspaceCurrency = useWorkspaceCurrency();
   const [funnelId, setFunnelId] = useState<string | null>(null);
   const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
   const [createOpen, setCreateOpen] = useState(false);
@@ -1045,7 +1048,7 @@ export default function KanbanPage() {
             {totals.sumValue > 0 && (
               <span>
                 <span className="font-semibold text-emerald-600">
-                  {formatCurrency(totals.sumValue)}
+                  {formatCurrency(totals.sumValue, workspaceCurrency)}
                 </span>{' '}
                 {t('kanban.in_pipeline')}
               </span>
@@ -1063,7 +1066,7 @@ export default function KanbanPage() {
               >
                 <Sparkles className="h-3 w-3 text-indigo-500" />
                 <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                  {formatCurrency(totals.forecastValue)}
+                  {formatCurrency(totals.forecastValue, workspaceCurrency)}
                 </span>{' '}
                 {t('kanban.forecasted')}
               </span>
