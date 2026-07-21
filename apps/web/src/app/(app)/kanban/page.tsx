@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
   KeyboardSensor,
+  type KeyboardCoordinateGetter,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -177,6 +178,28 @@ function initialsFrom(s: string | null | undefined): string {
     .map((p) => p[0]?.toUpperCase())
     .join('');
 }
+
+// Passo de teclado do drag: uma seta horizontal = uma coluna (w-[320px] + gap),
+// vertical = ~altura de um card. O getter default do dnd-kit anda 25px por toque.
+const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
+  const COLUMN_STEP = 332;
+  const CARD_STEP = 110;
+  switch (event.code) {
+    case 'ArrowRight':
+      event.preventDefault();
+      return { ...currentCoordinates, x: currentCoordinates.x + COLUMN_STEP };
+    case 'ArrowLeft':
+      event.preventDefault();
+      return { ...currentCoordinates, x: currentCoordinates.x - COLUMN_STEP };
+    case 'ArrowDown':
+      event.preventDefault();
+      return { ...currentCoordinates, y: currentCoordinates.y + CARD_STEP };
+    case 'ArrowUp':
+      event.preventDefault();
+      return { ...currentCoordinates, y: currentCoordinates.y - CARD_STEP };
+  }
+  return undefined;
+};
 
 function formatCurrency(n: number, currency: string = 'USD'): string {
   // Locale escolhido pelo currency (PYG/USD → es-PY, BRL → pt-BR, fallback en-US).
@@ -897,8 +920,9 @@ export default function KanbanPage() {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     // Acessibilidade: mover cards por teclado (espaço pega/solta, setas movem) +
-    // anúncios de screen reader do dnd-kit.
-    useSensor(KeyboardSensor),
+    // anúncios de screen reader do dnd-kit. coordinateGetter customizado: uma
+    // seta = uma coluna/card (o default anda 25px por toque — inviável).
+    useSensor(KeyboardSensor, { coordinateGetter: kanbanKeyboardCoordinates }),
   );
 
   async function handleDragEnd(e: DragEndEvent) {

@@ -30,7 +30,7 @@ interface TemplateItem {
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(80),
+  name: z.string().min(1, 'validation.name_required').max(80, 'validation.name_long'),
   shortcut: z
     .string()
     .regex(/^\/[a-z0-9_-]{1,30}$/i, 'validation.shortcut')

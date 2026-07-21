@@ -30,7 +30,9 @@ class SessionManager {
           logger.warn({ inboxId: id }, 'Inbox logged out, clearing auth');
           await clearAuthState(id);
           this.removeSession(id);
-          void sendAlert('warn', 'Inbox WhatsApp deslogado — precisa reconectar (novo QR)', {
+          // 'error' (não 'warn'): logout exige re-scan de QR pelo cliente — é o
+          // evento operacional mais crítico e precisa chegar no Sentry/webhook.
+          void sendAlert('error', 'Inbox WhatsApp deslogado — precisa reconectar (novo QR)', {
             inboxId: id,
           });
         },

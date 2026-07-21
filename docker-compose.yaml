@@ -126,12 +126,13 @@ services:
       - minio
     healthcheck:
       # Usa node (fetch nativo) pra não depender de wget na imagem do worker.
+      # Lê WAWORKER_PORT do ambiente do container (default 7303 = env.ts).
       test:
         [
           'CMD',
           'node',
           '-e',
-          "fetch('http://localhost:7303/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://localhost:'+(process.env.WAWORKER_PORT||7303)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s

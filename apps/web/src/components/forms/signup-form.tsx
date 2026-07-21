@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 // Signup do Better Auth: só name/email/password.
 // Workspace é criado na tela /onboarding após login.
 const signupFormSchema = z.object({
-  name: z.string().min(2, 'validation.name_short').max(80),
+  name: z.string().min(2, 'validation.name_short').max(80, 'validation.name_long'),
   email: z.string().email('validation.email_invalid'),
   password: z.string().min(8, 'validation.password_min').max(128, 'validation.password_max'),
 });

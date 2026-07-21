@@ -11,7 +11,9 @@
  */
 
 import { lookup } from 'node:dns/promises';
+import { lookup as dnsLookupCb } from 'node:dns';
 import { isIP } from 'node:net';
+import { Agent, fetch as undiciFetch } from 'undici';
 
 export class SsrfBlockedError extends Error {
   constructor(message: string) {
@@ -124,3 +126,42 @@ export async function assertPublicUrl(rawUrl: string): Promise<void> {
     }
   }
 }
+
+type LookupCb = (
+  err: NodeJS.ErrnoException | null,
+  address?: string | Array<{ address: string; family: number }>,
+  family?: number,
+) => void;
+
+/**
+ * Dispatcher undici cujo lookup RE-VALIDA os IPs no momento da conexão. Fecha o
+ * TOCTOU de DNS rebinding: `assertPublicUrl` valida, mas o fetch resolvia DNS de
+ * novo por conta própria — um registro de TTL curto podia flipar pra IP privado
+ * entre as duas resoluções. Com este dispatcher, TODA conexão do fetch de
+ * webhook resolve pelo nosso validador.
+ */
+export const ssrfSafeDispatcher = new Agent({
+  connect: {
+    lookup(hostname: string, options: { all?: boolean }, callback: LookupCb): void {
+      dnsLookupCb(hostname, { all: true, verbatim: true }, (err, addresses) => {
+        if (err) return callback(err);
+        const list = addresses as Array<{ address: string; family: number }>;
+        if (list.length === 0) {
+          return callback(new SsrfBlockedError('Host sem endereços'));
+        }
+        for (const a of list) {
+          if (isPrivateIp(a.address)) {
+            return callback(new SsrfBlockedError('Host resolve pra IP privado/reservado'));
+          }
+        }
+        if (options.all) return callback(null, list);
+        const first = list[0]!;
+        return callback(null, first.address, first.family);
+      });
+    },
+  },
+});
+
+/** fetch (undici) preso ao dispatcher acima — usar em TODO fetch de URL de tenant. */
+export const ssrfSafeFetch: typeof undiciFetch = (input, init) =>
+  undiciFetch(input, { ...init, dispatcher: ssrfSafeDispatcher });

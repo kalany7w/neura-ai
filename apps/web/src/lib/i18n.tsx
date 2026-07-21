@@ -61,6 +61,7 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
   // Workspace / user
   'workspace.your_workspaces': { pt: 'Seus workspaces', es: 'Tus empresas' },
   'workspace.new': { pt: 'Novo workspace', es: 'Nueva empresa' },
+  'layout.open_menu': { pt: 'Abrir menu', es: 'Abrir menú' },
   'workspace.switched': { pt: 'Workspace trocado', es: 'Empresa cambiada' },
   'workspace.switch_error': { pt: 'Erro ao trocar workspace', es: 'Error al cambiar de empresa' },
   'user.sign_out': { pt: 'Sair', es: 'Cerrar sesión' },
@@ -3845,6 +3846,8 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
   'welcome_test.sending': { pt: 'Enviando…', es: 'Enviando…' },
   'welcome_test.submit': { pt: 'Enviar', es: 'Enviar' },
   'validation.name_short': { pt: 'Nome muito curto', es: 'Nombre demasiado corto' },
+  'validation.name_long': { pt: 'Nome muito longo', es: 'Nombre demasiado largo' },
+  'validation.name_required': { pt: 'Nome obrigatório', es: 'Nombre obligatorio' },
   'validation.email_invalid': { pt: 'Email inválido', es: 'Email inválido' },
   'validation.password_min': {
     pt: 'Senha precisa ter no mínimo 8 caracteres',
@@ -3955,7 +3958,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       let s = TRANSLATIONS[key]?.[lang] ?? key;
       if (vars) {
         for (const [k, v] of Object.entries(vars)) {
-          s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+          // Callback (não string) no replace: valores vindos do usuário podem
+          // conter tokens de replacement ($&, $', $1) que garblariam o texto.
+          s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), () => String(v));
         }
       }
       return s;
