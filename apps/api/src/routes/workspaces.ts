@@ -69,10 +69,62 @@ workspacesRouter.post('/', requireAuth, async (c) => {
   }
 });
 
+// Auto-aceita invites pendentes do email do user. O convidado que cria conta
+// perde o ?next=/invite/<token> no caminho signup → verify-email → login e cai
+// no onboarding sem workspace; aqui qualquer invite válido pro email vira
+// membership transparentemente no primeiro GET /workspaces após login.
+async function autoAcceptPendingInvites(
+  userId: string,
+  ip?: string,
+  userAgent?: string,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { email: true },
+  });
+  if (!user?.email) return;
+  const pending = await prisma.invite.findMany({
+    where: {
+      email: { equals: user.email, mode: 'insensitive' },
+      acceptedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+  });
+  for (const invite of pending) {
+    try {
+      await prisma.membership.create({
+        data: { userId, workspaceId: invite.workspaceId, role: invite.role },
+      });
+      await audit({
+        workspaceId: invite.workspaceId,
+        actorId: userId,
+        action: 'invite.accepted',
+        resource: `Invite:${invite.id}`,
+        ip,
+        userAgent,
+      });
+    } catch (err: unknown) {
+      // P2002 = já é membro (aceite concorrente ou manual) — só marca o invite
+      if (!(err && typeof err === 'object' && 'code' in err && err.code === 'P2002')) {
+        throw err;
+      }
+    }
+    await prisma.invite.update({
+      where: { id: invite.id },
+      data: { acceptedAt: new Date() },
+    });
+  }
+}
+
 // GET /api/workspaces — lista workspaces do user
 workspacesRouter.get('/', requireAuth, async (c) => {
   const userId = c.get('userId');
   const sessionId = c.get('sessionId');
+  await autoAcceptPendingInvites(
+    userId,
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim(),
+    c.req.header('user-agent'),
+  );
   const [memberships, session] = await Promise.all([
     prisma.membership.findMany({
       where: { userId },
