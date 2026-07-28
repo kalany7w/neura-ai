@@ -8,6 +8,7 @@ const subscriber = new Redis(env.REDIS_URL);
 type Command =
   | { cmd: 'session.start'; inboxId: string }
   | { cmd: 'session.stop'; inboxId: string }
+  | { cmd: 'session.restart'; inboxId: string }
   | {
       cmd: 'presence.send';
       inboxId: string;
@@ -38,6 +39,11 @@ export function startCommandsListener(): void {
           break;
         case 'session.stop':
           await sessionManager.stop(cmd.inboxId);
+          break;
+        case 'session.restart':
+          // Sequência feita aqui: antes a API publicava stop e agendava o start
+          // com setTimeout, então um restart da API no meio engolia o start.
+          await sessionManager.restart(cmd.inboxId);
           break;
         case 'presence.send': {
           const handle = sessionManager.get(cmd.inboxId);

@@ -184,19 +184,14 @@ inboxesRouter.post(
     if (!inbox) return c.json({ error: 'not_found' }, 404);
 
     const { redis } = await import('../redis.js');
+    // O worker faz stop+start em sequência na própria fila da inbox. Antes a API
+    // publicava o stop e agendava o start com setTimeout: se a API reiniciasse
+    // nesse intervalo, o start sumia e a inbox ficava parada com o usuário
+    // achando que tinha reconectado.
     await redis.publish(
       'worker:commands',
-      JSON.stringify({ cmd: 'session.stop', inboxId: id }),
+      JSON.stringify({ cmd: 'session.restart', inboxId: id }),
     );
-    // Pequeno delay pra worker processar stop antes do start
-    setTimeout(() => {
-      redis
-        .publish(
-          'worker:commands',
-          JSON.stringify({ cmd: 'session.start', inboxId: id }),
-        )
-        .catch(() => {});
-    }, 1500);
     return c.json({ ok: true });
   },
 );
