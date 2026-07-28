@@ -1,14 +1,15 @@
 import { redis } from './redis.js';
-import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/webhooks.js';
 import { dispatchAutomationRules } from './services/automation.js';
 import { dispatchNotifications } from './services/notification-hooks.js';
 import { detectCsatResponse } from './services/csat-detect.js';
 
-const KNOWN_EVENTS = new Set<string>(WEBHOOK_EVENTS);
-
 /**
- * Publica evento em canal pub/sub `workspace:<id>:<resource>` e dispara
- * webhooks externos + automation rules cadastrados pelo workspace.
+ * Publica evento em canal pub/sub `workspace:<id>:<resource>` e roda
+ * automation rules/notifications/CSAT dos eventos emitidos pela API.
+ *
+ * Webhooks externos NÃO disparam aqui: o dispatch vive no subscriber Redis
+ * (ws.ts), único ponto que vê eventos de TODOS os processos — inclusive o
+ * message.new do waworker (WhatsApp), que nunca passa por esta função.
  */
 export async function publishEvent(
   workspaceId: string,
@@ -20,14 +21,6 @@ export async function publishEvent(
   await redis.publish(channel, JSON.stringify({ event, payload, ts: Date.now() }));
 
   const data = (payload ?? {}) as Record<string, unknown>;
-
-  if (KNOWN_EVENTS.has(event)) {
-    dispatchWebhook({
-      event: event as WebhookEvent,
-      workspaceId,
-      data,
-    });
-  }
 
   // Automation rules — engine interno (não rebobina se já veio de automation)
   dispatchAutomationRules(event, workspaceId, data);

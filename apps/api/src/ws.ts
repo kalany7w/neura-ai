@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { redis } from './redis.js';
 import { detectSchedule } from './services/ai-detect-schedule.js';
+import { dispatchWebhook, WEBHOOK_EVENTS, type WebhookEvent } from './services/webhooks.js';
 
 /**
  * Cada cliente WS está inscrito em 3 canais do workspace ativo:
@@ -60,8 +61,30 @@ export function setupWebSocket(app: Hono) {
     }
   }
 
+  // Webhooks externos disparam AQUI (não no publishEvent): o subscriber é o único
+  // ponto que vê eventos de todos os processos (api E waworker/WhatsApp). Ponto
+  // único = sem duplicata; se um dia a api escalar pra N réplicas, mover pra um
+  // consumer dedicado (senão cada réplica dispara o webhook).
+  const WEBHOOKABLE = new Set<string>(WEBHOOK_EVENTS);
+  function relayWebhooks(channel: string, raw: string) {
+    try {
+      const workspaceId = channel.split(':')[1];
+      if (!workspaceId) return;
+      const parsed = JSON.parse(raw) as { event?: string; payload?: unknown };
+      if (!parsed.event || !WEBHOOKABLE.has(parsed.event)) return;
+      dispatchWebhook({
+        event: parsed.event as WebhookEvent,
+        workspaceId,
+        data: (parsed.payload ?? {}) as Record<string, unknown>,
+      });
+    } catch {
+      // ignore malformed
+    }
+  }
+
   subscriber.on('pmessage', (_pattern, channel, message) => {
     if (channel.endsWith(':messages')) runMessageHooks(channel, message);
+    relayWebhooks(channel, message);
 
     const clients = channelClients.get(channel);
     if (!clients || clients.size === 0) return;
