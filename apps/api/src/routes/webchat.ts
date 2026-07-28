@@ -87,6 +87,93 @@ async function resolveInbox(slug: string): Promise<{
   return rows[0] ?? null;
 }
 
+/**
+ * Resolve o Contact de um visitante do webchat a partir do sessionToken.
+ *
+ * O par (workspaceId, email) é unique no schema, então gravar o e-mail informado
+ * pelo visitante pode colidir com um contato que já existe — o mesmo cliente
+ * voltando de outro navegador (localStorage limpo, aba anônima) ou um e-mail
+ * compartilhado tipo contato@empresa. Antes essa colisão vazava como P2002 e o
+ * widget quebrava com 500 pro visitante.
+ *
+ * Regra: o contato já existente com aquele e-mail tem prioridade. Se ele ainda
+ * não tem sessão de webchat, adotamos o token nele (é o mesmo cliente, ganha o
+ * histórico de volta). Se já tem outra sessão, seguimos sem o e-mail — o
+ * atendimento funciona igual e não fundimos contatos sem intervenção humana.
+ */
+async function upsertWebchatContact(params: {
+  workspaceId: string;
+  sessionToken: string;
+  namePatch: string | null;
+  emailPatch: string | null;
+}): Promise<{ id: string; name: string | null }> {
+  const { workspaceId, sessionToken, namePatch, emailPatch } = params;
+
+  const bySession = await prisma.contact.findUnique({
+    where: { workspaceId_webchatSessionId: { workspaceId, webchatSessionId: sessionToken } },
+    select: { id: true },
+  });
+
+  if (emailPatch) {
+    const byEmail = await prisma.contact.findUnique({
+      where: { workspaceId_email: { workspaceId, email: emailPatch } },
+      select: { id: true, name: true, webchatSessionId: true },
+    });
+
+    // E-mail pertence a outro contato: reaproveita em vez de colidir.
+    if (byEmail && byEmail.id !== bySession?.id) {
+      if (!byEmail.webchatSessionId && !bySession) {
+        return prisma.contact.update({
+          where: { id: byEmail.id },
+          data: { webchatSessionId: sessionToken, ...(namePatch ? { name: namePatch } : {}) },
+          select: { id: true, name: true },
+        });
+      }
+      // Não dá pra fundir os dois com segurança — segue sem gravar o e-mail.
+      return upsertIgnorandoEmail({ workspaceId, sessionToken, namePatch });
+    }
+  }
+
+  try {
+    return await prisma.contact.upsert({
+      where: { workspaceId_webchatSessionId: { workspaceId, webchatSessionId: sessionToken } },
+      create: {
+        workspaceId,
+        webchatSessionId: sessionToken,
+        name: namePatch,
+        email: emailPatch,
+      },
+      update: {
+        // Só atualiza email/name se vieram no payload (não nullify silencioso).
+        ...(emailPatch ? { email: emailPatch } : {}),
+        // name só preenche se ainda for null — preserva edição prévia.
+        ...(namePatch ? { name: namePatch } : {}),
+      },
+      select: { id: true, name: true },
+    });
+  } catch (err) {
+    // Rede de segurança pra corrida entre o SELECT acima e o upsert: dois
+    // visitantes mandando o mesmo e-mail ao mesmo tempo. Nenhuma rota pública
+    // pode responder 500 por causa disso.
+    if ((err as { code?: string }).code !== 'P2002') throw err;
+    return upsertIgnorandoEmail({ workspaceId, sessionToken, namePatch });
+  }
+}
+
+function upsertIgnorandoEmail(params: {
+  workspaceId: string;
+  sessionToken: string;
+  namePatch: string | null;
+}): Promise<{ id: string; name: string | null }> {
+  const { workspaceId, sessionToken, namePatch } = params;
+  return prisma.contact.upsert({
+    where: { workspaceId_webchatSessionId: { workspaceId, webchatSessionId: sessionToken } },
+    create: { workspaceId, webchatSessionId: sessionToken, name: namePatch },
+    update: { ...(namePatch ? { name: namePatch } : {}) },
+    select: { id: true, name: true },
+  });
+}
+
 // ============================================================
 // POST /:widgetSlug/session — bootstrap session + contact (idempotente)
 // ============================================================
@@ -128,29 +215,11 @@ webchatRouter.post('/:widgetSlug/session', async (c) => {
   const namePatch = parsed.data.name?.trim() || null;
   const emailPatch = parsed.data.email?.toLowerCase() || null;
 
-  // Upsert idempotente — duas chamadas simultâneas com mesmo token convergem
-  // pra mesmo Contact (unique constraint workspaceId + webchatSessionId).
-  // Update conservador: só preenche name se ainda vazio (não sobrescreve user input prévio).
-  const contact = await prisma.contact.upsert({
-    where: {
-      workspaceId_webchatSessionId: {
-        workspaceId: inbox.workspaceId,
-        webchatSessionId: sessionToken,
-      },
-    },
-    create: {
-      workspaceId: inbox.workspaceId,
-      webchatSessionId: sessionToken,
-      name: namePatch,
-      email: emailPatch,
-    },
-    update: {
-      // Só atualiza email/name se vieram no payload (não nullify silencioso).
-      ...(emailPatch ? { email: emailPatch } : {}),
-      // name só preenche se ainda for null — preserva edição prévia.
-      ...(namePatch ? { name: namePatch } : {}),
-    },
-    select: { id: true, name: true },
+  const contact = await upsertWebchatContact({
+    workspaceId: inbox.workspaceId,
+    sessionToken,
+    namePatch,
+    emailPatch,
   });
 
   // Acha conversation ativa ou cria nova
