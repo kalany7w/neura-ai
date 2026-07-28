@@ -8,7 +8,7 @@ import { useRealtimeListener } from '@/hooks/use-realtime-listener';
  * Silencioso por padrão até que o user permita.
  */
 export function DesktopNotificationsProvider() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
   const lastPingRef = useRef(0);
 
   useEffect(() => {
@@ -28,17 +28,45 @@ export function DesktopNotificationsProvider() {
     return document.hidden || !document.hasFocus();
   }
 
+  /**
+   * Beep sintetizado no WebAudio.
+   *
+   * Antes era um <audio src="data:audio/wav;base64,..."> que nunca tocou por dois
+   * motivos somados: a CSP não libera `data:` em media-src (o browser bloqueava o
+   * carregamento) e o WAV embutido tinha data chunk de 0 bytes — era silêncio.
+   * Gerando o tom aqui não há recurso de mídia para a CSP barrar nem arquivo para
+   * servir.
+   */
   function ping() {
     const now = Date.now();
     // Debounce 1.5s pra não tocar 10 sons seguidos numa rajada
     if (now - lastPingRef.current < 1500) return;
     lastPingRef.current = now;
-    const a = audioRef.current;
-    if (a) {
-      a.currentTime = 0;
-      a.play().catch(() => {
-        /* autoplay bloqueado é ok — só falha silenciosa */
-      });
+
+    try {
+      const Ctx =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!Ctx) return;
+      audioCtxRef.current ??= new Ctx();
+      const ctx = audioCtxRef.current;
+      // Sem gesto do usuário na aba o contexto nasce suspenso; retomar é no-op
+      // quando já está rodando.
+      void ctx.resume().catch(() => {});
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      // Envelope curto: sobe rápido e decai, pra soar como um "ding" e não um bip seco.
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.26);
+    } catch {
+      /* áudio indisponível não pode derrubar a notificação visual */
     }
   }
 
@@ -75,14 +103,5 @@ export function DesktopNotificationsProvider() {
     }
   });
 
-  return (
-    <>
-      {/* Áudio inline ~300ms ping. Fonte data URL simples (beep curto) */}
-      <audio
-        ref={audioRef}
-        preload="auto"
-        src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="
-      />
-    </>
-  );
+  return null;
 }

@@ -210,6 +210,41 @@ const TRANSLATIONS: Record<string, Record<Lang, string>> = {
   'common.phone': { pt: 'Telefone', es: 'Teléfono' },
   'common.role': { pt: 'Papel', es: 'Rol' },
   'common.status': { pt: 'Status', es: 'Estado' },
+  'common.close': { pt: 'Fechar', es: 'Cerrar' },
+  'common.open_menu': { pt: 'Abrir menu', es: 'Abrir menú' },
+  'common.per_page': { pt: 'Por página', es: 'Por página' },
+  'common.previous': { pt: 'Anterior', es: 'Anterior' },
+  'common.next': { pt: 'Próxima', es: 'Siguiente' },
+  'common.page_of': { pt: 'Página {page} de {total}', es: 'Página {page} de {total}' },
+
+  // Login / validação de formulário — vinham cruas do Zod em inglês
+  'auth.invalid_email': { pt: 'Email inválido', es: 'Email inválido' },
+  'auth.password_required': { pt: 'Informe sua senha', es: 'Ingrese su contraseña' },
+  'auth.password_min': {
+    pt: 'A senha precisa ter ao menos 8 caracteres',
+    es: 'La contraseña necesita al menos 8 caracteres',
+  },
+  'auth.name_required': { pt: 'Informe seu nome', es: 'Ingrese su nombre' },
+  'auth.invalid_credentials': {
+    pt: 'Email ou senha incorretos',
+    es: 'Email o contraseña incorrectos',
+  },
+  'auth.email_not_verified': {
+    pt: 'Confirme seu email antes de entrar — o link foi enviado no cadastro',
+    es: 'Confirme su email antes de entrar — el enlace fue enviado en el registro',
+  },
+  'auth.too_many_requests': {
+    pt: 'Muitas tentativas seguidas. Espere um minuto e tente de novo',
+    es: 'Demasiados intentos seguidos. Espere un minuto e intente de nuevo',
+  },
+  'auth.email_verified': {
+    pt: 'Email confirmado! Faça login para continuar.',
+    es: '¡Email confirmado! Inicie sesión para continuar.',
+  },
+  'auth.password': { pt: 'Senha', es: 'Contraseña' },
+  'auth.sign_in': { pt: 'Entrar', es: 'Entrar' },
+  'auth.signing_in': { pt: 'Entrando…', es: 'Entrando…' },
+  'auth.welcome': { pt: 'Bem-vindo!', es: '¡Bienvenido!' },
 };
 
 interface I18nContextValue {

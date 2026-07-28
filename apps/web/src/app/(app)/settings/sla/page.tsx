@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Timer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 interface SlaPolicy {
   id: string;
@@ -66,6 +67,11 @@ export default function SlaPage() {
     queryKey: ['labels'],
     queryFn: () => api('/api/labels'),
   });
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const policies = policiesData?.policies ?? [];
+  const { slice: policiesSlice } = usePaginatedList(policies, perPage, page);
 
   const inboxMap = new Map((inboxesData?.inboxes ?? []).map((i) => [i.id, i.name]));
   const labelMap = new Map(
@@ -139,7 +145,7 @@ export default function SlaPage() {
         ) : !policiesData?.policies.length ? (
           <p className="p-6 text-sm text-muted-foreground">Nenhuma policy.</p>
         ) : (
-          policiesData.policies.map((p) => (
+          policiesSlice.map((p) => (
             <div key={p.id} className="flex items-center gap-4 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -194,6 +200,14 @@ export default function SlaPage() {
             </div>
           ))
         )}
+        <Pagination
+          page={page}
+          perPage={perPage}
+          total={policies.length}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+          className="px-4 pb-4"
+        />
       </div>
 
       <SlaPolicyDialog
@@ -229,7 +243,11 @@ function SlaPolicyDialog({
   const [enabled, setEnabled] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  useState(() => {
+  // Precisa rodar toda vez que muda a policy em edição: com useState o corpo só
+  // rodava na montagem, então abrir "Editar" mostrava os defaults e salvar
+  // sobrescrevia a configuração real da policy.
+  useEffect(() => {
+    if (!open) return;
     if (editing) {
       setName(editing.name);
       setScope(editing.scope);
@@ -245,7 +263,7 @@ function SlaPolicyDialog({
       setRtMin(1440);
       setEnabled(true);
     }
-  });
+  }, [editing, open]);
 
   async function submit() {
     if (!name.trim() || submitting) return;
