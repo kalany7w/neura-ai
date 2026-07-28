@@ -326,7 +326,14 @@ async function persistInboundMessage(
   msg: WAMessage,
 ): Promise<void> {
   if (!msg.key.remoteJid) return;
-  if (msg.key.remoteJid === 'status@broadcast') return; // ignora status
+  // Atendimento é só chat individual: @s.whatsapp.net (número) ou @lid (LID rollout).
+  // Grupos (@g.us), status/listas (@broadcast) e canais (@newsletter) ficam fora.
+  if (
+    !msg.key.remoteJid.endsWith('@s.whatsapp.net') &&
+    !msg.key.remoteJid.endsWith('@lid')
+  ) {
+    return;
+  }
   if (msg.key.fromMe) {
     // Mensagem enviada por nós (em outro dispositivo do mesmo número) — opcional refletir
     return;
