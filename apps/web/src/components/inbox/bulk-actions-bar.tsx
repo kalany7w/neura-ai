@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -63,8 +64,12 @@ export function InboxBulkActionsBar({
   const qc = useQueryClient();
   const confirm = useConfirm();
   const canManageStatus = role !== 'AGENT';
+  // Sem trava de envio, dois cliques mandavam dois lotes da mesma seleção.
+  const [emAndamento, setEmAndamento] = useState(false);
 
   async function run(payload: Record<string, unknown>, successMsg?: string) {
+    if (emAndamento) return;
+    setEmAndamento(true);
     try {
       const res = await api<{ affected: number }>(`/api/conversations/bulk`, {
         method: 'POST',
@@ -76,6 +81,8 @@ export function InboxBulkActionsBar({
       await qc.invalidateQueries({ queryKey: ['conversations-counts'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro');
+    } finally {
+      setEmAndamento(false);
     }
   }
 
@@ -200,12 +207,12 @@ export function InboxBulkActionsBar({
       {/* Arquivar/Desarquivar (não-AGENT) */}
       {canManageStatus &&
         (tab === 'ARCHIVED' ? (
-          <Button size="sm" variant="outline" onClick={unarchive}>
+          <Button size="sm" variant="outline" onClick={unarchive} disabled={emAndamento}>
             <ArchiveRestore className="h-3.5 w-3.5" />
             Desarquivar
           </Button>
         ) : (
-          <Button size="sm" variant="outline" onClick={archive}>
+          <Button size="sm" variant="outline" onClick={archive} disabled={emAndamento}>
             <Archive className="h-3.5 w-3.5" />
             Arquivar
           </Button>

@@ -7,10 +7,10 @@ import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
 import { RealtimeProvider } from '@/components/realtime-provider';
 import { Sidebar } from '@/components/layout/sidebar';
+import { AppShell } from '@/components/layout/app-shell';
 import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { DesktopNotificationsProvider } from '@/components/desktop-notifications-provider';
-import { OfflineBanner } from '@/components/offline-banner';
 import { I18nProvider } from '@/lib/i18n';
 
 interface WorkspaceListItem {
@@ -76,26 +76,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <I18nProvider>
       <RealtimeProvider>
         <DesktopNotificationsProvider />
-        <div className="flex h-screen overflow-hidden">
-          <Sidebar
-            user={{
-              id: session.user.id,
-              name: session.user.name,
-              email: session.user.email,
-            }}
-            workspace={activeWorkspace ?? null}
-            workspaces={workspaces?.workspaces}
-            activeWorkspaceId={activeWorkspace?.id}
-          />
-          <main className="flex-1 overflow-y-auto">
-            <OfflineBanner />
-            <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
+        <AppShell
+          sidebar={
+            <Sidebar
+              user={{
+                id: session.user.id,
+                name: session.user.name,
+                email: session.user.email,
+              }}
+              workspace={activeWorkspace ?? null}
+              workspaces={workspaces?.workspaces}
+              activeWorkspaceId={activeWorkspace?.id}
+            />
+          }
+          header={
+            <>
               <GlobalSearch />
               <NotificationsBell />
-            </header>
-            <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
-          </main>
-        </div>
+            </>
+          }
+        >
+          {children}
+        </AppShell>
       </RealtimeProvider>
     </I18nProvider>
   );

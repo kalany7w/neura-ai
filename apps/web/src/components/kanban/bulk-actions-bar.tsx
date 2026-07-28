@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useQueryClient } from '@tanstack/react-query';
 import {
   AlarmClock,
@@ -75,8 +77,12 @@ export function BulkActionsBar({
 }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  // Sem trava de envio, dois cliques mandavam dois lotes da mesma seleção.
+  const [emAndamento, setEmAndamento] = useState(false);
 
   async function run(payload: Record<string, unknown>) {
+    if (emAndamento) return;
+    setEmAndamento(true);
     try {
       const res = await api<{ affected: number }>(`/api/kanban/cards/bulk`, {
         method: 'POST',
@@ -87,6 +93,8 @@ export function BulkActionsBar({
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro');
+    } finally {
+      setEmAndamento(false);
     }
   }
 
@@ -219,7 +227,7 @@ export function BulkActionsBar({
         </DropdownMenu>
       )}
 
-      <Button size="sm" variant="ghost" onClick={remove} className="text-destructive">
+      <Button size="sm" variant="ghost" onClick={remove} disabled={emAndamento} className="text-destructive">
         <Trash2 className="h-3.5 w-3.5" />
         Excluir
       </Button>

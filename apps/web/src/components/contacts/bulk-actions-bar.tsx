@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Tag, Trash2, X } from 'lucide-react';
@@ -30,8 +32,13 @@ interface Props {
 export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  // Ações em lote não tinham trava de envio: dois cliques disparavam dois POSTs
+  // sobre a mesma seleção.
+  const [emAndamento, setEmAndamento] = useState(false);
 
   async function run(payload: Record<string, unknown>) {
+    if (emAndamento) return;
+    setEmAndamento(true);
     try {
       const res = await api<{ affected: number }>(`/api/contacts/bulk`, {
         method: 'POST',
@@ -42,6 +49,8 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
       await qc.invalidateQueries({ queryKey: ['contacts'] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erro');
+    } finally {
+      setEmAndamento(false);
     }
   }
 
@@ -56,7 +65,7 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
       }))
     )
       return;
-    run({ action: 'delete' });
+    await run({ action: 'delete' });
   }
 
   if (selectedIds.length === 0) return null;
@@ -71,7 +80,7 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="outline" disabled={emAndamento}>
             <Tag className="h-3.5 w-3.5" />
             Aplicar etiqueta
           </Button>
@@ -111,7 +120,7 @@ export function ContactsBulkActionsBar({ selectedIds, labels, onClear }: Props) 
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Button size="sm" variant="ghost" onClick={remove} title="Excluir selecionados">
+      <Button size="sm" variant="ghost" onClick={remove} disabled={emAndamento} title="Excluir selecionados">
         <Trash2 className="h-3.5 w-3.5 text-destructive" />
       </Button>
 
