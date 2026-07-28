@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, ScrollText, X } from 'lucide-react';
+import { ScrollText, X } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Pagination, DEFAULT_PER_PAGE } from '@/components/ui/pagination';
 import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,22 +53,22 @@ function formatDate(iso: string): string {
 export default function AuditPage() {
   const { t } = useT();
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
   const [actionFilter, setActionFilter] = useState('');
   const [resourceFilter, setResourceFilter] = useState('');
 
   const params = new URLSearchParams({
     page: String(page),
-    perPage: '50',
+    perPage: String(perPage),
   });
   if (actionFilter) params.set('action', actionFilter);
   if (resourceFilter) params.set('resource', resourceFilter);
 
   const { data, isLoading } = useQuery<AuditResp>({
-    queryKey: ['audit-log', page, actionFilter, resourceFilter],
+    queryKey: ['audit-log', page, perPage, actionFilter, resourceFilter],
     queryFn: () => api(`/api/audit-log?${params.toString()}`),
   });
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.perPage)) : 1;
 
   return (
     <div className="space-y-6">
@@ -187,29 +188,13 @@ export default function AuditPage() {
             </table>
           </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {data.total} evento(s) · página {page} de {totalPages}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={data.total}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+          />
         </>
       )}
     </div>

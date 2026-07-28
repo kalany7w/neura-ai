@@ -13,6 +13,7 @@ import {
 import { authClient } from '@/lib/auth-client';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 interface Sess {
   id: string;
@@ -65,6 +66,10 @@ export function ActiveSessions() {
   const [sessions, setSessions] = useState<Sess[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [revokingToken, setRevokingToken] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const { slice: sessionsSlice } = usePaginatedList(sessions ?? [], perPage, page);
 
   async function load() {
     setLoading(true);
@@ -169,8 +174,9 @@ export function ActiveSessions() {
       ) : !sessions || sessions.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sem sessões ativas.</p>
       ) : (
+        <>
         <ul className="divide-y">
-          {sessions.map((s) => {
+          {sessionsSlice.map((s) => {
             const parsed = parseUA(s.userAgent);
             const isCurrent = s.userAgent === currentUA;
             const Icon = parsed.mobile ? Smartphone : parsed.browser === 'Chrome' ? Chrome : Globe;
@@ -208,6 +214,14 @@ export function ActiveSessions() {
             );
           })}
         </ul>
+        <Pagination
+          page={page}
+          perPage={perPage}
+          total={sessions.length}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+        />
+        </>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import { ContactsBulkActionsBar } from '@/components/contacts/bulk-actions-bar';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { api, ApiError } from '@/lib/api';
+import { Pagination, DEFAULT_PER_PAGE } from '@/components/ui/pagination';
 import { useT } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,7 @@ export default function ContactsPage() {
   const [page, setPage] = useState(1);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const perPage = 25;
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -79,7 +80,7 @@ export default function ContactsPage() {
     page: number;
     perPage: number;
   }>({
-    queryKey: ['contacts', search, labelId, page],
+    queryKey: ['contacts', search, labelId, page, perPage],
     queryFn: () => api(`/api/contacts?${params.toString()}`),
   });
 
@@ -114,8 +115,6 @@ export default function ContactsPage() {
       setSubmitting(false);
     }
   }
-
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / perPage)) : 1;
 
   return (
     <div className="space-y-6">
@@ -185,7 +184,10 @@ export default function ContactsPage() {
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => setLabelId(null)}
+              onClick={() => {
+                setLabelId(null);
+                setPage(1);
+              }}
               className={`rounded-full px-3 py-1 text-xs ${
                 !labelId ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
               }`}
@@ -196,7 +198,10 @@ export default function ContactsPage() {
               <button
                 key={l.id}
                 type="button"
-                onClick={() => setLabelId(l.id === labelId ? null : l.id)}
+                onClick={() => {
+                  setLabelId(l.id === labelId ? null : l.id);
+                  setPage(1);
+                }}
                 style={{ backgroundColor: labelId === l.id ? l.color : undefined }}
                 className={`rounded-full px-3 py-1 text-xs ${
                   labelId === l.id ? 'text-white' : 'bg-muted text-muted-foreground'
@@ -299,30 +304,14 @@ export default function ContactsPage() {
         onClear={clearSelection}
       />
 
-      {data && data.total > perPage && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            {data.total} contatos · página {data.page} de {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded border px-3 py-1 disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="rounded border px-3 py-1 disabled:opacity-50"
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
+      {data && (
+        <Pagination
+          page={page}
+          perPage={perPage}
+          total={data.total}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+        />
       )}
     </div>
   );

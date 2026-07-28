@@ -32,6 +32,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 interface Webhook {
   id: string;
@@ -108,6 +109,11 @@ export default function IntegrationsPage() {
     queryKey: ['webhooks'],
     queryFn: () => api('/api/integrations/webhooks'),
   });
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const webhooks = data?.webhooks ?? [];
+  const { slice: webhooksSlice } = usePaginatedList(webhooks, perPage, page);
 
   async function toggle(w: Webhook) {
     try {
@@ -216,7 +222,7 @@ export default function IntegrationsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {data.webhooks.map((w) => (
+          {webhooksSlice.map((w) => (
             <div
               key={w.id}
               className={`rounded-lg border bg-card p-4 ${!w.enabled ? 'opacity-60' : ''}`}
@@ -283,6 +289,13 @@ export default function IntegrationsPage() {
               )}
             </div>
           ))}
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={webhooks.length}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+          />
         </div>
       )}
 

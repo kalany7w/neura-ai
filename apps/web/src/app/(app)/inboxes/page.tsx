@@ -30,6 +30,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 type StatusFilter = 'ALL' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_QR' | 'ERROR';
 
@@ -86,6 +87,10 @@ export default function InboxesPage() {
       );
     });
   }, [data?.inboxes, search, statusFilter]);
+
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+  const { slice: inboxesSlice } = usePaginatedList(filtered, perPage, page);
 
   const totalsByStatus = useMemo(() => {
     const t = { ALL: 0, CONNECTED: 0, DISCONNECTED: 0, AWAITING_QR: 0, ERROR: 0 };
@@ -231,7 +236,10 @@ export default function InboxesPage() {
                 <button
                   key={t.value}
                   type="button"
-                  onClick={() => setStatusFilter(t.value)}
+                  onClick={() => {
+                    setStatusFilter(t.value);
+                    setPage(1);
+                  }}
                   className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors ${
                     statusFilter === t.value
                       ? 'bg-background shadow-sm font-medium'
@@ -256,7 +264,10 @@ export default function InboxesPage() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Nome ou número…"
               className="w-64 pl-8"
             />
@@ -281,6 +292,7 @@ export default function InboxesPage() {
             onClick={() => {
               setSearch('');
               setStatusFilter('ALL');
+              setPage(1);
             }}
             className="text-foreground underline hover:text-primary"
           >
@@ -288,10 +300,19 @@ export default function InboxesPage() {
           </button>
         </p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((inbox) => (
-            <InboxCard key={inbox.id} inbox={inbox} />
-          ))}
+        <div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {inboxesSlice.map((inbox) => (
+              <InboxCard key={inbox.id} inbox={inbox} />
+            ))}
+          </div>
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={filtered.length}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+          />
         </div>
       )}
 

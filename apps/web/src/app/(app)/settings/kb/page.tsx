@@ -28,6 +28,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 function DialogFooter({ children }: { children: React.ReactNode }) {
   return <div className="flex justify-end gap-2 pt-2">{children}</div>;
@@ -92,6 +93,8 @@ export default function KbPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [catDialogOpen, setCatDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
 
   const statsQ = useQuery<Stats>({
     queryKey: ['kb-stats'],
@@ -124,6 +127,8 @@ export default function KbPage() {
     }
     return arr;
   }, [articlesQ.data, selectedCategory]);
+
+  const { slice: articlesSlice } = usePaginatedList(filteredArticles, perPage, page);
 
   async function removeCategory(cat: Category) {
     const count = cat._count?.articles ?? 0;
@@ -270,12 +275,18 @@ export default function KbPage() {
             label="Todas"
             count={stats?.total ?? 0}
             active={selectedCategory === 'all'}
-            onClick={() => setSelectedCategory('all')}
+            onClick={() => {
+              setSelectedCategory('all');
+              setPage(1);
+            }}
           />
           <SidebarItem
             label="Sem categoria"
             active={selectedCategory === 'uncategorized'}
-            onClick={() => setSelectedCategory('uncategorized')}
+            onClick={() => {
+              setSelectedCategory('uncategorized');
+              setPage(1);
+            }}
             muted
           />
           <div className="border-t my-2" />
@@ -286,7 +297,10 @@ export default function KbPage() {
                 color={c.color}
                 count={c._count?.articles ?? 0}
                 active={selectedCategory === c.id}
-                onClick={() => setSelectedCategory(c.id)}
+                onClick={() => {
+                  setSelectedCategory(c.id);
+                  setPage(1);
+                }}
               />
               <button
                 onClick={() => removeCategory(c)}
@@ -312,7 +326,10 @@ export default function KbPage() {
               <Input
                 placeholder="Buscar por título ou conteúdo…"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }}
                 className="pl-8"
               />
             </div>
@@ -321,7 +338,10 @@ export default function KbPage() {
                 <button
                   key={s}
                   type="button"
-                  onClick={() => setStatusFilter(s)}
+                  onClick={() => {
+                    setStatusFilter(s);
+                    setPage(1);
+                  }}
                   className={`rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                     statusFilter === s
                       ? 'border-foreground bg-accent text-foreground'
@@ -355,8 +375,9 @@ export default function KbPage() {
               )}
             </div>
           ) : (
+            <>
             <ul className="space-y-2">
-              {filteredArticles.map((a) => (
+              {articlesSlice.map((a) => (
                 <li
                   key={a.id}
                   className="group rounded-lg border bg-card p-3 hover:border-foreground/30"
@@ -445,6 +466,14 @@ export default function KbPage() {
                 </li>
               ))}
             </ul>
+            <Pagination
+              page={page}
+              perPage={perPage}
+              total={filteredArticles.length}
+              onPageChange={setPage}
+              onPerPageChange={setPerPage}
+            />
+            </>
           )}
         </div>
       </div>

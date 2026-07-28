@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 interface ApiKey {
   id: string;
@@ -54,6 +55,11 @@ export default function ApiKeysPage() {
     queryKey: ['api-keys'],
     queryFn: () => api('/api/api-keys'),
   });
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const keys = data?.keys ?? [];
+  const { slice: keysSlice } = usePaginatedList(keys, perPage, page);
 
   async function toggle(key: ApiKey) {
     try {
@@ -140,7 +146,7 @@ export default function ApiKeysPage() {
               </tr>
             </thead>
             <tbody>
-              {data.keys.map((key) => (
+              {keysSlice.map((key) => (
                 <tr key={key.id} className="border-t">
                   <td className="px-4 py-2.5 font-medium">{key.name}</td>
                   <td className="px-4 py-2.5">
@@ -195,6 +201,14 @@ export default function ApiKeysPage() {
               ))}
             </tbody>
           </table>
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={keys.length}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+            className="px-4 pb-4"
+          />
         </div>
       )}
 

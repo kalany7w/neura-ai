@@ -27,6 +27,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 type ScoreType = 'CSAT' | 'NPS' | 'THUMBS';
 type ChannelScope = 'ALL' | 'WHATSAPP' | 'TELEGRAM' | 'EMAIL' | 'WEBCHAT';
@@ -84,6 +85,11 @@ export default function CsatPage() {
     queryKey: ['csat-surveys'],
     queryFn: () => api('/api/csat-surveys'),
   });
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const surveys = data?.surveys ?? [];
+  const { slice: surveysSlice } = usePaginatedList(surveys, perPage, page);
 
   async function toggleEnabled(s: Survey) {
     try {
@@ -173,7 +179,7 @@ export default function CsatPage() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {data.surveys.map((s) => {
+          {surveysSlice.map((s) => {
             const Icon = SCORE_TYPE_ICON[s.scoreType];
             const respRate = s.sentCount > 0
               ? Math.round((s.responseCount / s.sentCount) * 100)
@@ -288,6 +294,13 @@ export default function CsatPage() {
               </div>
             );
           })}
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={surveys.length}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+          />
         </div>
       )}
 

@@ -14,6 +14,7 @@ import { useConfirm } from '@/components/confirm-provider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 const PREVIEW_VARS = {
   contact: { name: 'Maria Silva', phoneNumber: '+5511999998888' },
@@ -50,6 +51,11 @@ export default function TemplatesPage() {
     queryFn: () => api('/api/templates'),
   });
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const templates = data?.templates ?? [];
+  const { slice: templatesSlice } = usePaginatedList(templates, perPage, page);
 
   const {
     register,
@@ -237,8 +243,9 @@ export default function TemplatesPage() {
           ) : !data?.templates.length ? (
             <p className="text-sm text-muted-foreground">Nenhum template.</p>
           ) : (
+            <>
             <ul className="space-y-2">
-              {data.templates.map((t) => {
+              {templatesSlice.map((t) => {
                 const isPinned = !!t.pinnedAt;
                 return (
                   <li
@@ -288,6 +295,14 @@ export default function TemplatesPage() {
                 );
               })}
             </ul>
+            <Pagination
+              page={page}
+              perPage={perPage}
+              total={templates.length}
+              onPageChange={setPage}
+              onPerPageChange={setPerPage}
+            />
+            </>
           )}
         </div>
       </div>

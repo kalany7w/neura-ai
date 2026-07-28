@@ -28,8 +28,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
-type Action = 'send_message' | 'create_conversation' | 'apply_label' | 'create_note';
+type Action ='send_message' | 'create_conversation' | 'apply_label' | 'create_note';
 
 interface InboundHook {
   id: string;
@@ -90,6 +91,11 @@ export function InboundWebhooksSection() {
     queryKey: ['inbound-webhooks'],
     queryFn: () => api('/api/integrations/inbound'),
   });
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const hooks = data?.hooks ?? [];
+  const { slice: hooksSlice } = usePaginatedList(hooks, perPage, page);
 
   function copy(text: string, key: string) {
     navigator.clipboard.writeText(text).then(
@@ -194,7 +200,7 @@ export function InboundWebhooksSection() {
         </div>
       ) : (
         <div className="space-y-3">
-          {data.hooks.map((h) => {
+          {hooksSlice.map((h) => {
             const url = inboundUrl(h.slug);
             const showSecret = revealedSecret[h.id];
             return (
@@ -336,6 +342,13 @@ export function InboundWebhooksSection() {
               </div>
             );
           })}
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={hooks.length}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+          />
         </div>
       )}
 

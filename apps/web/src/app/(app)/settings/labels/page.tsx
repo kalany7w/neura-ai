@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 interface FunnelLite {
   id: string;
@@ -66,6 +67,11 @@ export default function LabelsPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [editing, setEditing] = useState<LabelItem | null>(null);
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const labels = data?.labels ?? [];
+  const { slice: labelsSlice } = usePaginatedList(labels, perPage, page);
 
   const {
     register,
@@ -210,8 +216,9 @@ export default function LabelsPage() {
           ) : !data?.labels.length ? (
             <p className="text-sm text-muted-foreground">Nenhuma etiqueta.</p>
           ) : (
+            <>
             <ul className="space-y-2">
-              {data.labels.map((l) => (
+              {labelsSlice.map((l) => (
                 <li
                   key={l.id}
                   className="flex items-center justify-between rounded-md border p-3"
@@ -264,6 +271,14 @@ export default function LabelsPage() {
                 </li>
               ))}
             </ul>
+            <Pagination
+              page={page}
+              perPage={perPage}
+              total={labels.length}
+              onPageChange={setPage}
+              onPerPageChange={setPerPage}
+            />
+            </>
           )}
         </div>
       </div>

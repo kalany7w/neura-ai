@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 type AttrType = 'STRING' | 'NUMBER' | 'DATE' | 'SELECT';
 
@@ -117,58 +118,12 @@ export default function CustomAttrsPage() {
             const scopeLabel =
               scope === 'CONTACT' ? 'Contatos' : scope === 'CONVERSATION' ? 'Conversas' : 'Cards';
             return (
-              <section key={scope}>
-                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {scopeLabel} ({items.length})
-                </h2>
-                <div className="rounded-lg border bg-card overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <th className="px-4 py-2.5">Rótulo</th>
-                        <th className="px-4 py-2.5">Chave</th>
-                        <th className="px-4 py-2.5">Tipo</th>
-                        <th className="px-4 py-2.5">Opções</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((def) => (
-                        <tr key={def.id} className="border-t">
-                          <td className="px-4 py-2 font-medium">{def.label}</td>
-                          <td className="px-4 py-2">
-                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{def.key}</code>
-                          </td>
-                          <td className="px-4 py-2">
-                            <span
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_BADGE[def.type]}`}
-                            >
-                              {TYPE_LABEL[def.type]}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-xs text-muted-foreground">
-                            {def.type === 'SELECT' && def.options?.values ? (
-                              <span className="line-clamp-1">{def.options.values.join(', ')}</span>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-right">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => remove(def)}
-                              className="text-muted-foreground hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+              <AttrScopeSection
+                key={scope}
+                scopeLabel={scopeLabel}
+                items={items}
+                onRemove={remove}
+              />
             );
           })}
         </div>
@@ -176,6 +131,83 @@ export default function CustomAttrsPage() {
 
       <CreateAttrDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
+  );
+}
+
+function AttrScopeSection({
+  scopeLabel,
+  items,
+  onRemove,
+}: {
+  scopeLabel: string;
+  items: AttrDef[];
+  onRemove: (def: AttrDef) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+  const { slice } = usePaginatedList(items, perPage, page);
+
+  return (
+    <section>
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {scopeLabel} ({items.length})
+      </h2>
+      <div className="rounded-lg border bg-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <th className="px-4 py-2.5">Rótulo</th>
+              <th className="px-4 py-2.5">Chave</th>
+              <th className="px-4 py-2.5">Tipo</th>
+              <th className="px-4 py-2.5">Opções</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {slice.map((def) => (
+              <tr key={def.id} className="border-t">
+                <td className="px-4 py-2 font-medium">{def.label}</td>
+                <td className="px-4 py-2">
+                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{def.key}</code>
+                </td>
+                <td className="px-4 py-2">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_BADGE[def.type]}`}
+                  >
+                    {TYPE_LABEL[def.type]}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">
+                  {def.type === 'SELECT' && def.options?.values ? (
+                    <span className="line-clamp-1">{def.options.values.join(', ')}</span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onRemove(def)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <Pagination
+          page={page}
+          perPage={perPage}
+          total={items.length}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+          className="px-4 pb-4"
+        />
+      </div>
+    </section>
   );
 }
 

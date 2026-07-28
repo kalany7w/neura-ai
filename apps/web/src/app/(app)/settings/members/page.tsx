@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ChevronDown, Mail, RefreshCw, Trash2, UserMinus } from 'lucide-react';
@@ -18,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InviteForm } from '@/components/forms/invite-form';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 import { useOnlineAgents } from '@/hooks/use-online-agents';
 
 type Role = 'ADMIN' | 'SUPERVISOR' | 'AGENT';
@@ -105,6 +107,16 @@ export default function MembersPage() {
   });
 
   const adminCount = data?.workspace.members.filter((m) => m.role === 'ADMIN').length ?? 0;
+
+  const [invitesPage, setInvitesPage] = useState(1);
+  const [invitesPerPage, setInvitesPerPage] = useState<number>(DEFAULT_PER_PAGE);
+  const [membersPage, setMembersPage] = useState(1);
+  const [membersPerPage, setMembersPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const invites = invitesData?.invites ?? [];
+  const members = data?.workspace.members ?? [];
+  const { slice: invitesSlice } = usePaginatedList(invites, invitesPerPage, invitesPage);
+  const { slice: membersSlice } = usePaginatedList(members, membersPerPage, membersPage);
 
   async function changeRole(member: Member, newRole: Role) {
     if (newRole === member.role) return;
@@ -223,8 +235,9 @@ export default function MembersPage() {
             ) : invitesData.invites.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nenhum convite pendente.</p>
             ) : (
+              <>
               <ul className="divide-y">
-                {invitesData.invites.map((inv) => (
+                {invitesSlice.map((inv) => (
                   <li key={inv.id} className="flex items-center gap-3 py-2.5">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                       <Mail className="h-4 w-4" />
@@ -264,6 +277,14 @@ export default function MembersPage() {
                   </li>
                 ))}
               </ul>
+              <Pagination
+                page={invitesPage}
+                perPage={invitesPerPage}
+                total={invites.length}
+                onPageChange={setInvitesPage}
+                onPerPageChange={setInvitesPerPage}
+              />
+              </>
             )}
           </CardContent>
         </Card>
@@ -282,8 +303,9 @@ export default function MembersPage() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Carregando…</p>
           ) : (
+            <>
             <ul className="divide-y">
-              {data?.workspace.members.map((m) => {
+              {membersSlice.map((m) => {
                 const isSelf = m.userId === currentUserId;
                 const isLastAdmin = m.role === 'ADMIN' && adminCount <= 1;
                 const isOnline = online.has(m.userId);
@@ -379,6 +401,14 @@ export default function MembersPage() {
                 );
               })}
             </ul>
+            <Pagination
+              page={membersPage}
+              perPage={membersPerPage}
+              total={members.length}
+              onPageChange={setMembersPage}
+              onPerPageChange={setMembersPerPage}
+            />
+            </>
           )}
         </CardContent>
       </Card>

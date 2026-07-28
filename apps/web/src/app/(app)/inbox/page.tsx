@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Pagination, DEFAULT_PER_PAGE } from '@/components/ui/pagination';
 import { useT } from '@/lib/i18n';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import { Input } from '@/components/ui/input';
@@ -181,7 +182,7 @@ export default function InboxPage() {
   const [tab, setTab] = useState<Tab>('ALL');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const perPage = 25;
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
 
   // Filtros avançados
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -289,6 +290,7 @@ export default function InboxPage() {
       tab,
       search,
       page,
+      perPage,
       Array.from(advStatuses).sort().join(','),
       Array.from(advInboxIds).sort().join(','),
       advLabelId,
@@ -315,7 +317,6 @@ export default function InboxPage() {
     }
   });
 
-  const totalPages = data ? Math.max(1, Math.ceil(data.total / perPage)) : 1;
 
   return (
     <div className="space-y-6">
@@ -733,30 +734,14 @@ export default function InboxPage() {
         )}
       </div>
 
-      {data && data.total > perPage && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-muted-foreground">
-            {data.total} conversas · página {data.page} de {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded border px-3 py-1 disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="rounded border px-3 py-1 disabled:opacity-50"
-            >
-              Próxima
-            </button>
-          </div>
-        </div>
+      {data && (
+        <Pagination
+          page={page}
+          perPage={perPage}
+          total={data.total}
+          onPageChange={setPage}
+          onPerPageChange={setPerPage}
+        />
       )}
 
       <InboxBulkActionsBar

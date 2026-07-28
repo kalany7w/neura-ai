@@ -42,6 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Pagination, DEFAULT_PER_PAGE, usePaginatedList } from '@/components/ui/pagination';
 
 type ConditionOp = 'equals' | 'contains' | 'not_contains' | 'starts_with' | 'in' | 'not_in';
 
@@ -226,6 +227,12 @@ export default function AutomationsPage() {
     queryFn: () => api('/api/automations/settings'),
   });
 
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+
+  const rules = data?.rules ?? [];
+  const { slice: rulesSlice } = usePaginatedList(rules, perPage, page);
+
   async function togglePauseGlobal() {
     if (!settings) return;
     const next = !settings.paused;
@@ -355,7 +362,7 @@ export default function AutomationsPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {data.rules.map((rule) => (
+          {rulesSlice.map((rule) => (
             <RuleRow
               key={rule.id}
               rule={rule}
@@ -365,6 +372,13 @@ export default function AutomationsPage() {
               onShowRuns={() => setRunsRule(rule)}
             />
           ))}
+          <Pagination
+            page={page}
+            perPage={perPage}
+            total={rules.length}
+            onPageChange={setPage}
+            onPerPageChange={setPerPage}
+          />
         </div>
       )}
 
