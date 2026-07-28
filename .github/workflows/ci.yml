@@ -2,9 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # deploy/kvm4 e a branch que deploya em producao — sem ela no gatilho, o que
+    # vai pro ar nunca passava por typecheck, lint, teste nem build.
+    branches: [main, deploy/kvm4]
   pull_request:
-    branches: [main]
+    branches: [main, deploy/kvm4]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -15,7 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector, nao postgres puro: a migration phase34_knowledge_base faz
+        # CREATE EXTENSION vector e o schema declara extensions = [vector].
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
