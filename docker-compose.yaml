@@ -145,3 +145,10 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+
+# Rede coolify external: o Caddy do Coolify vive nela; rede própria (bridge isolada)
+# causa "HTTPS handshake OK + upstream timeout" intermitente após restarts.
+networks:
+  default:
+    name: coolify
+    external: true
