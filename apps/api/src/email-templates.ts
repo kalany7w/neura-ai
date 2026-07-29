@@ -8,6 +8,9 @@
 
 const FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
+/** Nome comercial do produto (decisão Kalan 2026-07-29). O subject usa só "Neura AI" pra não estourar a linha da inbox. */
+const PRODUCT_NAME = 'Sistema de atendimento Neura AI';
+
 /** Escapa `&` `<` `>` `"` `'` para uso seguro em HTML. Ampersand SEMPRE primeiro. */
 export function escapeHtml(s: string): string {
   return s
@@ -83,17 +86,17 @@ export const emailTemplates = {
     subject: 'Confirme seu email — Neura AI',
     html: emailLayout({
       title: 'Confirme seu email',
-      intro: 'Falta só um passo para ativar sua conta no Neura AI. Clique no botão abaixo para confirmar seu email.',
+      intro: `Falta só um passo para ativar sua conta no ${PRODUCT_NAME}. Clique no botão abaixo para confirmar seu email.`,
       ctaLabel: 'Confirmar email',
       ctaUrl: url,
-      footerNote: 'Se você não criou uma conta no Neura AI, ignore este email.',
+      footerNote: `Se você não criou uma conta no ${PRODUCT_NAME}, ignore este email.`,
     }),
   }),
   resetPassword: (url: string) => ({
     subject: 'Redefinir senha — Neura AI',
     html: emailLayout({
       title: 'Redefinir senha',
-      intro: 'Recebemos um pedido para redefinir sua senha no Neura AI. Clique no botão abaixo para criar uma nova senha.',
+      intro: `Recebemos um pedido para redefinir sua senha no ${PRODUCT_NAME}. Clique no botão abaixo para criar uma nova senha.`,
       ctaLabel: 'Criar nova senha',
       ctaUrl: url,
       footerNote: 'Se você não solicitou a redefinição, ignore este email — sua senha atual continua valendo.',
@@ -103,7 +106,7 @@ export const emailTemplates = {
     subject: `Você foi convidado para ${workspaceName} — Neura AI`,
     html: emailLayout({
       title: 'Convite para o Neura AI',
-      intro: `${escapeHtml(inviterName)} te convidou para fazer parte do workspace <strong>${escapeHtml(workspaceName)}</strong> no Neura AI.`,
+      intro: `${escapeHtml(inviterName)} te convidou para fazer parte do workspace <strong>${escapeHtml(workspaceName)}</strong> no ${PRODUCT_NAME}.`,
       ctaLabel: 'Aceitar convite',
       ctaUrl: url,
       footerNote: 'O convite expira em 7 dias. Se você não esperava este convite, ignore este email.',
