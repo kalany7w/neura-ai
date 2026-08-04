@@ -6,6 +6,7 @@ import { logger } from './logger.js';
 import { dispatchOutbound } from './queue.js';
 import { publishEvent } from './redis-pub.js';
 import { patchFirstResponse } from './services/sla-compute.js';
+import { splitMessageText } from './services/split-message.js';
 
 const QUEUE_SCHEDULED_MSGS = 'scheduled-messages';
 const bullConnection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -27,7 +28,7 @@ async function processScheduledTick(_job: Job): Promise<void> {
     try {
       const conv = await prisma.conversation.findFirst({
         where: { id: sched.conversationId, workspaceId: sched.workspaceId },
-        include: { contact: { select: { phoneNumber: true } }, inbox: { select: { status: true } } },
+        include: { contact: { select: { phoneNumber: true } }, inbox: { select: { status: true, type: true } } },
       });
       if (!conv) {
         await prisma.scheduledMessage.update({
@@ -42,48 +43,66 @@ async function processScheduledTick(_job: Job): Promise<void> {
         continue;
       }
 
-      // Cria Message OUTBOUND + enfileira pro waworker
-      const msg = await prisma.message.create({
-        data: {
+      // Cria Message(s) OUTBOUND + enfileira pro waworker. Texto longo em
+      // WHATSAPP/TELEGRAM (limite 4096 do canal) vira N partes (parte i/n).
+      const splitsChannel = conv.inbox.type === 'WHATSAPP' || conv.inbox.type === 'TELEGRAM';
+      const textParts =
+        sched.type === 'TEXT' && sched.content && splitsChannel
+          ? splitMessageText(sched.content)
+          : [sched.content];
+
+      let firstMessageId: string | null = null;
+      let firstCreatedAt: Date | null = null;
+      let lastCreatedAt: Date | null = null;
+      for (const [i, part] of textParts.entries()) {
+        const msg = await prisma.message.create({
+          data: {
+            conversationId: conv.id,
+            direction: 'OUTBOUND',
+            type: sched.type,
+            content: part,
+            mediaUrl: i === 0 ? sched.mediaUrl : null,
+            mediaMimeType: i === 0 ? sched.mediaMimeType : null,
+            status: 'PENDING',
+          },
+        });
+        firstMessageId ??= msg.id;
+        firstCreatedAt ??= msg.createdAt;
+        lastCreatedAt = msg.createdAt;
+        await dispatchOutbound({
+          inboxId: conv.inboxId,
+          workspaceId: sched.workspaceId,
           conversationId: conv.id,
-          direction: 'OUTBOUND',
-          type: sched.type,
-          content: sched.content,
-          mediaUrl: sched.mediaUrl,
-          mediaMimeType: sched.mediaMimeType,
-          status: 'PENDING',
-        },
-      });
-      const slaPatch = await patchFirstResponse(conv.id, msg.createdAt);
+          messageId: msg.id,
+          to: conv.contact.phoneNumber ?? '',
+          type: sched.type as 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT',
+          text: part ?? undefined,
+          mediaUrl: i === 0 ? sched.mediaUrl ?? undefined : undefined,
+          mimeType: i === 0 ? sched.mediaMimeType ?? undefined : undefined,
+          fileName: i === 0 ? sched.fileName ?? undefined : undefined,
+        });
+        await publishEvent(sched.workspaceId, 'messages', 'message.new', {
+          conversationId: conv.id,
+          message: msg,
+        });
+      }
+      const slaPatch = await patchFirstResponse(conv.id, firstCreatedAt!);
       await prisma.conversation.update({
         where: { id: conv.id },
         data: {
-          lastMessageAt: msg.createdAt,
-          lastOutboundAt: msg.createdAt,
+          lastMessageAt: lastCreatedAt!,
+          lastOutboundAt: lastCreatedAt!,
           ...slaPatch,
         },
       });
-      await dispatchOutbound({
-        inboxId: conv.inboxId,
-        workspaceId: sched.workspaceId,
-        conversationId: conv.id,
-        messageId: msg.id,
-        to: conv.contact.phoneNumber ?? '',
-        type: sched.type as 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'DOCUMENT',
-        text: sched.content ?? undefined,
-        mediaUrl: sched.mediaUrl ?? undefined,
-        mimeType: sched.mediaMimeType ?? undefined,
-        fileName: sched.fileName ?? undefined,
-      });
       await prisma.scheduledMessage.update({
         where: { id: sched.id },
-        data: { status: 'SENT', sentMessageId: msg.id },
+        data: { status: 'SENT', sentMessageId: firstMessageId },
       });
-      await publishEvent(sched.workspaceId, 'messages', 'message.new', {
-        conversationId: conv.id,
-        message: msg,
-      });
-      logger.info({ id: sched.id, messageId: msg.id }, 'scheduled message dispatched');
+      logger.info(
+        { id: sched.id, messageId: firstMessageId, parts: textParts.length },
+        'scheduled message dispatched',
+      );
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       logger.error({ err, id: sched.id }, 'scheduled message failed');

@@ -4,6 +4,7 @@ import { prisma } from '../db.js';
 import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
+import { MESSAGE_TEXT_MAX } from '../services/split-message.js';
 
 export const scheduledMessagesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -14,7 +15,7 @@ const scheduleSchema = z
     conversationId: z.string().min(1),
     scheduledFor: z.string().datetime(),
     type: z.enum(['TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT']).default('TEXT'),
-    content: z.string().max(4096).optional(),
+    content: z.string().max(MESSAGE_TEXT_MAX).optional(),
     mediaUrl: z.string().url().optional(),
     mediaMimeType: z.string().max(120).optional(),
     fileName: z.string().max(255).optional(),

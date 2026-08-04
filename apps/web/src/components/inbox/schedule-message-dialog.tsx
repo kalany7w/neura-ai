@@ -131,7 +131,7 @@ export function ScheduleMessageDialog({
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={4}
-              maxLength={4096}
+              maxLength={65536}
               placeholder="O que enviar?"
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />

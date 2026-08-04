@@ -9,6 +9,7 @@ import { publishEvent } from '../redis-pub.js';
 import { redis } from './../redis.js';
 import { audit } from '../services/audit.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
+import { splitMessageText, MESSAGE_TEXT_MAX } from '../services/split-message.js';
 
 /**
  * Endpoints PÚBLICOS — sem requireAuth/requireWorkspace. Cada request é
@@ -36,14 +37,14 @@ const actionSchema = z.discriminatedUnion('action', [
     conversationId: z.string().optional(),
     inboxId: z.string().optional(),
     phoneNumber: e164.optional(),
-    text: z.string().min(1).max(4096),
+    text: z.string().min(1).max(MESSAGE_TEXT_MAX),
   }),
   z.object({
     action: z.literal('create_conversation'),
     inboxId: z.string().min(1),
     phoneNumber: e164,
     contactName: z.string().max(120).optional(),
-    text: z.string().max(4096).optional(),
+    text: z.string().max(MESSAGE_TEXT_MAX).optional(),
   }),
   z.object({
     action: z.literal('apply_label'),
@@ -124,41 +125,52 @@ async function handleAction(
       if (!conv) return { ok: false, error: 'conversation_not_found' };
       if (conv.inbox.status !== 'CONNECTED') return { ok: false, error: 'inbox_not_connected' };
 
-      const msg = await prisma.message.create({
-        data: {
+      // Texto longo vira N partes (parte i/n) enviadas em ordem — antes a API
+      // rejeitava >4096 com 400 e a mensagem sumia em silêncio.
+      const parts = splitMessageText(action.text);
+      const messageIds: string[] = [];
+      let firstCreatedAt: Date | null = null;
+      let lastCreatedAt: Date | null = null;
+      for (const part of parts) {
+        const msg = await prisma.message.create({
+          data: {
+            conversationId: conv.id,
+            direction: 'OUTBOUND',
+            type: 'TEXT',
+            content: part,
+            status: 'PENDING',
+          },
+        });
+        firstCreatedAt ??= msg.createdAt;
+        lastCreatedAt = msg.createdAt;
+        messageIds.push(msg.id);
+        await dispatchOutbound({
+          inboxId: conv.inboxId,
+          workspaceId,
           conversationId: conv.id,
-          direction: 'OUTBOUND',
+          messageId: msg.id,
+          to: conv.contact.phoneNumber ?? '',
           type: 'TEXT',
-          content: action.text,
-          status: 'PENDING',
-        },
-      });
-      const slaPatch1 = await patchFirstResponse(conv.id, msg.createdAt);
+          text: part,
+        });
+        await publishEvent(workspaceId, 'messages', 'message.new', {
+          conversationId: conv.id,
+          message: msg,
+          reason: 'inbound_webhook',
+        });
+      }
+      const slaPatch1 = await patchFirstResponse(conv.id, firstCreatedAt!);
       await prisma.conversation.update({
         where: { id: conv.id },
         data: {
-          lastMessageAt: msg.createdAt,
-          lastOutboundAt: msg.createdAt,
+          lastMessageAt: lastCreatedAt!,
+          lastOutboundAt: lastCreatedAt!,
           lastMessagePreview: action.text.slice(0, 80),
           ...slaPatch1,
         },
       });
-      await dispatchOutbound({
-        inboxId: conv.inboxId,
-        workspaceId,
-        conversationId: conv.id,
-        messageId: msg.id,
-        to: conv.contact.phoneNumber ?? '',
-        type: 'TEXT',
-        text: action.text,
-      });
-      await publishEvent(workspaceId, 'messages', 'message.new', {
-        conversationId: conv.id,
-        message: msg,
-        reason: 'inbound_webhook',
-      });
       conversationId = conv.id;
-      return { ok: true, data: { messageId: msg.id, conversationId } };
+      return { ok: true, data: { messageId: messageIds[0], messageIds, parts: parts.length, conversationId } };
     }
 
     case 'create_conversation': {
@@ -209,43 +221,51 @@ async function handleAction(
         });
       }
 
-      // Se text presente, manda mensagem em sequência (reusa lógica do send_message inline)
+      // Se text presente, manda mensagem em sequência (reusa lógica do send_message inline).
+      // Texto longo vira N partes (parte i/n) enviadas em ordem.
       let messageId: string | undefined;
       if (action.text && inbox.status === 'CONNECTED') {
-        const msg = await prisma.message.create({
-          data: {
+        const parts = splitMessageText(action.text);
+        let firstCreatedAt: Date | null = null;
+        let lastCreatedAt: Date | null = null;
+        for (const part of parts) {
+          const msg = await prisma.message.create({
+            data: {
+              conversationId: conv.id,
+              direction: 'OUTBOUND',
+              type: 'TEXT',
+              content: part,
+              status: 'PENDING',
+            },
+          });
+          firstCreatedAt ??= msg.createdAt;
+          lastCreatedAt = msg.createdAt;
+          messageId ??= msg.id;
+          await dispatchOutbound({
+            inboxId: inbox.id,
+            workspaceId,
             conversationId: conv.id,
-            direction: 'OUTBOUND',
+            messageId: msg.id,
+            to: action.phoneNumber,
             type: 'TEXT',
-            content: action.text,
-            status: 'PENDING',
-          },
-        });
-        const slaPatch2 = await patchFirstResponse(conv.id, msg.createdAt);
+            text: part,
+          });
+          await publishEvent(workspaceId, 'messages', 'message.new', {
+            conversationId: conv.id,
+            message: msg,
+            reason: 'inbound_webhook',
+          });
+        }
+        const slaPatch2 = await patchFirstResponse(conv.id, firstCreatedAt!);
         await prisma.conversation.update({
           where: { id: conv.id },
           data: {
-            lastMessageAt: msg.createdAt,
-            lastOutboundAt: msg.createdAt,
+            lastMessageAt: lastCreatedAt!,
+            lastOutboundAt: lastCreatedAt!,
             lastMessagePreview: action.text.slice(0, 80),
             ...slaPatch2,
           },
         });
-        await dispatchOutbound({
-          inboxId: inbox.id,
-          workspaceId,
-          conversationId: conv.id,
-          messageId: msg.id,
-          to: action.phoneNumber,
-          type: 'TEXT',
-          text: action.text,
-        });
-        await publishEvent(workspaceId, 'messages', 'message.new', {
-          conversationId: conv.id,
-          message: msg,
-          reason: 'inbound_webhook',
-        });
-        messageId = msg.id;
       }
 
       return {

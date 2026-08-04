@@ -18,6 +18,7 @@ import { patchFirstResponse, patchResolution } from '../services/sla-compute.js'
 import { audit } from '../services/audit.js';
 import { aiQueue, enqueueCsatSend, cancelCsatSend } from '../queue.js';
 import { resolveSurveyForConversation } from '../services/csat-send.js';
+import { splitMessageText, MESSAGE_TEXT_MAX } from '../services/split-message.js';
 import { env } from '../env.js';
 
 export const conversationsRouter = new Hono<{
@@ -1040,7 +1041,7 @@ conversationsRouter.post('/:id/unarchive', requireAuth, requireWorkspace, async 
 const sendBody = z
   .object({
     type: z.enum(['TEXT', 'IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT']).default('TEXT'),
-    text: z.string().max(4096).optional(),
+    text: z.string().max(MESSAGE_TEXT_MAX).optional(),
     mediaUrl: z.string().url().optional(),
     mimeType: z.string().max(120).optional(),
     fileName: z.string().max(255).optional(),
@@ -1118,34 +1119,49 @@ conversationsRouter.post(
       quotedWaMessageId = quoted.waMessageId ?? undefined;
     }
 
-    // Cria Message PENDING
-    const msg = await prisma.message.create({
-      data: {
-        conversationId: conv.id,
-        direction: 'OUTBOUND',
-        type: parsed.data.type,
-        content: parsed.data.text ?? null,
-        mediaUrl: parsed.data.mediaUrl ?? null,
-        mediaMimeType: parsed.data.mimeType ?? null,
-        replyToId: parsed.data.replyToMessageId ?? null,
-        status: 'PENDING',
-      },
-    });
+    // Texto longo em WHATSAPP/TELEGRAM (limite 4096 do canal) vira N partes
+    // (parte i/n) enviadas em ordem. EMAIL/WEBCHAT não têm esse limite — vão inteiros.
+    const splitsChannel = conv.inbox.type === 'WHATSAPP' || conv.inbox.type === 'TELEGRAM';
+    const textParts =
+      parsed.data.type === 'TEXT' && parsed.data.text && splitsChannel
+        ? splitMessageText(parsed.data.text)
+        : [parsed.data.text];
+
+    // Cria Message(s) PENDING — reply/quote só na 1ª parte
+    const created: Awaited<ReturnType<typeof prisma.message.create>>[] = [];
+    for (const [i, part] of textParts.entries()) {
+      const msg = await prisma.message.create({
+        data: {
+          conversationId: conv.id,
+          direction: 'OUTBOUND',
+          type: parsed.data.type,
+          content: part ?? null,
+          mediaUrl: i === 0 ? parsed.data.mediaUrl ?? null : null,
+          mediaMimeType: i === 0 ? parsed.data.mimeType ?? null : null,
+          replyToId: i === 0 ? parsed.data.replyToMessageId ?? null : null,
+          status: 'PENDING',
+        },
+      });
+      created.push(msg);
+    }
+    // textParts sempre tem ≥1 item, então created também
+    const firstMsg = created[0]!;
+    const lastMsg = created[created.length - 1]!;
     // Cache do preview pra lista de conversas
     const preview = parsed.data.text
       ? parsed.data.text.slice(0, 80)
       : `[${parsed.data.type.toLowerCase()}]`;
     // SLA: registra FRT se primeira resposta de agente
-    const slaPatch = await patchFirstResponse(conv.id, msg.createdAt);
+    const slaPatch = await patchFirstResponse(conv.id, firstMsg.createdAt);
     // Auto-atribui o agente que enviou (se conversa não atribuída)
     if (!conv.assignedAgentId) {
       await prisma.conversation.update({
         where: { id: conv.id },
         data: {
           assignedAgentId: userId,
-          lastMessageAt: msg.createdAt,
+          lastMessageAt: lastMsg.createdAt,
           lastAgentRepliedId: userId,
-          lastOutboundAt: msg.createdAt,
+          lastOutboundAt: lastMsg.createdAt,
           lastMessagePreview: preview,
           ...slaPatch,
         },
@@ -1154,9 +1170,9 @@ conversationsRouter.post(
       await prisma.conversation.update({
         where: { id: conv.id },
         data: {
-          lastMessageAt: msg.createdAt,
+          lastMessageAt: lastMsg.createdAt,
           lastAgentRepliedId: userId,
-          lastOutboundAt: msg.createdAt,
+          lastOutboundAt: lastMsg.createdAt,
           lastMessagePreview: preview,
           ...slaPatch,
         },
@@ -1167,32 +1183,39 @@ conversationsRouter.post(
     await prisma.card.updateMany({
       where: { conversationId: conv.id },
       data: {
-        lastAgentReplyAt: msg.createdAt,
+        lastAgentReplyAt: firstMsg.createdAt,
         slaStatus: 'green',
         unreadCount: 0,
       },
     });
 
     // Enfileira na queue certa baseada no canal da inbox (WHATSAPP/TELEGRAM)
-    await dispatchOutbound({
-      inboxId: conv.inboxId,
-      workspaceId,
-      conversationId: conv.id,
-      messageId: msg.id,
-      to: conv.contact.phoneNumber ?? '',
-      type: parsed.data.type,
-      text: parsed.data.text,
-      mediaUrl: parsed.data.mediaUrl,
-      mimeType: parsed.data.mimeType,
-      fileName: parsed.data.fileName,
-      quotedWaMessageId,
-    });
+    for (const [i, msg] of created.entries()) {
+      await dispatchOutbound({
+        inboxId: conv.inboxId,
+        workspaceId,
+        conversationId: conv.id,
+        messageId: msg.id,
+        to: conv.contact.phoneNumber ?? '',
+        type: parsed.data.type,
+        text: msg.content ?? undefined,
+        mediaUrl: i === 0 ? parsed.data.mediaUrl : undefined,
+        mimeType: i === 0 ? parsed.data.mimeType : undefined,
+        fileName: i === 0 ? parsed.data.fileName : undefined,
+        quotedWaMessageId: i === 0 ? quotedWaMessageId : undefined,
+      });
 
-    await publishEvent(workspaceId, 'messages', 'message.new', {
-      conversationId: conv.id,
-      message: msg,
-    });
+      await publishEvent(workspaceId, 'messages', 'message.new', {
+        conversationId: conv.id,
+        message: msg,
+      });
+    }
 
-    return c.json({ message: msg }, 201);
+    return c.json(
+      created.length > 1
+        ? { message: firstMsg, messages: created, parts: created.length }
+        : { message: firstMsg },
+      201,
+    );
   },
 );

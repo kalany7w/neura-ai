@@ -370,8 +370,11 @@ async function main() {
   await t('mensagem TEXT sem texto → 400', async () => {
     expectStatus(await req('POST', `/api/conversations/${S.wcConversationId}/messages`, { type: 'TEXT' }), 400);
   });
-  await t('mensagem acima de 4096 chars → 400', async () => {
-    expectStatus(await req('POST', `/api/conversations/${S.wcConversationId}/messages`, { type: 'TEXT', text: 'x'.repeat(4097) }), 400);
+  await t('mensagem acima de 4096 chars → aceita (quebra automática)', async () => {
+    expectStatus(await req('POST', `/api/conversations/${S.wcConversationId}/messages`, { type: 'TEXT', text: 'x'.repeat(4097) }), [200, 201]);
+  });
+  await t('mensagem acima de 65536 chars → 400', async () => {
+    expectStatus(await req('POST', `/api/conversations/${S.wcConversationId}/messages`, { type: 'TEXT', text: 'x'.repeat(65537) }), 400);
   });
 
   // ------------------------------------------- SIMULADOR: EMAIL INBOUND
