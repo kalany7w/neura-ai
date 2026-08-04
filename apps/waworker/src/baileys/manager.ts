@@ -222,11 +222,13 @@ class SessionManager {
 
   /**
    * Restaura sessões de inboxes que estavam CONNECTED ou CONNECTING ao último shutdown.
+   * ERROR entra também: inbox que caiu com credencial salva (ex.: 405 por versão WA
+   * velha do Baileys, 28/07) deve voltar sozinha num deploy corrigido, sem QR novo.
    */
   async resumeAll(): Promise<void> {
     const inboxes = await prisma.inbox.findMany({
       where: {
-        status: { in: ['CONNECTED', 'CONNECTING', 'AWAITING_QR'] },
+        status: { in: ['CONNECTED', 'CONNECTING', 'AWAITING_QR', 'ERROR'] },
         waSession: { is: { encryptedAuthState: { not: null } } },
       },
       select: { id: true },

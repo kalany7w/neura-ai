@@ -67,8 +67,15 @@ export async function startSession(
   };
 
   sock.ev.on('creds.update', saveCreds);
+  // Handlers async num EventEmitter: rejection vira unhandledRejection e derruba
+  // o processo inteiro (todas as sessões). Foi a causa dos crash-loops de 28/07 —
+  // QA deletava a inbox com a sessão ainda fechando e o update de status explodia.
   sock.ev.on('connection.update', async (update) => {
-    await handleConnectionUpdate(ctx, update);
+    try {
+      await handleConnectionUpdate(ctx, update);
+    } catch (err) {
+      logger.error({ err, inboxId: inbox.id }, 'connection.update handler failed');
+    }
     if (update.connection === 'close') {
       const isLoggedOut =
         (update.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output
@@ -77,22 +84,24 @@ export async function startSession(
     }
   });
   sock.ev.on('messages.upsert', (payload) =>
-    handleMessagesUpsert({ inboxId: inbox.id, workspaceId: inbox.workspaceId, sock }, payload),
+    handleMessagesUpsert({ inboxId: inbox.id, workspaceId: inbox.workspaceId, sock }, payload).catch(
+      (err) => logger.error({ err, inboxId: inbox.id }, 'messages.upsert handler failed'),
+    ),
   );
   sock.ev.on('messages.update', (payload) =>
     handleMessagesUpdate(
       { inboxId: inbox.id, workspaceId: inbox.workspaceId },
       payload as Parameters<typeof handleMessagesUpdate>[1],
-    ),
+    ).catch((err) => logger.error({ err, inboxId: inbox.id }, 'messages.update handler failed')),
   );
   sock.ev.on('presence.update', (payload) =>
     handlePresenceUpdate(
       { inboxId: inbox.id, workspaceId: inbox.workspaceId },
       payload as Parameters<typeof handlePresenceUpdate>[1],
-    ),
+    ).catch((err) => logger.error({ err, inboxId: inbox.id }, 'presence.update handler failed')),
   );
 
-  await prisma.inbox.update({
+  await prisma.inbox.updateMany({
     where: { id: inboxId },
     data: { status: 'CONNECTING' },
   });

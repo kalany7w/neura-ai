@@ -40,7 +40,9 @@ export async function handleConnectionUpdate(
       create: { inboxId: ctx.inboxId, qrCode: dataUrl, qrExpiresAt: expiresAt },
       update: { qrCode: dataUrl, qrExpiresAt: expiresAt, updatedAt: new Date() },
     });
-    await prisma.inbox.update({
+    // updateMany: a inbox pode ter sido deletada com a sessão ainda viva (QA fazia
+    // isso) — update() lança P2025 nesse caso e o crash derruba o worker inteiro.
+    await prisma.inbox.updateMany({
       where: { id: ctx.inboxId },
       data: { status: 'AWAITING_QR' },
     });
@@ -54,7 +56,7 @@ export async function handleConnectionUpdate(
 
   if (connection === 'open') {
     const phoneNumber = ctx.sock.user?.id?.split(':')[0] ?? null;
-    await prisma.waSession.update({
+    await prisma.waSession.updateMany({
       where: { inboxId: ctx.inboxId },
       data: {
         phoneNumber: phoneNumber ? `+${phoneNumber}` : null,
@@ -64,7 +66,7 @@ export async function handleConnectionUpdate(
         lastError: null,
       },
     });
-    await prisma.inbox.update({
+    await prisma.inbox.updateMany({
       where: { id: ctx.inboxId },
       data: { status: 'CONNECTED' },
     });
@@ -88,11 +90,11 @@ export async function handleConnectionUpdate(
     );
 
     if (isLoggedOut) {
-      await prisma.inbox.update({
+      await prisma.inbox.updateMany({
         where: { id: ctx.inboxId },
         data: { status: 'DISCONNECTED' },
       });
-      await prisma.waSession.update({
+      await prisma.waSession.updateMany({
         where: { inboxId: ctx.inboxId },
         data: { encryptedAuthState: null, lastError: 'logged_out' },
       });
@@ -104,7 +106,7 @@ export async function handleConnectionUpdate(
       ctx.onLoggedOut?.();
     } else {
       // Reconexão será orquestrada pelo manager (backoff exp)
-      await prisma.inbox.update({
+      await prisma.inbox.updateMany({
         where: { id: ctx.inboxId },
         data: { status: 'CONNECTING' },
       });
