@@ -10,7 +10,15 @@ Think Chatwoot, but WhatsApp-first, kanban-native, and built on a modern TypeScr
 
 > **⚠️ Unofficial WhatsApp integration.** The WhatsApp channel uses [Baileys](https://github.com/WhiskeySockets/Baileys), which is **not** endorsed by WhatsApp/Meta and may violate their Terms of Service. Numbers can be banned — especially if used for bulk messaging. Use it for customer-initiated support conversations, at your own risk, preferably with a dedicated number. This project is not affiliated with WhatsApp or Meta.
 
-<!-- screenshots: kanban + inbox + connect-QR (coming) -->
+![Kanban board with SLA tracking and AI forecast](docs/screenshots/kanban.png)
+
+<details>
+<summary>More screenshots — conversation view & inbox</summary>
+
+![Conversation view with AI copilot sidebar](docs/screenshots/conversation.png)
+![Inbox with filters, labels and SLA states](docs/screenshots/inbox.png)
+
+</details>
 
 ## Features
 
