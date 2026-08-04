@@ -5,6 +5,7 @@ import { prisma } from '../db.js';
 import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
+import { aiRateLimit } from '../rate-limit.js';
 import { audit } from '../services/audit.js';
 import { publishEvent } from '../redis-pub.js';
 import { forecastCard } from '../services/ai-forecast.js';
@@ -20,7 +21,10 @@ export const kanbanRouter = new Hono<{
 
 const funnelSchema = z.object({
   name: z.string().min(1).max(80),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#3b82f6'),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#3b82f6'),
   isDefault: z.boolean().default(false),
   // Preset opcional (xag, caltech) — se passado, cria stages do preset em vez do default.
   preset: z.string().optional(),
@@ -44,7 +48,8 @@ kanbanRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = funnelSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     try {
       const maxOrder = await prisma.funnel.aggregate({
@@ -163,7 +168,10 @@ kanbanRouter.delete(
 
 const stageSchema = z.object({
   name: z.string().min(1).max(60),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#94a3b8'),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .default('#94a3b8'),
   outcome: z.enum(['POSITIVE', 'NEGATIVE', 'RISK']).nullable().optional(),
   order: z.number().int().optional(),
 });
@@ -270,9 +278,7 @@ kanbanRouter.post(
 
     // Update em transaction: 1 query por stage. N pequeno (50 max).
     await prisma.$transaction(
-      inputIds.map((id, idx) =>
-        prisma.stage.update({ where: { id }, data: { order: idx } }),
-      ),
+      inputIds.map((id, idx) => prisma.stage.update({ where: { id }, data: { order: idx } })),
     );
 
     return c.json({ ok: true });
@@ -320,10 +326,7 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
     where.OR = [{ assignedAgentId: userId }, { assignedAgentId: null }];
   }
   if (search) {
-    where.OR = [
-      ...(where.OR ?? []),
-      { title: { contains: search, mode: 'insensitive' } },
-    ];
+    where.OR = [...(where.OR ?? []), { title: { contains: search, mode: 'insensitive' } }];
   }
   if (labelId) where.labels = { some: { labelId } };
 
@@ -468,7 +471,8 @@ kanbanRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = cardSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const funnel = await prisma.funnel.findFirst({
       where: { id: parsed.data.funnelId, workspaceId },
@@ -610,7 +614,11 @@ const bulkActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('snooze'),
     cardIds: z.array(z.string()).min(1).max(200),
-    minutes: z.number().int().min(1).max(60 * 24 * 30),
+    minutes: z
+      .number()
+      .int()
+      .min(1)
+      .max(60 * 24 * 30),
   }),
   z.object({
     action: z.literal('delete'),
@@ -729,7 +737,11 @@ kanbanRouter.post(
 // ==================== SNOOZE ====================
 
 const snoozeSchema = z.object({
-  minutes: z.number().int().min(1).max(60 * 24 * 30), // até 30 dias
+  minutes: z
+    .number()
+    .int()
+    .min(1)
+    .max(60 * 24 * 30), // até 30 dias
   reason: z.string().max(200).optional(),
 });
 
@@ -741,7 +753,8 @@ kanbanRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = snoozeSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const id = c.req.param('id');
     const card = await prisma.card.findFirst({ where: { id, workspaceId } });
@@ -808,6 +821,7 @@ kanbanRouter.post(
   '/cards/:id/ai/forecast',
   requireAuth,
   requireWorkspace,
+  aiRateLimit,
   async (c) => {
     if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);
     const workspaceId = c.get('workspaceId') as string;
@@ -817,6 +831,11 @@ kanbanRouter.post(
       include: { stage: { select: { name: true, outcome: true } } },
     });
     if (!card) return c.json({ error: 'not_found' }, 404);
+    // AGENT só enxerga cards atribuídos a ele (card.read_assigned) — sem este
+    // guard podia gastar IA em qualquer card do workspace.
+    if (c.get('role') === 'AGENT' && card.assignedAgentId !== c.get('userId')) {
+      return c.json({ error: 'permission_denied' }, 403);
+    }
 
     let contactName: string | null = null;
     let messages: Array<{
@@ -853,9 +872,7 @@ kanbanRouter.post(
     const history = messages
       .reverse()
       .map((m) => ({
-        direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as
-          | 'inbound'
-          | 'outbound',
+        direction: (m.direction === 'INBOUND' ? 'inbound' : 'outbound') as 'inbound' | 'outbound',
         content: m.content || m.transcription || `[${m.type.toLowerCase()}]`,
       }))
       .filter((m) => m.content.trim().length > 0);
@@ -898,6 +915,7 @@ kanbanRouter.post(
   '/funnels/:id/ai/forecast-all',
   requireAuth,
   requireWorkspace,
+  aiRateLimit,
   requirePermission('funnel.manage'),
   async (c) => {
     if (!env.OPENAI_API_KEY) return c.json({ error: 'ai_disabled' }, 503);

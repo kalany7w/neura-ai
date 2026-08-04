@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,6 +76,7 @@ interface Props {
 }
 
 export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, members }: Props) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [items, setItems] = useState(options);
 
@@ -89,7 +91,12 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
         method: 'POST',
         body: JSON.stringify({ orderedIds }),
       }),
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao reordenar'),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('c_settings_welcome_flow_options_editor.reorder_error'),
+      ),
   });
 
   const addMut = useMutation({
@@ -98,7 +105,7 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
         method: 'POST',
         body: JSON.stringify({
           position: items.length + 1,
-          label: 'Nova opção',
+          label: t('c_settings_welcome_flow_options_editor.new_option_label'),
           matchKeywords: [],
           targetLabelId: labels[0]?.id ?? '',
         }),
@@ -107,7 +114,7 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
       setItems([...items, resp.option]);
       qc.invalidateQueries({ queryKey: ['welcome-flow'] });
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t('common.error')),
   });
 
   const removeMut = useMutation({
@@ -117,7 +124,7 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
       setItems(items.filter((o) => o.id !== optionId));
       qc.invalidateQueries({ queryKey: ['welcome-flow'] });
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t('common.error')),
   });
 
   const updateMut = useMutation({
@@ -126,7 +133,7 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
         method: 'PUT',
         body: JSON.stringify(patch),
       }),
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t('common.error')),
   });
 
   function onDragEnd(event: DragEndEvent) {
@@ -148,7 +155,9 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Opções do menu (max 10)</h2>
+        <h2 className="font-semibold">
+          {t('c_settings_welcome_flow_options_editor.menu_options_title')}
+        </h2>
         <Button
           type="button"
           size="sm"
@@ -156,19 +165,19 @@ export function WelcomeFlowOptionsEditor({ flowId, options, labels, funnels, mem
           disabled={addMut.isPending || items.length >= 10}
         >
           <Plus className="mr-1 h-4 w-4" />
-          Adicionar
+          {t('action.add')}
         </Button>
       </div>
 
       {items.length === 0 && (
         <p className="text-muted-foreground text-sm">
-          Sem opções ainda. Adicione pelo menos uma pra ativar o fluxo.
+          {t('c_settings_welcome_flow_options_editor.no_options')}
         </p>
       )}
 
       {items.length === 10 && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-          Limite máximo de 10 opções atingido (restrição do WhatsApp listMessage).
+          {t('c_settings_welcome_flow_options_editor.limit_reached')}
         </p>
       )}
 
@@ -203,6 +212,7 @@ interface RowProps {
 }
 
 function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemove }: RowProps) {
+  const { t } = useT();
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({
     id: option.id,
   });
@@ -244,7 +254,7 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
           {...listeners}
           type="button"
           className="cursor-grab text-muted-foreground hover:text-foreground"
-          aria-label="Arrastar"
+          aria-label={t('c_settings_welcome_flow_options_editor.drag_aria')}
         >
           <GripVertical className="h-4 w-4" />
         </button>
@@ -253,7 +263,7 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
           value={option.label}
           onChange={(e) => onUpdate({ label: e.target.value })}
           className="flex-1"
-          placeholder="Ex: Compra"
+          placeholder={t('c_settings_welcome_flow_options_editor.label_placeholder')}
         />
         <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
           <Trash2 className="h-4 w-4 text-destructive" />
@@ -263,12 +273,14 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
       <Input
         value={option.description ?? ''}
         onChange={(e) => onUpdate({ description: e.target.value || null })}
-        placeholder="Descrição (opcional, aparece abaixo do título no menu)"
+        placeholder={t('c_settings_welcome_flow_options_editor.description_placeholder')}
       />
 
       <div className="grid grid-cols-4 gap-2">
         <div className="space-y-1">
-          <Label className="text-xs">Etiqueta aplicada</Label>
+          <Label className="text-xs">
+            {t('c_settings_welcome_flow_options_editor.label_applied')}
+          </Label>
           <Select
             value={
               option.targetLabelId && visibleLabels.some((l) => l.id === option.targetLabelId)
@@ -278,14 +290,16 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
             onValueChange={(v) => onUpdate({ targetLabelId: v })}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Escolha" />
+              <SelectValue
+                placeholder={t('c_settings_welcome_flow_options_editor.choose_placeholder')}
+              />
             </SelectTrigger>
             <SelectContent>
               {visibleLabels.length === 0 ? (
                 // SelectItem precisa value não-vazio (Radix lança erro com value=""):
                 // usamos disabled placeholder com value="__empty__" pra não quebrar.
                 <SelectItem value="__empty__" disabled>
-                  Nenhuma etiqueta no funil — crie em /settings/labels
+                  {t('c_settings_welcome_flow_options_editor.no_label_in_funnel')}
                 </SelectItem>
               ) : (
                 visibleLabels.map((l) => (
@@ -303,7 +317,7 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Funil</Label>
+          <Label className="text-xs">{t('c_settings_welcome_flow_options_editor.funnel')}</Label>
           <Select
             value={option.targetFunnelId ?? 'none'}
             onValueChange={(v) =>
@@ -311,10 +325,12 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
             }
           >
             <SelectTrigger>
-              <SelectValue placeholder="Nenhum" />
+              <SelectValue placeholder={t('c_settings_welcome_flow_options_editor.none_masc')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Nenhum</SelectItem>
+              <SelectItem value="none">
+                {t('c_settings_welcome_flow_options_editor.none_masc')}
+              </SelectItem>
               {funnels.map((f) => (
                 <SelectItem key={f.id} value={f.id}>
                   {f.name}
@@ -324,7 +340,7 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Etapa</Label>
+          <Label className="text-xs">{t('c_settings_welcome_flow_options_editor.stage')}</Label>
           <Select
             value={option.targetStageId ?? 'none'}
             onValueChange={(v) => onUpdate({ targetStageId: v === 'none' ? null : v })}
@@ -334,7 +350,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Nenhuma</SelectItem>
+              <SelectItem value="none">
+                {t('c_settings_welcome_flow_options_editor.none_fem')}
+              </SelectItem>
               {stages.map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}
@@ -344,7 +362,7 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Atribuir a</Label>
+          <Label className="text-xs">{t('c_settings_welcome_flow_options_editor.assign_to')}</Label>
           <Select
             value={option.targetUserId ?? 'none'}
             onValueChange={(v) => onUpdate({ targetUserId: v === 'none' ? null : v })}
@@ -353,7 +371,9 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
               <SelectValue placeholder="—" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Ninguém</SelectItem>
+              <SelectItem value="none">
+                {t('c_settings_welcome_flow_options_editor.nobody')}
+              </SelectItem>
               {members.map((m) => (
                 <SelectItem key={m.id} value={m.id}>
                   {m.name ?? m.email}
@@ -365,24 +385,29 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs">Mensagem de confirmação (enviada após o cliente escolher)</Label>
+        <Label className="text-xs">
+          {t('c_settings_welcome_flow_options_editor.confirmation_message_label')}
+        </Label>
         <textarea
           value={option.confirmationText ?? ''}
           onChange={(e) => onUpdate({ confirmationText: e.target.value || null })}
-          placeholder="Ex: ¡Excelente! {{agent.name}} se va a poner en contacto contigo en breve para mostrarte los modelos…"
+          placeholder={t('c_settings_welcome_flow_options_editor.confirmation_placeholder')}
           rows={3}
           maxLength={1000}
           className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <p className="text-[10px] text-muted-foreground">
-          Vazio = usa mensagem genérica. Suporta <code>{'{{agent.name}}'}</code> (nome do
-          responsável) e <code>{'{{contact.name}}'}</code>. Personalize por opção pra
-          falar do produto/serviço (ex: drones agrícolas, e-commerce, etc).
+          {t('c_settings_welcome_flow_options_editor.hint_prefix')} <code>{'{{agent.name}}'}</code>{' '}
+          {t('c_settings_welcome_flow_options_editor.hint_agent_name')}{' '}
+          <code>{'{{contact.name}}'}</code>
+          {t('c_settings_welcome_flow_options_editor.hint_suffix')}
         </p>
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs">Palavras-chave (enter pra adicionar)</Label>
+        <Label className="text-xs">
+          {t('c_settings_welcome_flow_options_editor.keywords_label')}
+        </Label>
         <div className="flex flex-wrap gap-1 rounded-md border bg-background p-2 min-h-10">
           {option.matchKeywords.map((k, i) => (
             <span
@@ -414,7 +439,7 @@ function SortableOptionRow({ option, labels, funnels, members, onUpdate, onRemov
                 setKeywordInput('');
               }
             }}
-            placeholder="adicionar palavra-chave..."
+            placeholder={t('c_settings_welcome_flow_options_editor.keyword_placeholder')}
           />
         </div>
       </div>

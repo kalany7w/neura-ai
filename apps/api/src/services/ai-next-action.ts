@@ -11,6 +11,7 @@
 import { z } from 'zod';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
+import { UNTRUSTED_DATA_RULE } from './ai-safety.js';
 
 export const nextActionSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -92,6 +93,7 @@ export async function suggestNextActions(input: NextActionInput): Promise<NextAc
     'confidence: 0-1 sua certeza dessa sugestão.',
     '',
     'Retorne APENAS JSON: { "actions": [...] }',
+    UNTRUSTED_DATA_RULE,
   ].join('\n');
 
   const lines: string[] = [];
@@ -129,10 +131,12 @@ export async function suggestNextActions(input: NextActionInput): Promise<NextAc
   }
   lines.push('');
   lines.push('=== ÚLTIMAS MENSAGENS ===');
+  lines.push('<dados_conversa>');
   for (const m of input.history) {
-    const trunc = m.content.slice(0, 250);
+    const trunc = m.content.slice(0, 250).replace(/<\/?dados_conversa>/gi, '');
     lines.push(`[${m.direction === 'inbound' ? 'CLIENTE' : 'AGENTE'}] ${trunc}`);
   }
+  lines.push('</dados_conversa>');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -170,18 +174,13 @@ export async function suggestNextActions(input: NextActionInput): Promise<NextAc
     }
     const safe = nextActionsResponseSchema.safeParse(parsed);
     if (!safe.success) {
-      logger.warn(
-        { issues: safe.error.issues.slice(0, 3) },
-        'next-action: schema invalid',
-      );
+      logger.warn({ issues: safe.error.issues.slice(0, 3) }, 'next-action: schema invalid');
       return [];
     }
     // Filter actions cujo slug/name não bate com listas fornecidas (anti-alucinação)
     const validAgentSlugs = new Set(input.availableAgents.map((a) => a.slug));
     const validLabelNames = new Set(input.availableLabels.map((l) => l.name.toLowerCase()));
-    const validTemplateNames = new Set(
-      input.availableTemplates.map((t) => t.name.toLowerCase()),
-    );
+    const validTemplateNames = new Set(input.availableTemplates.map((t) => t.name.toLowerCase()));
     const validStageNames = new Set(input.availableStages.map((s) => s.name.toLowerCase()));
     return safe.data.actions.filter((a) => {
       if (a.kind === 'assign_agent') return validAgentSlugs.has(a.agentSlug);

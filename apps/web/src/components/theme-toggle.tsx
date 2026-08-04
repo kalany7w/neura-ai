@@ -30,7 +30,9 @@ export function ThemeToggle() {
         <DropdownMenuItem onSelect={() => setTheme('light')}>
           <Sun className="h-3.5 w-3.5" />
           Claro
-          {theme === 'light' && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
+          {theme === 'light' && (
+            <span className="ml-auto text-[10px] text-muted-foreground">✓</span>
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => setTheme('dark')}>
           <Moon className="h-3.5 w-3.5" />

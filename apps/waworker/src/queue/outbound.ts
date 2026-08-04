@@ -23,9 +23,79 @@ async function fetchMediaBuffer(mediaUrl: string): Promise<Buffer> {
   return getMediaBuffer(key);
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Delay aleatório em [min, max) ms — evita padrão robótico de disparo. */
+function jitter(min: number, max: number): number {
+  return Math.floor(min + Math.random() * (max - min));
+}
+
+/**
+ * Anti-ban WhatsApp: simula digitação humana antes de um envio de conteúdo.
+ * Manda presença "composing", espera um tempo proporcional ao tamanho do texto
+ * (com teto), depois "paused". Falhas de presença não bloqueiam o envio.
+ *
+ * Isto é a maior mitigação de banimento do lado do worker: número que dispara
+ * mensagens instantâneas em sequência é sinalizado como bot pelo WhatsApp.
+ */
+async function humanTypingPause(
+  sock: { sendPresenceUpdate: (p: 'composing' | 'paused', jid: string) => Promise<unknown> },
+  jid: string,
+  contentLength: number,
+): Promise<void> {
+  try {
+    await sock.sendPresenceUpdate('composing', jid);
+  } catch {
+    /* presença é best-effort */
+  }
+  const base = jitter(700, 1600);
+  const perChar = Math.min(contentLength * 25, 4000);
+  await sleep(Math.min(base + perChar, 6500));
+  try {
+    await sock.sendPresenceUpdate('paused', jid);
+  } catch {
+    /* idem */
+  }
+}
+
+/**
+ * Serialização POR CHAT (inbox+destino): com concurrency 3 e a pausa de
+ * digitação aleatória (0,7–6,5s), duas mensagens da MESMA conversa em slots
+ * paralelos chegariam fora de ordem com frequência (a 2ª curta ultrapassa a
+ * 1ª longa). Chats diferentes seguem paralelos; o mesmo chat vira fila FIFO.
+ * (Retry com backoff ainda pode inverter — inerente ao retry; janela rara.)
+ */
+const chatChains = new Map<string, Promise<unknown>>();
+function withChatLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = chatChains.get(key) ?? Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  chatChains.set(key, tail);
+  void tail.then(() => {
+    if (chatChains.get(key) === tail) chatChains.delete(key);
+  });
+  return run;
+}
+
 export const outboundWorker = new Worker<SendMessageJob>(
   QUEUE_OUTBOUND,
-  async (job: Job<SendMessageJob>) => {
+  (job: Job<SendMessageJob>) =>
+    withChatLock(`${job.data.inboxId}:${job.data.to}`, () => processOutbound(job)),
+  {
+    connection: bullConnection,
+    // Concorrência menor + limiter global: teto de segurança anti-ban que soma
+    // ao limiter por-inbox do lado da API (30/min). Números diferentes seguem
+    // paralelos, mas a vazão total do worker fica suave.
+    concurrency: 3,
+    limiter: { max: 8, duration: 1000 },
+  },
+);
+
+async function processOutbound(job: Job<SendMessageJob>): Promise<void> {
+  {
     const {
       inboxId,
       workspaceId,
@@ -240,6 +310,9 @@ export const outboundWorker = new Worker<SendMessageJob>(
       : undefined;
     const sendOpts = quoted ? { quoted } : {};
 
+    // Anti-ban: pausa de digitação humana antes de mandar conteúdo real.
+    await humanTypingPause(handle.sock, jid, (text ?? '').length);
+
     let result: { key: { id?: string | null } } | undefined;
     if (type === 'TEXT') {
       result = await handle.sock.sendMessage(jid, { text: text ?? '' }, sendOpts);
@@ -300,9 +373,8 @@ export const outboundWorker = new Worker<SendMessageJob>(
       waMessageId,
       sentAt,
     });
-  },
-  { connection: bullConnection, concurrency: 5 },
-);
+  }
+}
 
 outboundWorker.on('completed', (job) => {
   logger.info({ jobId: job.id, messageId: job.data.messageId }, 'Outbound message sent');

@@ -6,15 +6,33 @@ import { requireAuth, type AuthVars } from '../middlewares/auth.js';
 import { requireWorkspace, type WorkspaceVars } from '../middlewares/workspace.js';
 import { requirePermission } from '../middlewares/permissions.js';
 import { audit } from '../services/audit.js';
-import { WEBHOOK_EVENTS } from '../services/webhooks.js';
+import { WEBHOOK_EVENTS, webhookQueue } from '../services/webhooks.js';
+import { assertHostnameAllowed, SsrfBlockedError, ssrfSafeFetch } from '../services/ssrf-guard.js';
 
 export const integrationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
 }>();
 
+// URL de webhook: http(s) + host público (bloqueia SSRF pra localhost/IP privado/metadata).
+const webhookUrl = z
+  .string()
+  .url()
+  .max(500)
+  .refine(
+    (u) => {
+      try {
+        assertHostnameAllowed(u);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: 'URL não permitida (host interno, IP privado ou esquema inválido)' },
+  );
+
 const createSchema = z.object({
   name: z.string().min(1).max(80),
-  url: z.string().url().max(500),
+  url: webhookUrl,
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
   enabled: z.boolean().default(true),
   generateSecret: z.boolean().default(true),
@@ -22,7 +40,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
-  url: z.string().url().max(500).optional(),
+  url: webhookUrl.optional(),
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).optional(),
   enabled: z.boolean().optional(),
   regenerateSecret: z.boolean().optional(),
@@ -257,8 +275,7 @@ integrationsRouter.patch(
 
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
-    if (parsed.data.allowedActions !== undefined)
-      data.allowedActions = parsed.data.allowedActions;
+    if (parsed.data.allowedActions !== undefined) data.allowedActions = parsed.data.allowedActions;
     if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
     let newSecret: string | null = null;
     if (parsed.data.regenerateSecret) {
@@ -324,24 +341,44 @@ integrationsRouter.post(
         'sha256=' + createHmac('sha256', webhook.secret).update(body).digest('hex');
     }
 
+    // Guarda SSRF antes do fetch de teste (mesma proteção do dispatch real).
+    try {
+      const { assertPublicUrl } = await import('../services/ssrf-guard.js');
+      await assertPublicUrl(webhook.url);
+      // (o fetch abaixo usa ssrfSafeFetch — re-validação dos IPs na conexão)
+    } catch (err) {
+      const errMsg = err instanceof SsrfBlockedError ? err.message : 'blocked';
+      return c.json({ ok: false, status: 0, error: errMsg }, 400);
+    }
+
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 10_000);
     try {
-      const res = await fetch(webhook.url, {
+      // redirect: 'manual' — mesma razão do dispatch real: seguir redirect
+      // contornaria o assertPublicUrl (302 pra IP interno/metadata).
+      const res = await ssrfSafeFetch(webhook.url, {
         method: 'POST',
         headers,
         body,
         signal: ctrl.signal,
+        redirect: 'manual',
       });
+      void res.body?.cancel().catch(() => {});
+      const redirected = res.status >= 300 && res.status < 400;
+      const ok = res.ok && !redirected;
       await prisma.webhook.update({
         where: { id },
         data: {
           lastFiredAt: new Date(),
           lastStatus: res.status,
-          lastError: res.ok ? null : `HTTP ${res.status}`,
+          lastError: ok ? null : redirected ? 'redirect não permitido' : `HTTP ${res.status}`,
         },
       });
-      return c.json({ ok: res.ok, status: res.status });
+      return c.json(
+        redirected
+          ? { ok: false, status: res.status, error: 'redirect não permitido' }
+          : { ok: res.ok, status: res.status },
+      );
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'unknown';
       await prisma.webhook.update({
@@ -352,5 +389,63 @@ integrationsRouter.post(
     } finally {
       clearTimeout(t);
     }
+  },
+);
+
+// GET /api/integrations/webhooks/dlq — entregas que esgotaram os retries (DLQ),
+// filtradas pros webhooks deste workspace.
+integrationsRouter.get(
+  '/webhooks/dlq',
+  requireAuth,
+  requireWorkspace,
+  // workspace.update (ADMIN) — webhooks são infra do workspace; AGENT não deve
+  // enumerar entregas falhadas (metadata de integrações). Igual ao retry.
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const wsHooks = await prisma.webhook.findMany({ where: { workspaceId }, select: { id: true } });
+    const wsIds = new Set(wsHooks.map((w) => w.id));
+    const failed = await webhookQueue.getFailed(0, 200);
+    const jobs = failed
+      .filter((j) => wsIds.has(j.data.webhookId))
+      .map((j) => ({
+        jobId: j.id,
+        webhookId: j.data.webhookId,
+        event: j.data.event,
+        reason: j.failedReason,
+        attempts: j.attemptsMade,
+        failedAt: j.finishedOn ? new Date(j.finishedOn).toISOString() : null,
+      }));
+    return c.json({ failed: jobs, total: jobs.length });
+  },
+);
+
+// POST /api/integrations/webhooks/dlq/retry — reprocessa os falhados do workspace.
+integrationsRouter.post(
+  '/webhooks/dlq/retry',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const wsHooks = await prisma.webhook.findMany({ where: { workspaceId }, select: { id: true } });
+    const wsIds = new Set(wsHooks.map((w) => w.id));
+    const failed = await webhookQueue.getFailed(0, 500);
+    let retried = 0;
+    for (const j of failed) {
+      if (wsIds.has(j.data.webhookId)) {
+        await j.retry();
+        retried++;
+      }
+    }
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'webhook.dlq_retried',
+      resource: `Workspace:${workspaceId}`,
+      metadata: { retried },
+    });
+    return c.json({ retried });
   },
 );

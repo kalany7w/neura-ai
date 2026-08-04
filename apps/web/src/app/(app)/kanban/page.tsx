@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   DndContext,
+  KeyboardSensor,
+  type KeyboardCoordinateGetter,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -37,8 +39,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
+import { useT, localeFor, type Lang } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -80,12 +84,6 @@ const OUTCOME_COLOR: Record<Exclude<StageOutcome, null>, string> = {
   POSITIVE: '#10b981',
   NEGATIVE: '#ef4444',
   RISK: '#f59e0b',
-};
-
-const OUTCOME_LABEL: Record<Exclude<StageOutcome, null>, string> = {
-  POSITIVE: 'Positivo',
-  NEGATIVE: 'Negativo',
-  RISK: 'Risco',
 };
 
 const OUTCOME_BADGE_CLASS: Record<Exclude<StageOutcome, null>, string> = {
@@ -155,20 +153,20 @@ const SLA_DOT: Record<string, string> = {
   blink: 'bg-red-600 animate-pulse',
 };
 
-const SLA_LABEL: Record<string, string> = {
-  green: 'No prazo',
-  yellow: 'Atenção',
-  red: 'Atrasado',
-  blink: 'Crítico',
+const SLA_LABEL_KEY: Record<string, string> = {
+  green: 'kanban.sla.green',
+  yellow: 'kanban.sla.yellow',
+  red: 'kanban.sla.red',
+  blink: 'kanban.sla.blink',
 };
 
-const SNOOZE_PRESETS: Array<{ label: string; minutes: number }> = [
-  { label: '15 minutos', minutes: 15 },
-  { label: '1 hora', minutes: 60 },
-  { label: '4 horas', minutes: 60 * 4 },
-  { label: 'Amanhã (24h)', minutes: 60 * 24 },
-  { label: '3 dias', minutes: 60 * 24 * 3 },
-  { label: '1 semana', minutes: 60 * 24 * 7 },
+const SNOOZE_PRESETS: Array<{ labelKey: string; minutes: number }> = [
+  { labelKey: 'kanban.snooze.15min', minutes: 15 },
+  { labelKey: 'kanban.snooze.1h', minutes: 60 },
+  { labelKey: 'kanban.snooze.4h', minutes: 60 * 4 },
+  { labelKey: 'kanban.snooze.tomorrow', minutes: 60 * 24 },
+  { labelKey: 'kanban.snooze.3d', minutes: 60 * 24 * 3 },
+  { labelKey: 'kanban.snooze.1w', minutes: 60 * 24 * 7 },
 ];
 
 function initialsFrom(s: string | null | undefined): string {
@@ -180,6 +178,28 @@ function initialsFrom(s: string | null | undefined): string {
     .map((p) => p[0]?.toUpperCase())
     .join('');
 }
+
+// Passo de teclado do drag: uma seta horizontal = uma coluna (w-[320px] + gap),
+// vertical = ~altura de um card. O getter default do dnd-kit anda 25px por toque.
+const kanbanKeyboardCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates }) => {
+  const COLUMN_STEP = 332;
+  const CARD_STEP = 110;
+  switch (event.code) {
+    case 'ArrowRight':
+      event.preventDefault();
+      return { ...currentCoordinates, x: currentCoordinates.x + COLUMN_STEP };
+    case 'ArrowLeft':
+      event.preventDefault();
+      return { ...currentCoordinates, x: currentCoordinates.x - COLUMN_STEP };
+    case 'ArrowDown':
+      event.preventDefault();
+      return { ...currentCoordinates, y: currentCoordinates.y + CARD_STEP };
+    case 'ArrowUp':
+      event.preventDefault();
+      return { ...currentCoordinates, y: currentCoordinates.y - CARD_STEP };
+  }
+  return undefined;
+};
 
 function formatCurrency(n: number, currency: string = 'USD'): string {
   // Locale escolhido pelo currency (PYG/USD → es-PY, BRL → pt-BR, fallback en-US).
@@ -198,17 +218,21 @@ function formatCurrency(n: number, currency: string = 'USD'): string {
   }
 }
 
-function formatSnoozeUntil(iso: string): string {
+function formatSnoozeUntil(
+  iso: string,
+  lang: Lang,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const d = new Date(iso);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
   const isTomorrow = d.toDateString() === tomorrow.toDateString();
-  const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  if (sameDay) return `Hoje ${time}`;
-  if (isTomorrow) return `Amanhã ${time}`;
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + time;
+  const time = d.toLocaleTimeString(localeFor(lang), { hour: '2-digit', minute: '2-digit' });
+  if (sameDay) return t('kanban.snooze.today_at', { time });
+  if (isTomorrow) return t('kanban.snooze.tomorrow_at', { time });
+  return d.toLocaleDateString(localeFor(lang), { day: '2-digit', month: '2-digit' }) + ' ' + time;
 }
 
 function CardActionsMenu({
@@ -224,6 +248,7 @@ function CardActionsMenu({
 }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t, lang } = useT();
 
   async function snooze(minutes: number) {
     try {
@@ -231,20 +256,22 @@ function CardActionsMenu({
         method: 'POST',
         body: JSON.stringify({ minutes }),
       });
-      toast.success(`Adiado até ${formatSnoozeUntil(res.snoozeUntil)}`);
+      toast.success(
+        t('kanban.snooze.until', { until: formatSnoozeUntil(res.snoozeUntil, lang, t) }),
+      );
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao adiar');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.snooze_error'));
     }
   }
 
   async function unsnooze() {
     try {
       await api(`/api/kanban/cards/${card.id}/snooze`, { method: 'DELETE' });
-      toast.success('Card reativado');
+      toast.success(t('kanban.toast.reactivated'));
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao reativar');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.reactivate_error'));
     }
   }
 
@@ -254,29 +281,29 @@ function CardActionsMenu({
         method: 'PATCH',
         body: JSON.stringify({ assignedAgentId: agentId }),
       });
-      toast.success(agentId ? 'Atribuído' : 'Atribuição removida');
+      toast.success(agentId ? t('kanban.toast.assigned') : t('kanban.toast.assignment_removed'));
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao atribuir');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.assign_error'));
     }
   }
 
   async function remove() {
     if (
       !(await confirm({
-        title: 'Excluir este card?',
-        description: `"${card.title}" será removido junto com etiquetas e notas.`,
-        confirmLabel: 'Excluir',
+        title: t('kanban.card.delete_title'),
+        description: t('kanban.card.delete_desc', { title: card.title }),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/kanban/cards/${card.id}`, { method: 'DELETE' });
-      toast.success('Card excluído');
+      toast.success(t('kanban.toast.card_deleted'));
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao excluir');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.delete_error'));
     }
   }
 
@@ -285,7 +312,7 @@ function CardActionsMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          aria-label="Ações do card"
+          aria-label={t('kanban.card.actions')}
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -302,18 +329,18 @@ function CardActionsMenu({
         {isSnoozed ? (
           <DropdownMenuItem onSelect={unsnooze}>
             <AlarmClockOff className="h-3.5 w-3.5" />
-            Reativar agora
+            {t('kanban.card.reactivate_now')}
           </DropdownMenuItem>
         ) : (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <AlarmClock className="h-3.5 w-3.5" />
-              Adiar
+              {t('kanban.card.snooze')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {SNOOZE_PRESETS.map((p) => (
                 <DropdownMenuItem key={p.minutes} onSelect={() => snooze(p.minutes)}>
-                  {p.label}
+                  {t(p.labelKey)}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuSubContent>
@@ -323,15 +350,17 @@ function CardActionsMenu({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <UserCheck className="h-3.5 w-3.5" />
-            Atribuir
+            {t('kanban.card.assign')}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
             <DropdownMenuItem onSelect={() => assign(null)}>
               <UserX className="h-3.5 w-3.5" />
-              Remover atribuição
+              {t('kanban.card.remove_assignment')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {members.length === 0 && <DropdownMenuLabel>Nenhum agente</DropdownMenuLabel>}
+            {members.length === 0 && (
+              <DropdownMenuLabel>{t('kanban.card.no_agents')}</DropdownMenuLabel>
+            )}
             {members.map((m) => (
               <DropdownMenuItem
                 key={m.userId}
@@ -351,12 +380,9 @@ function CardActionsMenu({
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={remove}
-          className="text-destructive focus:text-destructive"
-        >
+        <DropdownMenuItem onSelect={remove} className="text-destructive focus:text-destructive">
           <Trash2 className="h-3.5 w-3.5" />
-          Excluir card
+          {t('kanban.card.delete')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -381,6 +407,7 @@ function DraggableCard({
   anySelected: boolean;
 }) {
   const router = useRouter();
+  const { t, lang } = useT();
   const activeSnooze = card.snoozes?.[0];
   const isSnoozed = !!activeSnooze;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -396,6 +423,7 @@ function DraggableCard({
 
   const assignee = members.find((m) => m.userId === card.assignedAgentId);
   const stripeClass = SLA_STRIPE[card.slaStatus] ?? 'before:bg-slate-300';
+  const slaLabel = t(SLA_LABEL_KEY[card.slaStatus] ?? card.slaStatus);
   const value = card.value ? Number(card.value) : null;
   const hasUnread = card.unreadCount > 0;
 
@@ -453,36 +481,27 @@ function DraggableCard({
         )}
 
         {/* Forecast IA: probabilidade fechamento */}
-        {card.aiWinProbability != null && (() => {
-          const prob = Number(card.aiWinProbability);
-          const pct = Math.round(prob * 100);
-          const cls =
-            prob >= 0.7
-              ? 'bg-emerald-500'
-              : prob >= 0.4
-                ? 'bg-amber-500'
-                : 'bg-red-500';
-          return (
-            <div
-              className="mt-2 pl-2"
-              title={card.aiWinReasoning ?? 'Forecast IA'}
-            >
-              <div className="flex items-center justify-between gap-1.5 text-[10px]">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Sparkles className="h-2.5 w-2.5 text-indigo-500" />
-                  Forecast IA
-                </span>
-                <span className="font-semibold tabular-nums">{pct}%</span>
+        {card.aiWinProbability != null &&
+          (() => {
+            const prob = Number(card.aiWinProbability);
+            const pct = Math.round(prob * 100);
+            const cls =
+              prob >= 0.7 ? 'bg-emerald-500' : prob >= 0.4 ? 'bg-amber-500' : 'bg-red-500';
+            return (
+              <div className="mt-2 pl-2" title={card.aiWinReasoning ?? t('kanban.forecast_ai')}>
+                <div className="flex items-center justify-between gap-1.5 text-[10px]">
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Sparkles className="h-2.5 w-2.5 text-indigo-500" />
+                    {t('kanban.forecast_ai')}
+                  </span>
+                  <span className="font-semibold tabular-nums">{pct}%</span>
+                </div>
+                <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
+                  <div className={`h-full ${cls}`} style={{ width: `${pct}%` }} />
+                </div>
               </div>
-              <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full ${cls}`}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
 
         {/* Etiquetas */}
         {card.labels.length > 0 && (
@@ -513,9 +532,9 @@ function DraggableCard({
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span
               className={`inline-block h-1.5 w-1.5 rounded-full ${SLA_DOT[card.slaStatus] ?? 'bg-slate-400'}`}
-              title={SLA_LABEL[card.slaStatus] ?? card.slaStatus}
+              title={slaLabel}
             />
-            <span>{SLA_LABEL[card.slaStatus] ?? card.slaStatus}</span>
+            <span>{slaLabel}</span>
           </div>
           <div className="flex items-center gap-1.5">
             {hasUnread && (
@@ -532,7 +551,7 @@ function DraggableCard({
               </div>
             ) : (
               <div
-                title="Sem agente"
+                title={t('kanban.no_agent')}
                 className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/30 text-muted-foreground/40"
               >
                 <UserX className="h-3 w-3" />
@@ -544,7 +563,9 @@ function DraggableCard({
         {isSnoozed && activeSnooze && (
           <div className="mt-2.5 -mx-3 -mb-3 rounded-b-xl border-t border-amber-200/60 bg-amber-100/60 px-3 py-1.5 flex items-center gap-1.5 text-[11px] font-medium text-amber-900">
             <Clock className="h-3 w-3" />
-            Adiado até {formatSnoozeUntil(activeSnooze.snoozeUntil)}
+            {t('kanban.snooze.until', {
+              until: formatSnoozeUntil(activeSnooze.snoozeUntil, lang, t),
+            })}
           </div>
         )}
       </div>
@@ -562,17 +583,12 @@ function DraggableCard({
           checked={selected}
           onChange={() => onToggleSelect(card.id)}
           className="h-4 w-4 cursor-pointer rounded border-2 bg-card"
-          title="Selecionar pra ação em lote"
+          title={t('kanban.select_bulk')}
         />
       </div>
 
       <div className="absolute right-2 top-2" data-card-menu>
-        <CardActionsMenu
-          card={card}
-          members={members}
-          funnelId={funnelId}
-          isSnoozed={isSnoozed}
-        />
+        <CardActionsMenu card={card} members={members} funnelId={funnelId} isSnoozed={isSnoozed} />
       </div>
     </div>
   );
@@ -596,6 +612,8 @@ function StageColumn({
   onToggleSelect: (id: string) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
+  const workspaceCurrency = useWorkspaceCurrency();
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const total = cards.length;
   const sumValue = cards.reduce((acc, c) => acc + (c.value ? Number(c.value) : 0), 0);
@@ -635,7 +653,7 @@ function StageColumn({
         closeComposer();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar card');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.create_card_error'));
     } finally {
       setComposerSubmitting(false);
     }
@@ -656,10 +674,7 @@ function StageColumn({
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: accent }}
-            />
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
             <h3 className="truncate text-sm font-semibold tracking-tight">{stage.name}</h3>
             <span className="rounded-md bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
               {total}
@@ -670,13 +685,13 @@ function StageColumn({
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${OUTCOME_BADGE_CLASS[stage.outcome]}`}
               >
-                {OUTCOME_LABEL[stage.outcome]}
+                {t(`kanban.outcome.${stage.outcome}`)}
               </span>
             )}
             <button
               type="button"
               onClick={() => setComposerOpen(true)}
-              title="Adicionar card nesta lista"
+              title={t('kanban.add_card_here')}
               className="rounded-md p-1 text-muted-foreground transition hover:bg-background hover:text-foreground"
             >
               <Plus className="h-4 w-4" />
@@ -685,7 +700,8 @@ function StageColumn({
         </div>
         {sumValue > 0 && (
           <p className="mt-1 text-[11px] font-medium text-muted-foreground">
-            Total: <span className="text-foreground">{formatCurrency(sumValue)}</span>
+            {t('kanban.column_total')}{' '}
+            <span className="text-foreground">{formatCurrency(sumValue, workspaceCurrency)}</span>
           </p>
         )}
       </div>
@@ -712,13 +728,11 @@ function StageColumn({
               }}
               rows={2}
               maxLength={200}
-              placeholder="Título do card (Enter pra criar, Shift+Enter pra quebrar linha)"
+              placeholder={t('kanban.composer_placeholder')}
               className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
             <div className="mt-1.5 flex items-center justify-between gap-2">
-              <p className="text-[10px] text-muted-foreground">
-                Cmd/Ctrl+Enter cria e mantém aberto
-              </p>
+              <p className="text-[10px] text-muted-foreground">{t('kanban.composer_hint')}</p>
               <div className="flex items-center gap-1">
                 <Button
                   size="sm"
@@ -727,7 +741,7 @@ function StageColumn({
                   disabled={composerSubmitting}
                   className="h-7 px-2 text-xs"
                 >
-                  Cancelar
+                  {t('action.cancel')}
                 </Button>
                 <Button
                   size="sm"
@@ -735,7 +749,7 @@ function StageColumn({
                   disabled={composerSubmitting || !composerTitle.trim()}
                   className="h-7 px-2 text-xs"
                 >
-                  {composerSubmitting ? 'Criando…' : 'Adicionar'}
+                  {composerSubmitting ? t('kanban.creating') : t('action.add')}
                 </Button>
               </div>
             </div>
@@ -760,7 +774,7 @@ function StageColumn({
             className="flex h-32 w-full flex-col items-center justify-center rounded-xl border border-dashed bg-background/40 px-3 text-center transition hover:border-foreground/30 hover:bg-background/70"
           >
             <p className="text-[11px] text-muted-foreground">
-              {isOver ? 'Solte aqui ↓' : '+ Adicionar card'}
+              {isOver ? t('kanban.drop_here') : t('kanban.add_card')}
             </p>
           </button>
         )}
@@ -788,6 +802,8 @@ const EMPTY_FILTERS: KanbanFilters = {
 export default function KanbanPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const { t } = useT();
+  const workspaceCurrency = useWorkspaceCurrency();
   const [funnelId, setFunnelId] = useState<string | null>(null);
   const [filters, setFilters] = useState<KanbanFilters>(EMPTY_FILTERS);
   const [createOpen, setCreateOpen] = useState(false);
@@ -844,8 +860,7 @@ export default function KanbanPage() {
     labels: Array<{ id: string; name: string; color: string }>;
   }>({
     queryKey: ['labels', funnelId],
-    queryFn: () =>
-      api(`/api/labels${funnelId ? `?funnelId=${funnelId}` : ''}`),
+    queryFn: () => api(`/api/labels${funnelId ? `?funnelId=${funnelId}` : ''}`),
     enabled: !!funnelId,
   });
 
@@ -902,7 +917,13 @@ export default function KanbanPage() {
     return { total, sumValue, unread, forecastValue, forecastedCount };
   }, [cardsData]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // Acessibilidade: mover cards por teclado (espaço pega/solta, setas movem) +
+    // anúncios de screen reader do dnd-kit. coordinateGetter customizado: uma
+    // seta = uma coluna/card (o default anda 25px por toque — inviável).
+    useSensor(KeyboardSensor, { coordinateGetter: kanbanKeyboardCoordinates }),
+  );
 
   async function handleDragEnd(e: DragEndEvent) {
     const cardId = e.active.id as string;
@@ -924,7 +945,7 @@ export default function KanbanPage() {
         body: JSON.stringify({ stageId: newStageId, position: 0 }),
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao mover');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.move_error'));
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
     }
   }
@@ -938,24 +959,24 @@ export default function KanbanPage() {
       unassigned: q.unassigned === true,
       showSnoozed: q.showSnoozed === true,
     });
-    toast.success(`Filtro "${f.name}" aplicado`);
+    toast.success(t('kanban.toast.filter_applied', { name: f.name }));
   }
 
   async function deleteSavedFilter(f: SavedFilter) {
     if (
       !(await confirm({
-        title: `Excluir filtro "${f.name}"?`,
-        confirmLabel: 'Excluir',
+        title: t('kanban.filter.delete_title', { name: f.name }),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/saved-filters/${f.id}`, { method: 'DELETE' });
-      toast.success('Filtro excluído');
+      toast.success(t('kanban.toast.filter_deleted'));
       await qc.invalidateQueries({ queryKey: ['saved-filters', 'kanban'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao excluir');
+      toast.error(err instanceof Error ? err.message : t('kanban.toast.delete_error'));
     }
   }
 
@@ -967,17 +988,15 @@ export default function KanbanPage() {
     filters.showSnoozed;
 
   if (funnelsLoading) {
-    return <p className="text-sm text-muted-foreground">Carregando…</p>;
+    return <p className="text-sm text-muted-foreground">{t('action.loading')}</p>;
   }
 
   if (!funnelsData?.funnels.length) {
     return (
       <div className="rounded-2xl border border-dashed bg-gradient-to-br from-muted/40 to-muted/10 p-12 text-center">
         <LayoutEmptyIcon />
-        <h3 className="mt-3 font-semibold">Nenhum funil criado</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Crie um funil pra começar a organizar conversas em estágios.
-        </p>
+        <h3 className="mt-3 font-semibold">{t('kanban.empty.title')}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{t('kanban.empty.subtitle')}</p>
         <div className="mt-4">
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
         </div>
@@ -995,18 +1014,23 @@ export default function KanbanPage() {
             funnelId={funnelId}
             onChange={setFunnelId}
           />
-          <Button size="sm" variant="outline" onClick={() => setManageOpen(true)} title="Gerenciar funil">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setManageOpen(true)}
+            title={t('kanban.manage_funnel')}
+          >
             <Settings2 className="h-3.5 w-3.5" />
-            Gerenciar
+            {t('kanban.manage')}
           </Button>
           <Button
             size="sm"
             variant="outline"
             onClick={async () => {
               const ok = await confirm({
-                title: 'Recalcular forecast IA?',
-                description: `IA vai estimar probabilidade de fechamento pra todos cards ativos do funil. Pode levar até 1min e custa ~$0.001 por card.`,
-                confirmLabel: 'Recalcular',
+                title: t('kanban.forecast.confirm_title'),
+                description: t('kanban.forecast.confirm_desc'),
+                confirmLabel: t('kanban.forecast.recalculate'),
               });
               if (!ok) return;
               try {
@@ -1014,27 +1038,27 @@ export default function KanbanPage() {
                   `/api/kanban/funnels/${funnelId}/ai/forecast-all`,
                   { method: 'POST' },
                 );
-                toast.success(`${res.enqueued} card(s) enfileirados — atualizando em segundos`);
+                toast.success(t('kanban.forecast.enqueued', { n: res.enqueued }));
               } catch (err) {
                 const msg =
                   err instanceof ApiError && err.code === 'ai_disabled'
-                    ? 'Configure OPENAI_API_KEY pra ativar IA'
+                    ? t('kanban.forecast.ai_disabled')
                     : err instanceof Error
                       ? err.message
-                      : 'Erro';
+                      : t('common.error');
                 toast.error(msg);
               }
             }}
-            title="Recalcular probabilidade de fechamento IA pra todos cards do funil"
+            title={t('kanban.forecast.button_title')}
           >
             <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-            Forecast IA
+            {t('kanban.forecast_ai')}
           </Button>
           <a
             href={`/api/reports/export.csv?type=cards`}
             download
             className="inline-flex items-center gap-1 rounded-md border bg-card px-2.5 py-1.5 text-sm hover:bg-accent"
-            title="Baixar CSV dos cards"
+            title={t('kanban.download_csv')}
           >
             <Download className="h-3.5 w-3.5" />
             CSV
@@ -1042,29 +1066,33 @@ export default function KanbanPage() {
           <CreateFunnelDialog open={createFunnelOpen} onOpenChange={setCreateFunnelOpen} />
           <div className="hidden md:flex items-center gap-4 pl-3 ml-1 border-l text-[11px] text-muted-foreground">
             <span>
-              <span className="font-semibold text-foreground">{totals.total}</span> cards
+              <span className="font-semibold text-foreground">{totals.total}</span>{' '}
+              {t('kanban.cards_label')}
             </span>
             {totals.sumValue > 0 && (
               <span>
-                <span className="font-semibold text-emerald-600">{formatCurrency(totals.sumValue)}</span>{' '}
-                em pipeline
+                <span className="font-semibold text-emerald-600">
+                  {formatCurrency(totals.sumValue, workspaceCurrency)}
+                </span>{' '}
+                {t('kanban.in_pipeline')}
               </span>
             )}
             {totals.unread > 0 && (
               <span>
-                <span className="font-semibold text-primary">{totals.unread}</span> não lidas
+                <span className="font-semibold text-primary">{totals.unread}</span>{' '}
+                {t('kanban.unread')}
               </span>
             )}
             {totals.forecastedCount > 0 && totals.forecastValue > 0 && (
               <span
-                title={`Receita prevista IA = soma(valor × probabilidade) de ${totals.forecastedCount} card(s) com forecast`}
+                title={t('kanban.forecast.revenue_tooltip', { n: totals.forecastedCount })}
                 className="inline-flex items-center gap-1"
               >
                 <Sparkles className="h-3 w-3 text-indigo-500" />
                 <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                  {formatCurrency(totals.forecastValue)}
+                  {formatCurrency(totals.forecastValue, workspaceCurrency)}
                 </span>{' '}
-                previstos
+                {t('kanban.forecasted')}
               </span>
             )}
           </div>
@@ -1076,7 +1104,7 @@ export default function KanbanPage() {
             <Input
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-              placeholder="Buscar card…"
+              placeholder={t('kanban.search_placeholder')}
               className="w-60 pl-8"
             />
           </div>
@@ -1100,11 +1128,7 @@ export default function KanbanPage() {
         </div>
       </div>
 
-      <SaveFilterDialog
-        open={saveFilterOpen}
-        onOpenChange={setSaveFilterOpen}
-        filters={filters}
-      />
+      <SaveFilterDialog open={saveFilterOpen} onOpenChange={setSaveFilterOpen} filters={filters} />
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 gap-4 overflow-x-auto pb-4 -mx-1 px-1">
@@ -1142,11 +1166,7 @@ export default function KanbanPage() {
         allLabels={labelsData?.labels ?? []}
       />
 
-      <ManageFunnelDialog
-        funnel={funnel ?? null}
-        open={manageOpen}
-        onOpenChange={setManageOpen}
-      />
+      <ManageFunnelDialog funnel={funnel ?? null} open={manageOpen} onOpenChange={setManageOpen} />
     </div>
   );
 }
@@ -1160,6 +1180,7 @@ function FunnelSwitcher({
   funnelId: string | null;
   onChange: (id: string) => void;
 }) {
+  const { t } = useT();
   const current = funnels.find((f) => f.id === funnelId);
   return (
     <DropdownMenu>
@@ -1169,17 +1190,16 @@ function FunnelSwitcher({
           className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-semibold shadow-sm hover:bg-accent"
         >
           {current && (
-            <span
-              className="h-2.5 w-2.5 rounded-full"
-              style={{ backgroundColor: current.color }}
-            />
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: current.color }} />
           )}
-          <span className="truncate max-w-[180px]">{current?.name ?? 'Selecione'}</span>
+          <span className="truncate max-w-[180px]">
+            {current?.name ?? t('kanban.select_funnel')}
+          </span>
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[220px]">
-        <DropdownMenuLabel>Funis</DropdownMenuLabel>
+        <DropdownMenuLabel>{t('kanban.funnels')}</DropdownMenuLabel>
         {funnels.map((f) => (
           <DropdownMenuItem key={f.id} onSelect={() => onChange(f.id)}>
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: f.color }} />
@@ -1203,6 +1223,7 @@ function FilterChips({
   labels: Array<{ id: string; name: string; color: string }>;
   members: Member[];
 }) {
+  const { t } = useT();
   const labelObj = labels.find((l) => l.id === filters.labelId);
   const memberObj = members.find((m) => m.userId === filters.assignedAgentId);
 
@@ -1219,24 +1240,24 @@ function FilterChips({
             }`}
           >
             {labelObj && (
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: labelObj.color }}
-              />
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: labelObj.color }} />
             )}
-            {labelObj ? labelObj.name : 'Etiqueta'}
+            {labelObj ? labelObj.name : t('kanban.label_filter')}
             <ChevronDown className="h-3 w-3" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           <DropdownMenuItem onSelect={() => setFilters((f) => ({ ...f, labelId: null }))}>
             <X className="h-3.5 w-3.5" />
-            Todas
+            {t('kanban.all_labels')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {labels.length === 0 && <DropdownMenuLabel>Nenhuma etiqueta</DropdownMenuLabel>}
+          {labels.length === 0 && <DropdownMenuLabel>{t('kanban.no_labels')}</DropdownMenuLabel>}
           {labels.map((l) => (
-            <DropdownMenuItem key={l.id} onSelect={() => setFilters((f) => ({ ...f, labelId: l.id }))}>
+            <DropdownMenuItem
+              key={l.id}
+              onSelect={() => setFilters((f) => ({ ...f, labelId: l.id }))}
+            >
               <span className="h-2 w-2 rounded-full" style={{ backgroundColor: l.color }} />
               {l.name}
             </DropdownMenuItem>
@@ -1256,29 +1277,25 @@ function FilterChips({
           >
             <Users className="h-3 w-3" />
             {filters.unassigned
-              ? 'Sem agente'
+              ? t('kanban.no_agent')
               : memberObj
-                ? memberObj.user.name ?? memberObj.user.email
-                : 'Agente'}
+                ? (memberObj.user.name ?? memberObj.user.email)
+                : t('role.agent')}
             <ChevronDown className="h-3 w-3" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
           <DropdownMenuItem
-            onSelect={() =>
-              setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: null }))
-            }
+            onSelect={() => setFilters((f) => ({ ...f, unassigned: false, assignedAgentId: null }))}
           >
             <X className="h-3.5 w-3.5" />
-            Todos
+            {t('kanban.all_agents')}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() =>
-              setFilters((f) => ({ ...f, unassigned: true, assignedAgentId: null }))
-            }
+            onSelect={() => setFilters((f) => ({ ...f, unassigned: true, assignedAgentId: null }))}
           >
             <UserX className="h-3.5 w-3.5" />
-            Sem atribuição
+            {t('kanban.unassigned')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {members.map((m) => (
@@ -1307,7 +1324,7 @@ function FilterChips({
         }`}
       >
         <AlarmClock className="h-3 w-3" />
-        Adiados
+        {t('kanban.snoozed')}
       </button>
     </div>
   );
@@ -1328,12 +1345,13 @@ function SavedFiltersMenu({
   onSaveCurrent: () => void;
   onClearAll: () => void;
 }) {
+  const { t } = useT();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button size="sm" variant="outline" className="gap-1.5">
           <Filter className="h-3.5 w-3.5" />
-          Filtros
+          {t('kanban.filters')}
           {hasActiveFilters && (
             <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
               !
@@ -1343,20 +1361,20 @@ function SavedFiltersMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72">
         <DropdownMenuLabel className="flex items-center justify-between">
-          <span>Filtros salvos</span>
+          <span>{t('kanban.saved_filters')}</span>
           {hasActiveFilters && (
             <button
               type="button"
               onClick={onClearAll}
               className="text-[10px] font-medium text-muted-foreground hover:text-foreground"
             >
-              limpar tudo
+              {t('kanban.clear_all')}
             </button>
           )}
         </DropdownMenuLabel>
         {saved.length === 0 && (
           <p className="px-2 py-1.5 text-xs text-muted-foreground">
-            Nenhum filtro salvo. Aplique filtros e salve a combinação.
+            {t('kanban.no_saved_filters')}
           </p>
         )}
         {saved.map((f) => (
@@ -1372,7 +1390,7 @@ function SavedFiltersMenu({
             <button
               type="button"
               onClick={() => deleteSavedFilter(f)}
-              aria-label="Excluir filtro"
+              aria-label={t('kanban.delete_filter')}
               className="rounded p-1 text-muted-foreground hover:text-destructive"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1382,7 +1400,7 @@ function SavedFiltersMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSaveCurrent} disabled={!hasActiveFilters}>
           <Save className="h-3.5 w-3.5" />
-          Salvar filtro atual
+          {t('kanban.save_current_filter')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1407,6 +1425,7 @@ function SaveFilterDialog({
   filters: KanbanFilters;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -1426,13 +1445,15 @@ function SaveFilterDialog({
           query: filters,
         }),
       });
-      toast.success('Filtro salvo');
+      toast.success(t('kanban.toast.filter_saved'));
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['saved-filters', 'kanban'] });
     } catch (err) {
       const code =
         err && typeof err === 'object' && 'code' in err ? (err as { code: string }).code : '';
-      toast.error(code === 'name_taken' ? 'Já existe filtro com esse nome' : 'Erro ao salvar');
+      toast.error(
+        code === 'name_taken' ? t('kanban.filter.name_taken') : t('kanban.toast.save_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -1442,24 +1463,22 @@ function SaveFilterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Salvar filtro</DialogTitle>
-          <DialogDescription>
-            Salva a combinação atual de busca, etiqueta, agente e adiados.
-          </DialogDescription>
+          <DialogTitle>{t('kanban.save_filter')}</DialogTitle>
+          <DialogDescription>{t('kanban.save_filter_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="filter-name">Nome</Label>
+            <Label htmlFor="filter-name">{t('common.name')}</Label>
             <Input
               id="filter-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Meus abertos da semana"
+              placeholder={t('kanban.filter_name_placeholder')}
               autoFocus
             />
           </div>
           <Button onClick={submit} className="w-full" disabled={submitting || !name.trim()}>
-            {submitting ? 'Salvando…' : 'Salvar filtro'}
+            {submitting ? t('action.saving') : t('kanban.save_filter')}
           </Button>
         </div>
       </DialogContent>
@@ -1475,10 +1494,11 @@ function CreateFunnelDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [presetId, setPresetId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
-  const selectedPreset = presetId ? FUNNEL_PRESETS.find((p) => p.id === presetId) ?? null : null;
+  const selectedPreset = presetId ? (FUNNEL_PRESETS.find((p) => p.id === presetId) ?? null) : null;
   async function submit() {
     if (!name.trim()) return;
     setSubmitting(true);
@@ -1492,13 +1512,13 @@ function CreateFunnelDialog({
           ...(presetId ? { preset: presetId } : {}),
         }),
       });
-      toast.success('Funil criado');
+      toast.success(t('kanban.toast.funnel_created'));
       setName('');
       setPresetId('');
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['funnels'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -1508,50 +1528,50 @@ function CreateFunnelDialog({
       <DialogTrigger asChild>
         <Button size="sm" variant="outline">
           <Plus className="h-3.5 w-3.5" />
-          Novo funil
+          {t('kanban.new_funnel')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo funil</DialogTitle>
-          <DialogDescription>
-            Escolha um preset pra criar os stages automaticamente, ou deixe vazio (cria New Lead /
-            Ganho / Perda). Você pode adicionar mais stages depois.
-          </DialogDescription>
+          <DialogTitle>{t('kanban.new_funnel')}</DialogTitle>
+          <DialogDescription>{t('kanban.new_funnel_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="funnel-name">Nome</Label>
+            <Label htmlFor="funnel-name">{t('common.name')}</Label>
             <Input
               id="funnel-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Vendas"
+              placeholder={t('kanban.funnel_name_placeholder')}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="funnel-preset">Preset (opcional)</Label>
+            <Label htmlFor="funnel-preset">{t('kanban.preset_optional')}</Label>
             <select
               id="funnel-preset"
               value={presetId}
               onChange={(e) => setPresetId(e.target.value)}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-              <option value="">Vazio (3 stages padrão)</option>
+              <option value="">{t('kanban.preset_empty')}</option>
               {FUNNEL_PRESETS.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} — {p.stages.length} stages
+                  {t('kanban.preset_stages_count', { name: p.name, count: p.stages.length })}
                 </option>
               ))}
             </select>
             {selectedPreset && (
               <p className="text-[11px] text-muted-foreground">
-                {selectedPreset.description}. Cria: {selectedPreset.stages.map((s) => s.name).join(' · ')}.
+                {t('kanban.preset_creates', {
+                  desc: selectedPreset.description,
+                  stages: selectedPreset.stages.map((s) => s.name).join(' · '),
+                })}
               </p>
             )}
           </div>
           <Button onClick={submit} className="w-full" disabled={submitting || !name.trim()}>
-            {submitting ? 'Criando...' : 'Criar funil'}
+            {submitting ? t('kanban.creating') : t('kanban.create_funnel')}
           </Button>
         </div>
       </DialogContent>
@@ -1569,6 +1589,7 @@ function CreateCardDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [title, setTitle] = useState('');
   const [stageId, setStageId] = useState(funnel.stages[0]?.id ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -1580,12 +1601,12 @@ function CreateCardDialog({
         method: 'POST',
         body: JSON.stringify({ funnelId: funnel.id, stageId, title }),
       });
-      toast.success('Card criado');
+      toast.success(t('kanban.toast.card_created'));
       setTitle('');
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['cards', funnel.id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -1595,24 +1616,20 @@ function CreateCardDialog({
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="h-3.5 w-3.5" />
-          Novo card
+          {t('kanban.new_card')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo card no funil {funnel.name}</DialogTitle>
+          <DialogTitle>{t('kanban.new_card_in', { name: funnel.name })}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="card-title">Título</Label>
-            <Input
-              id="card-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+            <Label htmlFor="card-title">{t('kanban.title_label')}</Label>
+            <Input id="card-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="card-stage">Stage</Label>
+            <Label htmlFor="card-stage">{t('kanban.stage_label')}</Label>
             <select
               id="card-stage"
               value={stageId}
@@ -1631,7 +1648,7 @@ function CreateCardDialog({
             className="w-full"
             disabled={submitting || !title.trim() || !stageId}
           >
-            {submitting ? 'Criando...' : 'Criar card'}
+            {submitting ? t('kanban.creating') : t('kanban.create_card')}
           </Button>
         </div>
       </DialogContent>

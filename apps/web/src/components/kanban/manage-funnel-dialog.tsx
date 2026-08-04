@@ -29,6 +29,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,36 +54,36 @@ interface Stage {
 
 const OUTCOME_OPTIONS: Array<{
   value: StageOutcome;
-  label: string;
-  hint: string;
+  labelKey: string;
+  hintKey: string;
   Icon: React.ComponentType<{ className?: string }>;
   classes: string;
 }> = [
   {
     value: null,
-    label: 'Aberto',
-    hint: 'Etapa normal do pipeline — card ativo',
+    labelKey: 'c_kanban_manage_funnel_dialog.outcome_open_label',
+    hintKey: 'c_kanban_manage_funnel_dialog.outcome_open_hint',
     Icon: CircleDashed,
     classes: 'text-slate-600',
   },
   {
     value: 'POSITIVE',
-    label: 'Positivo',
-    hint: 'Outcome final positivo (ganho/sucesso)',
+    labelKey: 'c_kanban_manage_funnel_dialog.outcome_positive_label',
+    hintKey: 'c_kanban_manage_funnel_dialog.outcome_positive_hint',
     Icon: Trophy,
     classes: 'text-emerald-600',
   },
   {
     value: 'NEGATIVE',
-    label: 'Negativo',
-    hint: 'Outcome final negativo (perda/cancelado)',
+    labelKey: 'c_kanban_manage_funnel_dialog.outcome_negative_label',
+    hintKey: 'c_kanban_manage_funnel_dialog.outcome_negative_hint',
     Icon: Minus,
     classes: 'text-red-600',
   },
   {
     value: 'RISK',
-    label: 'Risco',
-    hint: 'Alerta — card ainda ativo mas em perigo',
+    labelKey: 'c_kanban_manage_funnel_dialog.outcome_risk_label',
+    hintKey: 'c_kanban_manage_funnel_dialog.outcome_risk_hint',
     Icon: AlertTriangle,
     classes: 'text-amber-600',
   },
@@ -118,6 +119,7 @@ export function ManageFunnelDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
 
@@ -138,7 +140,7 @@ export function ManageFunnelDialog({
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
-          <DialogTitle>Sem funil</DialogTitle>
+          <DialogTitle>{t('c_kanban_manage_funnel_dialog.no_funnel')}</DialogTitle>
         </DialogContent>
       </Dialog>
     );
@@ -154,10 +156,12 @@ export function ManageFunnelDialog({
         method: 'PATCH',
         body: JSON.stringify({ name: funnelName.trim(), color: funnelColor }),
       });
-      toast.success('Funil atualizado');
+      toast.success(t('c_kanban_manage_funnel_dialog.funnel_updated'));
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.save_error'),
+      );
     } finally {
       setSavingFunnel(false);
     }
@@ -166,21 +170,24 @@ export function ManageFunnelDialog({
   async function deleteFunnel() {
     if (
       !(await confirm({
-        title: `Excluir funil "${funnel!.name}"?`,
-        description:
-          'Todos os cards e listas dele serão removidos. Esta ação não pode ser desfeita.',
-        confirmLabel: 'Excluir funil',
+        title: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_title', {
+          name: funnel!.name,
+        }),
+        description: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_desc'),
+        confirmLabel: t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_label'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/kanban/funnels/${funnel!.id}`, { method: 'DELETE' });
-      toast.success('Funil excluído');
+      toast.success(t('c_kanban_manage_funnel_dialog.funnel_deleted'));
       onOpenChange(false);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao excluir funil');
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.delete_funnel_error'),
+      );
     }
   }
 
@@ -188,20 +195,17 @@ export function ManageFunnelDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Gerenciar funil</DialogTitle>
-          <DialogDescription>
-            Você define as listas (stages) que compõem o funil. Cada lista é uma etapa pela qual
-            o card passa.
-          </DialogDescription>
+          <DialogTitle>{t('c_kanban_manage_funnel_dialog.title')}</DialogTitle>
+          <DialogDescription>{t('c_kanban_manage_funnel_dialog.description')}</DialogDescription>
         </DialogHeader>
 
         {/* Funnel meta */}
         <section className="space-y-3 rounded-lg border bg-muted/30 p-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Funil
+            {t('c_kanban_manage_funnel_dialog.funnel_section')}
           </h3>
           <div className="space-y-2">
-            <Label htmlFor="f-name">Nome</Label>
+            <Label htmlFor="f-name">{t('common.name')}</Label>
             <Input
               id="f-name"
               value={funnelName}
@@ -210,7 +214,7 @@ export function ManageFunnelDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Cor</Label>
+            <Label>{t('c_kanban_manage_funnel_dialog.color_label')}</Label>
             <ColorPicker value={funnelColor} onChange={setFunnelColor} />
           </div>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -219,11 +223,11 @@ export function ManageFunnelDialog({
               onClick={saveFunnelMeta}
               disabled={!funnelName.trim() || !funnelDirty || savingFunnel}
             >
-              {savingFunnel ? 'Salvando…' : 'Salvar funil'}
+              {savingFunnel ? t('action.saving') : t('c_kanban_manage_funnel_dialog.save_funnel')}
             </Button>
             <Button size="sm" variant="ghost" onClick={deleteFunnel} className="text-destructive">
               <Trash2 className="h-3.5 w-3.5" />
-              Excluir funil
+              {t('c_kanban_manage_funnel_dialog.delete_funnel_confirm_label')}
             </Button>
           </div>
         </section>
@@ -232,17 +236,13 @@ export function ManageFunnelDialog({
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Listas (stages) — {funnel.stages.length}
+              {t('c_kanban_manage_funnel_dialog.stages_count', { n: funnel.stages.length })}
             </h3>
             <span className="text-[10px] text-muted-foreground">
-              Arraste pelo punho ⋮⋮ pra reordenar
+              {t('c_kanban_manage_funnel_dialog.reorder_hint')}
             </span>
           </div>
-          <SortableStagesList
-            funnelId={funnel.id}
-            stages={funnel.stages}
-            refresh={refresh}
-          />
+          <SortableStagesList funnelId={funnel.id} stages={funnel.stages} refresh={refresh} />
           <NewStageRow funnelId={funnel.id} stages={funnel.stages} refresh={refresh} />
         </section>
       </DialogContent>
@@ -250,13 +250,7 @@ export function ManageFunnelDialog({
   );
 }
 
-function ColorPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (c: string) => void;
-}) {
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {STAGE_COLORS.map((c) => (
@@ -286,6 +280,7 @@ function SortableStagesList({
   stages: Stage[];
   refresh: () => void;
 }) {
+  const { t } = useT();
   // Cópia local pra reordenação otimista — sincroniza quando server confirma
   const [localOrder, setLocalOrder] = useState<Stage[]>(stages);
   const [busy, setBusy] = useState(false);
@@ -295,9 +290,7 @@ function SortableStagesList({
   }, [stages]);
 
   // PointerSensor com distance pra não disparar drag em clique acidental (8px)
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-  );
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   async function handleDragEnd(ev: DragEndEvent) {
     const { active, over } = ev;
@@ -318,7 +311,9 @@ function SortableStagesList({
     } catch (err) {
       // Rollback se server rejeitar
       setLocalOrder(stages);
-      toast.error(err instanceof Error ? err.message : 'Erro ao reordenar');
+      toast.error(
+        err instanceof Error ? err.message : t('c_kanban_manage_funnel_dialog.reorder_error'),
+      );
     } finally {
       setBusy(false);
     }
@@ -326,10 +321,7 @@ function SortableStagesList({
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext
-        items={localOrder.map((s) => s.id)}
-        strategy={verticalListSortingStrategy}
-      >
+      <SortableContext items={localOrder.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <ul className="space-y-2">
           {localOrder.map((s) => (
             <SortableStageRow
@@ -357,6 +349,7 @@ function SortableStageRow({
   refresh: () => void;
   disabled: boolean;
 }) {
+  const { t } = useT();
   const confirm = useConfirm();
   const [name, setName] = useState(stage.name);
   const [color, setColor] = useState(stage.color);
@@ -364,14 +357,10 @@ function SortableStageRow({
   const [editingColor, setEditingColor] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: stage.id, disabled });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: stage.id,
+    disabled,
+  });
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -384,8 +373,7 @@ function SortableStageRow({
     setOutcome(stage.outcome);
   }, [stage.id, stage.name, stage.color, stage.outcome]);
 
-  const dirty =
-    name !== stage.name || color !== stage.color || outcome !== stage.outcome;
+  const dirty = name !== stage.name || color !== stage.color || outcome !== stage.outcome;
 
   async function patch(payload: Record<string, unknown>) {
     setBusy(true);
@@ -396,7 +384,7 @@ function SortableStageRow({
       });
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setBusy(false);
     }
@@ -409,14 +397,14 @@ function SortableStageRow({
 
   async function remove() {
     if (stagesCount <= 1) {
-      toast.error('Funil precisa ter pelo menos 1 lista');
+      toast.error(t('c_kanban_manage_funnel_dialog.min_one_stage'));
       return;
     }
     if (
       !(await confirm({
-        title: `Excluir lista "${stage.name}"?`,
-        description: 'Cards nela ficarão órfãos do stage.',
-        confirmLabel: 'Excluir',
+        title: t('c_kanban_manage_funnel_dialog.delete_stage_confirm_title', { name: stage.name }),
+        description: t('c_kanban_manage_funnel_dialog.delete_stage_confirm_desc'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
@@ -424,10 +412,10 @@ function SortableStageRow({
     setBusy(true);
     try {
       await api(`/api/kanban/stages/${stage.id}`, { method: 'DELETE' });
-      toast.success('Lista excluída');
+      toast.success(t('c_kanban_manage_funnel_dialog.stage_deleted'));
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setBusy(false);
     }
@@ -447,8 +435,8 @@ function SortableStageRow({
           {...attributes}
           {...listeners}
           disabled={disabled}
-          aria-label="Arrastar pra reordenar"
-          title="Arrastar pra reordenar"
+          aria-label={t('c_kanban_manage_funnel_dialog.drag_reorder')}
+          title={t('c_kanban_manage_funnel_dialog.drag_reorder')}
           className="mt-1 cursor-grab touch-none rounded p-1 text-muted-foreground/60 transition hover:bg-muted hover:text-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
         >
           <GripVertical className="h-4 w-4" />
@@ -459,14 +447,14 @@ function SortableStageRow({
           onClick={() => setEditingColor((v) => !v)}
           className="mt-1.5 h-6 w-6 shrink-0 rounded-full ring-2 ring-card transition hover:scale-110"
           style={{ backgroundColor: color }}
-          title="Trocar cor"
+          title={t('c_kanban_manage_funnel_dialog.change_color')}
         />
 
         <div className="flex-1 space-y-2 min-w-0">
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Nome da lista"
+            placeholder={t('c_kanban_manage_funnel_dialog.stage_name_placeholder')}
             maxLength={60}
             className="font-medium"
           />
@@ -485,10 +473,10 @@ function SortableStageRow({
               const active = outcome === opt.value;
               return (
                 <button
-                  key={opt.label}
+                  key={opt.labelKey}
                   type="button"
                   onClick={() => setOutcome(opt.value)}
-                  title={opt.hint}
+                  title={t(opt.hintKey)}
                   className={`flex flex-col items-center gap-0.5 rounded-md border px-2 py-1.5 text-[11px] transition ${
                     active
                       ? 'border-foreground bg-accent font-medium'
@@ -496,7 +484,7 @@ function SortableStageRow({
                   }`}
                 >
                   <Icon className={`h-3.5 w-3.5 ${opt.classes}`} />
-                  <span className={opt.classes}>{opt.label}</span>
+                  <span className={opt.classes}>{t(opt.labelKey)}</span>
                 </button>
               );
             })}
@@ -531,6 +519,7 @@ function NewStageRow({
   stages: Stage[];
   refresh: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [color, setColor] = useState('#6366f1');
   const [submitting, setSubmitting] = useState(false);
@@ -541,7 +530,9 @@ function NewStageRow({
     setSubmitting(true);
     try {
       // Insere antes do primeiro stage com outcome (POSITIVE/NEGATIVE), senão no fim
-      const outcomeOrder = stages.find((s) => s.outcome === 'POSITIVE' || s.outcome === 'NEGATIVE')?.order;
+      const outcomeOrder = stages.find(
+        (s) => s.outcome === 'POSITIVE' || s.outcome === 'NEGATIVE',
+      )?.order;
       const lastNormal = stages
         .filter((s) => s.outcome !== 'POSITIVE' && s.outcome !== 'NEGATIVE')
         .reduce((acc, s) => Math.max(acc, s.order), -1);
@@ -550,12 +541,12 @@ function NewStageRow({
         method: 'POST',
         body: JSON.stringify({ name: name.trim(), color, order: newOrder }),
       });
-      toast.success('Lista criada');
+      toast.success(t('c_kanban_manage_funnel_dialog.stage_created'));
       setName('');
       setOpen(false);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -569,7 +560,7 @@ function NewStageRow({
         className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed bg-muted/20 px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted/40 hover:text-foreground"
       >
         <Plus className="h-3.5 w-3.5" />
-        Adicionar lista
+        {t('c_kanban_manage_funnel_dialog.add_stage')}
       </button>
     );
   }
@@ -577,14 +568,11 @@ function NewStageRow({
   return (
     <div className="space-y-3 rounded-lg border-2 border-dashed bg-muted/20 p-3">
       <div className="flex items-center gap-2">
-        <span
-          className="h-5 w-5 shrink-0 rounded-full"
-          style={{ backgroundColor: color }}
-        />
+        <span className="h-5 w-5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Nome da nova lista"
+          placeholder={t('c_kanban_manage_funnel_dialog.new_stage_name_placeholder')}
           autoFocus
           maxLength={60}
           onKeyDown={(e) => {
@@ -599,7 +587,9 @@ function NewStageRow({
       <ColorPicker value={color} onChange={setColor} />
       <div className="flex gap-2">
         <Button size="sm" onClick={submit} disabled={!name.trim() || submitting}>
-          {submitting ? 'Criando…' : 'Criar lista'}
+          {submitting
+            ? t('c_kanban_manage_funnel_dialog.creating')
+            : t('c_kanban_manage_funnel_dialog.create_stage')}
         </Button>
         <Button
           size="sm"
@@ -609,7 +599,7 @@ function NewStageRow({
             setName('');
           }}
         >
-          Cancelar
+          {t('action.cancel')}
         </Button>
       </div>
     </div>

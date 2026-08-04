@@ -63,9 +63,18 @@ interface ConversationListItem {
 }
 
 const INTENT_BADGE: Record<AiClassification['intent'], { label: string; cls: string }> = {
-  sale: { label: 'Venda', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
-  support: { label: 'Suporte', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
-  complaint: { label: 'Reclamação', cls: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
+  sale: {
+    label: 'Venda',
+    cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  },
+  support: {
+    label: 'Suporte',
+    cls: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+  },
+  complaint: {
+    label: 'Reclamação',
+    cls: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+  },
   info: { label: 'Info', cls: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
   other: { label: 'Outro', cls: 'bg-muted text-muted-foreground' },
 };
@@ -118,14 +127,14 @@ const SLA_LABEL: Record<NonNullable<SlaStatus>, string> = {
 
 type Tab = 'ALL' | 'AWAITING' | 'OPEN' | 'UNASSIGNED' | 'PENDING' | 'RESOLVED' | 'ARCHIVED';
 
-const STATUS_TABS: Array<{ value: Tab; label: string }> = [
-  { value: 'ALL', label: 'Todas' },
-  { value: 'AWAITING', label: 'Aguardando' },
-  { value: 'OPEN', label: 'Abertas' },
-  { value: 'UNASSIGNED', label: 'Sem agente' },
-  { value: 'PENDING', label: 'Pendentes' },
-  { value: 'RESOLVED', label: 'Resolvidas' },
-  { value: 'ARCHIVED', label: 'Arquivadas' },
+const STATUS_TABS: Array<{ value: Tab; key: string }> = [
+  { value: 'ALL', key: 'inbox.tab.all' },
+  { value: 'AWAITING', key: 'inbox.tab.awaiting' },
+  { value: 'OPEN', key: 'inbox.tab.open' },
+  { value: 'UNASSIGNED', key: 'inbox.tab.unassigned' },
+  { value: 'PENDING', key: 'inbox.tab.pending' },
+  { value: 'RESOLVED', key: 'inbox.tab.resolved' },
+  { value: 'ARCHIVED', key: 'inbox.tab.archived' },
 ];
 
 const STATUS_BADGE: Record<ConversationStatus, string> = {
@@ -326,25 +335,25 @@ export default function InboxPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
-          {STATUS_TABS.map((t) => {
+          {STATUS_TABS.map((tabOpt) => {
             const badge =
-              t.value === 'AWAITING' && counts && counts.awaiting > 0 ? counts.awaiting : null;
-            const isAwaiting = t.value === 'AWAITING';
+              tabOpt.value === 'AWAITING' && counts && counts.awaiting > 0 ? counts.awaiting : null;
+            const isAwaiting = tabOpt.value === 'AWAITING';
             return (
               <button
-                key={t.value}
+                key={tabOpt.value}
                 type="button"
                 onClick={() => {
-                  setTab(t.value);
+                  setTab(tabOpt.value);
                   setPage(1);
                 }}
                 className={`inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors ${
-                  tab === t.value
+                  tab === tabOpt.value
                     ? 'bg-background shadow-sm font-medium'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {t.label}
+                {t(tabOpt.key)}
                 {badge != null && (
                   <span
                     className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none ${
@@ -383,7 +392,7 @@ export default function InboxPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Nome ou telefone…"
+              placeholder={t('inbox.search_placeholder')}
               className="w-64 pl-8"
             />
           </div>
@@ -571,14 +580,14 @@ export default function InboxPage() {
 
       <div className="rounded-lg border bg-card divide-y">
         {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground">Carregando…</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('action.loading')}</p>
         ) : !data?.items.length ? (
           <p className="p-6 text-sm text-muted-foreground">
             {tab === 'ARCHIVED'
-              ? 'Nenhuma conversa arquivada.'
+              ? t('inbox.empty_archived')
               : tab === 'AWAITING'
-                ? 'Tudo respondido. Nenhum cliente aguardando agora.'
-                : 'Nenhuma conversa nesse filtro.'}
+                ? t('inbox.empty_awaiting')
+                : t('inbox.empty')}
           </p>
         ) : (
           data.items.map((c) => {
@@ -607,125 +616,128 @@ export default function InboxPage() {
                       : 'border-input bg-background opacity-0 group-hover:opacity-100'
                   } ${hasSelection ? 'opacity-100' : ''}`}
                 >
-                  {isSelected ? <CheckSquare className="h-3 w-3" /> : <Square className="h-3 w-3 opacity-0" />}
-                </button>
-                <Link
-                  href={`/inbox/${c.id}`}
-                  className="flex min-w-0 flex-1 items-start gap-3"
-                >
-                <div className="relative shrink-0">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-xs font-semibold uppercase text-slate-700 ring-2 ring-card">
-                    {initialsFrom(c.contact.name ?? c.contact.phoneNumber)}
-                  </div>
-                  {sla && (
-                    <span
-                      title={SLA_LABEL[sla]}
-                      className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${SLA_DOT[sla]}`}
-                    />
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate font-medium">
-                      {c.contact.name ?? c.contact.phoneNumber}
-                    </p>
-                    {c.unreadCount > 0 && (
-                      <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                        {c.unreadCount}
-                      </span>
-                    )}
-                    {isArchived && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-                        <Archive className="h-2.5 w-2.5" />
-                        Arquivada
-                      </span>
-                    )}
-                    {c.slaBreachNotifiedAt && !c.firstResponseAt && (
-                      <span
-                        title="SLA estourado — cliente aguardando primeira resposta acima do alvo"
-                        className="inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white animate-pulse"
-                      >
-                        SLA breach
-                      </span>
-                    )}
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[c.status]}`}
-                    >
-                      {STATUS_LABEL[c.status]}
-                    </span>
-                    {c.aiClassification && (
-                      <>
-                        <span
-                          title={`IA: ${INTENT_BADGE[c.aiClassification.intent].label} (${Math.round(c.aiClassification.confidence * 100)}%)`}
-                          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${INTENT_BADGE[c.aiClassification.intent].cls}`}
-                        >
-                          {INTENT_BADGE[c.aiClassification.intent].label}
-                        </span>
-                        {c.aiClassification.urgency !== 'low' && (
-                          <span
-                            title={URGENCY_LABEL[c.aiClassification.urgency]}
-                            className={`h-2 w-2 rounded-full ${URGENCY_DOT[c.aiClassification.urgency]}`}
-                          />
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {c.lastMessagePreview && (
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {c.lastAgentRepliedBy && (
-                        <span className="font-medium text-foreground/70">
-                          {c.lastAgentRepliedBy.name?.split(' ')[0] ??
-                            c.lastAgentRepliedBy.email.split('@')[0]}
-                          :{' '}
-                        </span>
-                      )}
-                      {c.lastMessagePreview}
-                    </p>
-                  )}
-
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {c.labels.slice(0, 4).map((cl) => (
-                      <span
-                        key={cl.label.id}
-                        style={{ backgroundColor: cl.label.color + '20', color: cl.label.color }}
-                        className="rounded-full px-1.5 py-0 text-[10px] font-medium"
-                      >
-                        {cl.label.name}
-                      </span>
-                    ))}
-                    {c.labels.length > 4 && (
-                      <span className="text-[10px] text-muted-foreground">
-                        +{c.labels.length - 4}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
-                  <time>{formatRelative(c.lastMessageAt)}</time>
-                  <span className="truncate max-w-[140px]">{c.inbox.name}</span>
-                  {c.assignedAgentId ? (
-                    <span
-                      title={c.lastAgentRepliedBy?.name ?? c.lastAgentRepliedBy?.email ?? 'Atribuída'}
-                      className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-semibold uppercase text-white"
-                    >
-                      {initialsFrom(
-                        c.lastAgentRepliedBy?.name ?? c.lastAgentRepliedBy?.email ?? 'A',
-                      )}
-                    </span>
+                  {isSelected ? (
+                    <CheckSquare className="h-3 w-3" />
                   ) : (
-                    <span className="flex items-center gap-0.5 text-amber-600">
-                      <UserMinus className="h-3 w-3" />
-                      Sem agente
-                    </span>
+                    <Square className="h-3 w-3 opacity-0" />
                   )}
-                  {tab === 'ARCHIVED' && <ArchiveRestore className="h-3 w-3 opacity-50" />}
-                  {tab !== 'ARCHIVED' && c.assignedAgentId && (
-                    <UserCheck className="h-3 w-3 opacity-0" />
-                  )}
-                </div>
+                </button>
+                <Link href={`/inbox/${c.id}`} className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className="relative shrink-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-xs font-semibold uppercase text-slate-700 ring-2 ring-card">
+                      {initialsFrom(c.contact.name ?? c.contact.phoneNumber)}
+                    </div>
+                    {sla && (
+                      <span
+                        title={SLA_LABEL[sla]}
+                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card ${SLA_DOT[sla]}`}
+                      />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium">
+                        {c.contact.name ?? c.contact.phoneNumber}
+                      </p>
+                      {c.unreadCount > 0 && (
+                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                          {c.unreadCount}
+                        </span>
+                      )}
+                      {isArchived && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                          <Archive className="h-2.5 w-2.5" />
+                          Arquivada
+                        </span>
+                      )}
+                      {c.slaBreachNotifiedAt && !c.firstResponseAt && (
+                        <span
+                          title="SLA estourado — cliente aguardando primeira resposta acima do alvo"
+                          className="inline-flex items-center gap-0.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white animate-pulse"
+                        >
+                          SLA breach
+                        </span>
+                      )}
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${STATUS_BADGE[c.status]}`}
+                      >
+                        {STATUS_LABEL[c.status]}
+                      </span>
+                      {c.aiClassification && (
+                        <>
+                          <span
+                            title={`IA: ${INTENT_BADGE[c.aiClassification.intent].label} (${Math.round(c.aiClassification.confidence * 100)}%)`}
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${INTENT_BADGE[c.aiClassification.intent].cls}`}
+                          >
+                            {INTENT_BADGE[c.aiClassification.intent].label}
+                          </span>
+                          {c.aiClassification.urgency !== 'low' && (
+                            <span
+                              title={URGENCY_LABEL[c.aiClassification.urgency]}
+                              className={`h-2 w-2 rounded-full ${URGENCY_DOT[c.aiClassification.urgency]}`}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {c.lastMessagePreview && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {c.lastAgentRepliedBy && (
+                          <span className="font-medium text-foreground/70">
+                            {c.lastAgentRepliedBy.name?.split(' ')[0] ??
+                              c.lastAgentRepliedBy.email.split('@')[0]}
+                            :{' '}
+                          </span>
+                        )}
+                        {c.lastMessagePreview}
+                      </p>
+                    )}
+
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {c.labels.slice(0, 4).map((cl) => (
+                        <span
+                          key={cl.label.id}
+                          style={{ backgroundColor: cl.label.color + '20', color: cl.label.color }}
+                          className="rounded-full px-1.5 py-0 text-[10px] font-medium"
+                        >
+                          {cl.label.name}
+                        </span>
+                      ))}
+                      {c.labels.length > 4 && (
+                        <span className="text-[10px] text-muted-foreground">
+                          +{c.labels.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-col items-end gap-1 text-xs text-muted-foreground">
+                    <time>{formatRelative(c.lastMessageAt)}</time>
+                    <span className="truncate max-w-[140px]">{c.inbox.name}</span>
+                    {c.assignedAgentId ? (
+                      <span
+                        title={
+                          c.lastAgentRepliedBy?.name ?? c.lastAgentRepliedBy?.email ?? 'Atribuída'
+                        }
+                        className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-[9px] font-semibold uppercase text-white"
+                      >
+                        {initialsFrom(
+                          c.lastAgentRepliedBy?.name ?? c.lastAgentRepliedBy?.email ?? 'A',
+                        )}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-0.5 text-amber-600">
+                        <UserMinus className="h-3 w-3" />
+                        {t('inbox.tab.unassigned')}
+                      </span>
+                    )}
+                    {tab === 'ARCHIVED' && <ArchiveRestore className="h-3 w-3 opacity-50" />}
+                    {tab !== 'ARCHIVED' && c.assignedAgentId && (
+                      <UserCheck className="h-3 w-3 opacity-0" />
+                    )}
+                  </div>
                 </Link>
               </div>
             );

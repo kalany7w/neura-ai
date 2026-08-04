@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, formatMoney, localeFor } from '@/lib/i18n';
+import { useWorkspaceCurrency } from '@/hooks/use-workspace-currency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,10 +60,6 @@ interface InboxRow {
   conversationsByStatus: Record<string, number>;
   messages: number;
   frt: { count: number; avgHuman: string };
-}
-
-function formatBRL(n: number): string {
-  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
 function toInputDate(d: Date): string {
@@ -214,7 +211,11 @@ export default function ReportsPage() {
   function downloadCsv(type: 'conversations' | 'messages') {
     const url = `/api/reports/export.csv?type=${type}&${queryStr}`;
     window.open(url, '_blank');
-    toast.success(`Exportando ${type === 'conversations' ? 'conversas' : 'mensagens'}…`);
+    toast.success(
+      type === 'conversations'
+        ? t('reports.toast.exporting_conversations')
+        : t('reports.toast.exporting_messages'),
+    );
   }
 
   return (
@@ -232,7 +233,7 @@ export default function ReportsPage() {
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
             <Label htmlFor="since" className="text-xs">
-              De
+              {t('reports.date.from')}
             </Label>
             <Input
               id="since"
@@ -244,7 +245,7 @@ export default function ReportsPage() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="until" className="text-xs">
-              Até
+              {t('reports.date.to')}
             </Label>
             <Input
               id="until"
@@ -269,39 +270,29 @@ export default function ReportsPage() {
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => downloadCsv('conversations')}>
             <Download className="h-3.5 w-3.5" />
-            CSV conversas
+            {t('reports.csv_conversations')}
           </Button>
           <Button size="sm" variant="outline" onClick={() => downloadCsv('messages')}>
             <Download className="h-3.5 w-3.5" />
-            CSV mensagens
+            {t('reports.csv_messages')}
           </Button>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b">
-        {(['overview', 'agents', 'inboxes', 'sla', 'csat', 'kb'] as const).map((t) => (
+        {(['overview', 'agents', 'inboxes', 'sla', 'csat', 'kb'] as const).map((tabKey) => (
           <button
-            key={t}
+            key={tabKey}
             type="button"
-            onClick={() => setTab(t)}
+            onClick={() => setTab(tabKey)}
             className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
-              tab === t
+              tab === tabKey
                 ? 'border-foreground text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {t === 'overview'
-              ? 'Visão geral'
-              : t === 'agents'
-                ? 'Por agente'
-                : t === 'inboxes'
-                  ? 'Por inbox'
-                  : t === 'sla'
-                    ? 'SLA'
-                    : t === 'csat'
-                      ? 'Satisfação'
-                      : 'Base de conhecimento'}
+            {t(`reports.tab.${tabKey}`)}
           </button>
         ))}
       </div>
@@ -309,7 +300,7 @@ export default function ReportsPage() {
       {tab === 'overview' && (
         <>
           {overviewQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : overviewQ.data ? (
             <OverviewTab data={overviewQ.data} />
           ) : null}
@@ -319,7 +310,7 @@ export default function ReportsPage() {
       {tab === 'agents' && (
         <>
           {agentsQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : agentsQ.data ? (
             <AgentsTab rows={agentsQ.data.rows} />
           ) : null}
@@ -329,7 +320,7 @@ export default function ReportsPage() {
       {tab === 'inboxes' && (
         <>
           {inboxesQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : inboxesQ.data ? (
             <InboxesTab rows={inboxesQ.data.rows} />
           ) : null}
@@ -339,7 +330,7 @@ export default function ReportsPage() {
       {tab === 'sla' && (
         <>
           {slaQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : slaQ.data ? (
             <SlaTab data={slaQ.data} />
           ) : null}
@@ -349,7 +340,7 @@ export default function ReportsPage() {
       {tab === 'csat' && (
         <>
           {csatQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : csatQ.data ? (
             <CsatTab data={csatQ.data} />
           ) : null}
@@ -359,7 +350,7 @@ export default function ReportsPage() {
       {tab === 'kb' && (
         <>
           {kbQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : kbQ.data ? (
             <KbTab data={kbQ.data} />
           ) : null}
@@ -370,6 +361,7 @@ export default function ReportsPage() {
 }
 
 function KbTab({ data }: { data: KbReport }) {
+  const { t } = useT();
   const { summary, topArticles } = data;
   const acceptColor =
     summary.acceptRate == null
@@ -392,48 +384,60 @@ function KbTab({ data }: { data: KbReport }) {
     <div className="space-y-6">
       {summary.published === 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50/40 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
-          Nenhum artigo publicado. Crie o primeiro em{' '}
+          {t('reports.kb.empty_before')}{' '}
           <a href="/settings/kb" className="font-medium underline">
             /settings/kb
           </a>{' '}
-          pra começar a alimentar o auto-suggest da IA.
+          {t('reports.kb.empty_after')}
         </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <CsatKpiCard label="Artigos publicados" value={summary.published.toString()} />
+        <CsatKpiCard label={t('reports.kb.published')} value={summary.published.toString()} />
         <CsatKpiCard
-          label="Cobertura IA"
+          label={t('reports.kb.ai_coverage')}
           value={summary.coverage !== null ? `${summary.coverage}%` : '—'}
-          sub={`${summary.withEmbedding}/${summary.published} indexados`}
+          sub={t('reports.kb.indexed', {
+            indexed: summary.withEmbedding,
+            total: summary.published,
+          })}
           valueClass={coverageColor}
         />
         <CsatKpiCard
-          label="Sugestões geradas"
+          label={t('reports.kb.suggestions')}
           value={summary.suggestedTotal.toString()}
-          sub="no período"
+          sub={t('reports.kb.in_period')}
         />
         <CsatKpiCard
-          label="Taxa de aceitação"
+          label={t('reports.kb.accept_rate')}
           value={summary.acceptRate !== null ? `${summary.acceptRate}%` : '—'}
-          sub={`${summary.acceptedTotal} aceitas pelo agente`}
+          sub={t('reports.kb.accepted_by_agent', { n: summary.acceptedTotal })}
           valueClass={acceptColor}
         />
       </div>
 
       {summary.drafts + summary.archived > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
-          <CsatKpiCard label="Rascunhos" value={summary.drafts.toString()} sub="não disparam IA" />
-          <CsatKpiCard label="Arquivados" value={summary.archived.toString()} sub="ocultos da busca" />
+          <CsatKpiCard
+            label={t('reports.kb.drafts')}
+            value={summary.drafts.toString()}
+            sub={t('reports.kb.drafts_sub')}
+          />
+          <CsatKpiCard
+            label={t('reports.kb.archived')}
+            value={summary.archived.toString()}
+            sub={t('reports.kb.archived_sub')}
+          />
         </div>
       )}
 
       <div className="rounded-lg border bg-card p-4">
-        <h3 className="mb-3 font-semibold">Top artigos por uso</h3>
+        <h3 className="mb-3 font-semibold">{t('reports.kb.top_articles')}</h3>
         {topArticles.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
-            Nenhum artigo foi consumido ainda. Use o botão{' '}
-            <strong>Buscar na base</strong> no composer pra começar.
+            {t('reports.kb.no_articles_before')}{' '}
+            <strong>{t('reports.kb.no_articles_strong')}</strong>{' '}
+            {t('reports.kb.no_articles_after')}
           </p>
         ) : (
           <ol className="space-y-1.5">
@@ -456,14 +460,16 @@ function KbTab({ data }: { data: KbReport }) {
                     )}
                     {!a.indexed && (
                       <span className="rounded bg-amber-500/15 px-1 text-amber-700 dark:text-amber-300">
-                        sem embedding
+                        {t('reports.kb.no_embedding')}
                       </span>
                     )}
                   </div>
                 </div>
                 <span className="shrink-0 text-sm font-medium tabular-nums">
                   {a.viewCount}
-                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">uso</span>
+                  <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">
+                    {t('reports.kb.usage')}
+                  </span>
                 </span>
               </li>
             ))}
@@ -475,6 +481,7 @@ function KbTab({ data }: { data: KbReport }) {
 }
 
 function CsatTab({ data }: { data: CsatReport }) {
+  const { t, lang } = useT();
   const { summary, csatDistribution, agents, recentComments, surveys } = data;
   const enabledSurveys = surveys.filter((s) => s.enabled);
   const hasCsat = csatDistribution.some((d) => d.count > 0);
@@ -503,29 +510,33 @@ function CsatTab({ data }: { data: CsatReport }) {
     <div className="space-y-6">
       {enabledSurveys.length === 0 && summary.totalSent === 0 && (
         <div className="rounded-md border border-amber-300 bg-amber-50/40 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
-          Nenhum survey ativo. Configure em{' '}
+          {t('reports.csat.empty_before')}{' '}
           <a href="/settings/csat" className="font-medium underline">
             /settings/csat
           </a>{' '}
-          pra começar a coletar satisfação.
+          {t('reports.csat.empty_after')}
         </div>
       )}
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <CsatKpiCard label="Surveys enviados" value={summary.totalSent.toString()} />
+        <CsatKpiCard label={t('reports.csat.surveys_sent')} value={summary.totalSent.toString()} />
         <CsatKpiCard
-          label="Respostas"
+          label={t('reports.col.responses')}
           value={summary.totalResponses.toString()}
-          sub={summary.responseRate !== null ? `${summary.responseRate}% taxa` : '—'}
+          sub={
+            summary.responseRate !== null
+              ? t('reports.csat.response_rate', { rate: summary.responseRate })
+              : '—'
+          }
         />
         {hasCsat && (
           <CsatKpiCard
-            label="CSAT médio"
+            label={t('reports.csat.csat_avg')}
             value={summary.csatAvg !== null ? summary.csatAvg.toFixed(2) : '—'}
             sub={
               summary.csatSatisfactionRate !== null
-                ? `${summary.csatSatisfactionRate}% satisfeitos (4-5★)`
+                ? t('reports.csat.satisfied', { rate: summary.csatSatisfactionRate })
                 : '—'
             }
             valueClass={csatAvgColor}
@@ -535,17 +546,22 @@ function CsatTab({ data }: { data: CsatReport }) {
           <CsatKpiCard
             label="NPS"
             value={summary.npsScore !== null ? String(summary.npsScore) : '—'}
-            sub={`${summary.npsBreakdown.promoters} prom · ${summary.npsBreakdown.passives} pas · ${summary.npsBreakdown.detractors} det`}
+            sub={t('reports.csat.nps_breakdown', {
+              prom: summary.npsBreakdown.promoters,
+              pas: summary.npsBreakdown.passives,
+              det: summary.npsBreakdown.detractors,
+            })}
             valueClass={npsColor}
           />
         )}
         {hasThumbs && (
           <CsatKpiCard
-            label="👍 positivos"
-            value={
-              summary.thumbsPositiveRate !== null ? `${summary.thumbsPositiveRate}%` : '—'
-            }
-            sub={`${summary.thumbsBreakdown.positives} 👍 · ${summary.thumbsBreakdown.negatives} 👎`}
+            label={t('reports.csat.thumbs_positive')}
+            value={summary.thumbsPositiveRate !== null ? `${summary.thumbsPositiveRate}%` : '—'}
+            sub={t('reports.csat.thumbs_breakdown', {
+              pos: summary.thumbsBreakdown.positives,
+              neg: summary.thumbsBreakdown.negatives,
+            })}
           />
         )}
       </div>
@@ -553,7 +569,7 @@ function CsatTab({ data }: { data: CsatReport }) {
       {/* Distribuição CSAT */}
       {hasCsat && (
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="mb-3 font-semibold">Distribuição CSAT</h3>
+          <h3 className="mb-3 font-semibold">{t('reports.csat.distribution')}</h3>
           <div className="space-y-1.5">
             {csatDistribution
               .slice()
@@ -563,11 +579,7 @@ function CsatTab({ data }: { data: CsatReport }) {
                 const total = csatDistribution.reduce((a, b) => a + b.count, 0);
                 const sharePct = total > 0 ? Math.round((d.count / total) * 100) : 0;
                 const fill =
-                  d.score >= 4
-                    ? 'bg-emerald-500'
-                    : d.score === 3
-                      ? 'bg-amber-500'
-                      : 'bg-red-500';
+                  d.score >= 4 ? 'bg-emerald-500' : d.score === 3 ? 'bg-amber-500' : 'bg-red-500';
                 return (
                   <div key={d.score} className="flex items-center gap-3">
                     <span className="w-14 text-sm tabular-nums">
@@ -575,10 +587,7 @@ function CsatTab({ data }: { data: CsatReport }) {
                     </span>
                     <div className="relative flex-1">
                       <div className="h-5 rounded bg-muted/50">
-                        <div
-                          className={`h-5 rounded ${fill}`}
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className={`h-5 rounded ${fill}`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                     <span className="w-24 text-right text-xs text-muted-foreground tabular-nums">
@@ -594,13 +603,13 @@ function CsatTab({ data }: { data: CsatReport }) {
       {/* Por agente */}
       {agents.length > 0 && (
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="mb-3 font-semibold">Por agente</h3>
+          <h3 className="mb-3 font-semibold">{t('reports.section.by_agent')}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="py-2 pr-2">Agente</th>
-                  <th className="py-2 px-2 text-right">Respostas</th>
+                  <th className="py-2 pr-2">{t('reports.col.agent')}</th>
+                  <th className="py-2 px-2 text-right">{t('reports.col.responses')}</th>
                   <th className="py-2 px-2 text-right">CSAT</th>
                   <th className="py-2 px-2 text-right">NPS</th>
                   <th className="py-2 pl-2 text-right">👍</th>
@@ -634,7 +643,7 @@ function CsatTab({ data }: { data: CsatReport }) {
       {/* Comentários recentes */}
       {recentComments.length > 0 && (
         <div className="rounded-lg border bg-card p-4">
-          <h3 className="mb-3 font-semibold">Comentários recentes</h3>
+          <h3 className="mb-3 font-semibold">{t('reports.csat.recent_comments')}</h3>
           <ul className="space-y-2">
             {recentComments.map((c, idx) => (
               <li
@@ -657,7 +666,7 @@ function CsatTab({ data }: { data: CsatReport }) {
                     {c.scoreType === 'CSAT' && '/5'}
                     {c.scoreType === 'NPS' && '/10'}
                   </span>
-                  <span>{new Date(c.respondedAt).toLocaleString('pt-BR')}</span>
+                  <span>{new Date(c.respondedAt).toLocaleString(localeFor(lang))}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-sm">{c.comment}</p>
               </li>
@@ -690,6 +699,7 @@ function CsatKpiCard({
 }
 
 function SlaTab({ data }: { data: SlaReport }) {
+  const { t, lang } = useT();
   const { summary, agents, thresholds } = data;
   const hitColor = (rate: number | null) => {
     if (rate == null) return 'text-muted-foreground';
@@ -700,76 +710,78 @@ function SlaTab({ data }: { data: SlaReport }) {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border bg-amber-50/50 p-3 text-sm dark:bg-amber-950/20">
-        Alvos: FRT <strong>{thresholds.firstResponseMin}min</strong> · RT{' '}
-        <strong>{thresholds.resolutionMin}min</strong>. Configure em{' '}
+        {t('reports.sla.targets_before')} <strong>{thresholds.firstResponseMin}min</strong>{' '}
+        {t('reports.sla.targets_rt')} <strong>{thresholds.resolutionMin}min</strong>.{' '}
+        {t('reports.sla.targets_configure')}{' '}
         <a href="/settings/sla" className="font-medium underline">
-          Configurações → SLA
+          {t('reports.sla.targets_link')}
         </a>
         .
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
-        <SlaKpiCard label="Conversas no período" value={summary.totalConversations.toLocaleString('pt-BR')} />
         <SlaKpiCard
-          label="FRT médio"
-          value={summary.frtAvgHuman}
-          sub={`P50 ${summary.frtP50Human} · P90 ${summary.frtP90Human}`}
+          label={t('reports.sla.conversations_period')}
+          value={summary.totalConversations.toLocaleString(localeFor(lang))}
         />
         <SlaKpiCard
-          label="FRT hit rate"
+          label={t('reports.col.frt_avg')}
+          value={summary.frtAvgHuman}
+          sub={t('reports.sla.frt_p50_p90', { p50: summary.frtP50Human, p90: summary.frtP90Human })}
+        />
+        <SlaKpiCard
+          label={t('reports.sla.frt_hit_rate')}
           value={summary.frtHitRate != null ? `${summary.frtHitRate}%` : '—'}
           valueClass={hitColor(summary.frtHitRate)}
-          sub={`dentro de ${thresholds.firstResponseMin}min`}
+          sub={t('reports.sla.within', { n: thresholds.firstResponseMin })}
         />
         <SlaKpiCard
-          label="Em breach agora"
-          value={summary.currentlyBreached.toLocaleString('pt-BR')}
+          label={t('reports.sla.breached_now')}
+          value={summary.currentlyBreached.toLocaleString(localeFor(lang))}
           valueClass={
             summary.currentlyBreached > 0 ? 'text-red-600 dark:text-red-400' : 'text-foreground'
           }
-          sub="aguardando primeira resposta"
+          sub={t('reports.sla.breached_sub')}
         />
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
         <SlaKpiCard
-          label="RT médio"
+          label={t('reports.sla.rt_avg')}
           value={summary.rtAvgHuman}
-          sub={`P90 ${summary.rtP90Human}`}
+          sub={t('reports.sla.rt_p90', { p90: summary.rtP90Human })}
         />
         <SlaKpiCard
-          label="RT hit rate"
+          label={t('reports.sla.rt_hit_rate')}
           value={summary.rtHitRate != null ? `${summary.rtHitRate}%` : '—'}
           valueClass={hitColor(summary.rtHitRate)}
-          sub={`dentro de ${thresholds.resolutionMin}min`}
+          sub={t('reports.sla.within', { n: thresholds.resolutionMin })}
         />
         <SlaKpiCard
-          label="P50 resolução"
+          label={t('reports.sla.rt_p50')}
           value={summary.rtP50 != null ? formatSeconds(summary.rtP50) : '—'}
         />
       </div>
 
       <div className="rounded-lg border bg-card">
         <div className="border-b px-4 py-3">
-          <h3 className="text-sm font-semibold">Por agente</h3>
-          <p className="text-xs text-muted-foreground">
-            Quem mais respondeu primeiro nas conversas do período.
-          </p>
+          <h3 className="text-sm font-semibold">{t('reports.section.by_agent')}</h3>
+          <p className="text-xs text-muted-foreground">{t('reports.sla.by_agent_sub')}</p>
         </div>
         {agents.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">Sem dados.</p>
+          <p className="p-6 text-sm text-muted-foreground">{t('common.no_data')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/30 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2 text-left">Agente</th>
-                  <th className="px-4 py-2 text-right">Conversas</th>
-                  <th className="px-4 py-2 text-right">FRT médio</th>
-                  <th className="px-4 py-2 text-right">FRT P90</th>
-                  <th className="px-4 py-2 text-right">FRT hit %</th>
-                  <th className="px-4 py-2 text-right">RT médio</th>
-                  <th className="px-4 py-2 text-right">RT hit %</th>
+                  <th className="px-4 py-2 text-left">{t('reports.col.agent')}</th>
+                  <th className="px-4 py-2 text-right">{t('reports.col.conversations')}</th>
+                  <th className="px-4 py-2 text-right">{t('reports.col.frt_avg')}</th>
+                  <th className="px-4 py-2 text-right">{t('reports.col.frt_p90')}</th>
+                  <th className="px-4 py-2 text-right">{t('reports.col.frt_hit')}</th>
+                  <th className="px-4 py-2 text-right">{t('reports.sla.rt_avg')}</th>
+                  <th className="px-4 py-2 text-right">{t('reports.col.rt_hit')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -777,24 +789,22 @@ function SlaTab({ data }: { data: SlaReport }) {
                   <tr key={a.userId} className="hover:bg-accent/30">
                     <td className="px-4 py-2">
                       <p className="font-medium">{a.name ?? a.email}</p>
-                      {a.name && (
-                        <p className="text-[11px] text-muted-foreground">{a.email}</p>
-                      )}
+                      {a.name && <p className="text-[11px] text-muted-foreground">{a.email}</p>}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{a.conversations}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">
-                      {formatSeconds(a.frtAvg)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
-                      {formatSeconds(a.frtP90)}
-                    </td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.frtHitRate)}`}>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatSeconds(a.frtAvg)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatSeconds(a.frtP90)}</td>
+                    <td
+                      className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.frtHitRate)}`}
+                    >
                       {a.frtHitRate != null ? `${a.frtHitRate}%` : '—'}
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">
                       {a.rtAvg ? formatSeconds(a.rtAvg) : '—'}
                     </td>
-                    <td className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.rtHitRate)}`}>
+                    <td
+                      className={`px-4 py-2 text-right tabular-nums font-semibold ${hitColor(a.rtHitRate)}`}
+                    >
                       {a.rtHitRate != null ? `${a.rtHitRate}%` : '—'}
                     </td>
                   </tr>
@@ -838,11 +848,7 @@ function formatSeconds(sec: number): string {
   return `${Math.round(sec / 8640) / 10}d`;
 }
 
-function setShortcut(
-  days: number,
-  setSince: (v: string) => void,
-  setUntil: (v: string) => void,
-) {
+function setShortcut(days: number, setSince: (v: string) => void, setUntil: (v: string) => void) {
   const until = new Date();
   const since = new Date(until.getTime() - days * 24 * 60 * 60 * 1000);
   setSince(toInputDate(since));
@@ -850,42 +856,55 @@ function setShortcut(
 }
 
 function OverviewTab({ data }: { data: Overview }) {
+  const { t, lang } = useT();
+  const currency = useWorkspaceCurrency();
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
-          label="Conversas"
+          label={t('reports.col.conversations')}
           value={data.conversations.total}
           icon={MessageCircle}
           accent="blue"
         />
         <KpiCard
-          label="Mensagens"
+          label={t('reports.col.messages')}
           value={data.messages.total}
-          subtitle={`${data.messages.byDirection.INBOUND ?? 0} IN · ${data.messages.byDirection.OUTBOUND ?? 0} OUT`}
+          subtitle={t('reports.overview.messages_sub', {
+            in: data.messages.byDirection.INBOUND ?? 0,
+            out: data.messages.byDirection.OUTBOUND ?? 0,
+          })}
           icon={MessageCircle}
           accent="slate"
         />
         <KpiCard
-          label="FRT médio"
+          label={t('reports.col.frt_avg')}
           value={data.firstResponseTime.avgHuman}
-          subtitle={`${data.firstResponseTime.count} respondidas · p90 ${data.firstResponseTime.p90Human}`}
+          subtitle={t('reports.overview.frt_sub', {
+            count: data.firstResponseTime.count,
+            p90: data.firstResponseTime.p90Human,
+          })}
           icon={Clock}
           accent="amber"
         />
         <KpiCard
-          label="Conversão pipeline"
+          label={t('reports.overview.pipeline_conversion')}
           value={data.pipeline.conversionRate !== null ? `${data.pipeline.conversionRate}%` : '—'}
-          subtitle={`${data.pipeline.positive} ganhos · ${data.pipeline.negative} perdas`}
+          subtitle={t('reports.overview.pipeline_sub', {
+            pos: data.pipeline.positive,
+            neg: data.pipeline.negative,
+          })}
           icon={TrendingUp}
-          accent={data.pipeline.conversionRate && data.pipeline.conversionRate >= 50 ? 'emerald' : 'slate'}
+          accent={
+            data.pipeline.conversionRate && data.pipeline.conversionRate >= 50 ? 'emerald' : 'slate'
+          }
         />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <div className="rounded-lg border bg-card p-5">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Conversas por status
+            {t('reports.overview.by_status')}
           </h3>
           <ul className="space-y-2">
             {['OPEN', 'PENDING', 'RESOLVED', 'SNOOZED'].map((s) => {
@@ -921,19 +940,19 @@ function OverviewTab({ data }: { data: Overview }) {
 
         <div className="rounded-lg border bg-card p-5">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Pipeline
+            {t('reports.overview.pipeline')}
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between rounded-md bg-emerald-50 px-3 py-2 ring-1 ring-emerald-100">
               <span className="flex items-center gap-2 text-sm">
                 <TrendingUp className="h-4 w-4 text-emerald-600" />
-                Positivos
+                {t('reports.overview.positive')}
               </span>
               <div className="text-right">
                 <p className="text-lg font-bold text-emerald-700">{data.pipeline.positive}</p>
                 {data.pipeline.positiveValue > 0 && (
                   <p className="text-[10px] text-muted-foreground">
-                    {formatBRL(data.pipeline.positiveValue)}
+                    {formatMoney(data.pipeline.positiveValue, lang, currency)}
                   </p>
                 )}
               </div>
@@ -941,13 +960,13 @@ function OverviewTab({ data }: { data: Overview }) {
             <div className="flex items-center justify-between rounded-md bg-red-50 px-3 py-2 ring-1 ring-red-100">
               <span className="flex items-center gap-2 text-sm">
                 <TrendingDown className="h-4 w-4 text-red-600" />
-                Negativos
+                {t('reports.overview.negative')}
               </span>
               <div className="text-right">
                 <p className="text-lg font-bold text-red-700">{data.pipeline.negative}</p>
                 {data.pipeline.negativeValue > 0 && (
                   <p className="text-[10px] text-muted-foreground">
-                    {formatBRL(data.pipeline.negativeValue)}
+                    {formatMoney(data.pipeline.negativeValue, lang, currency)}
                   </p>
                 )}
               </div>
@@ -956,7 +975,7 @@ function OverviewTab({ data }: { data: Overview }) {
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium uppercase tracking-wider text-muted-foreground">
-                    Taxa de conversão
+                    {t('reports.overview.conversion_rate')}
                   </span>
                   <span className="text-base font-bold">{data.pipeline.conversionRate}%</span>
                 </div>
@@ -974,15 +993,15 @@ function OverviewTab({ data }: { data: Overview }) {
 
       <div className="rounded-lg border bg-card p-5">
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Tempo de primeira resposta (FRT)
+          {t('reports.overview.frt_title')}
         </h3>
         <div className="grid grid-cols-3 gap-4">
-          <Stat label="Média" value={data.firstResponseTime.avgHuman} />
-          <Stat label="Mediana (p50)" value={data.firstResponseTime.p50Human} />
+          <Stat label={t('reports.overview.stat_avg')} value={data.firstResponseTime.avgHuman} />
+          <Stat label={t('reports.overview.stat_median')} value={data.firstResponseTime.p50Human} />
           <Stat label="p90" value={data.firstResponseTime.p90Human} />
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Baseado em {data.firstResponseTime.count} conversas respondidas no período.
+          {t('reports.overview.frt_note', { count: data.firstResponseTime.count })}
         </p>
       </div>
     </div>
@@ -990,24 +1009,25 @@ function OverviewTab({ data }: { data: Overview }) {
 }
 
 function AgentsTab({ rows }: { rows: AgentRow[] }) {
+  const { t } = useT();
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/50">
           <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            <th className="px-4 py-2.5">Agente</th>
-            <th className="px-4 py-2.5">Role</th>
-            <th className="px-4 py-2.5 text-right">Conversas</th>
-            <th className="px-4 py-2.5 text-right">Abertas</th>
-            <th className="px-4 py-2.5 text-right">Resolvidas</th>
-            <th className="px-4 py-2.5 text-right">FRT médio</th>
+            <th className="px-4 py-2.5">{t('reports.col.agent')}</th>
+            <th className="px-4 py-2.5">{t('common.role')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.conversations')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.open')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.resolved')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.frt_avg')}</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Sem dados no período.
+                {t('reports.empty_period')}
               </td>
             </tr>
           ) : (
@@ -1047,24 +1067,25 @@ function AgentsTab({ rows }: { rows: AgentRow[] }) {
 }
 
 function InboxesTab({ rows }: { rows: InboxRow[] }) {
+  const { t } = useT();
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted/50">
           <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             <th className="px-4 py-2.5">Inbox</th>
-            <th className="px-4 py-2.5 text-right">Conversas</th>
-            <th className="px-4 py-2.5 text-right">Mensagens</th>
-            <th className="px-4 py-2.5 text-right">Abertas</th>
-            <th className="px-4 py-2.5 text-right">Resolvidas</th>
-            <th className="px-4 py-2.5 text-right">FRT médio</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.conversations')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.messages')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.open')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.resolved')}</th>
+            <th className="px-4 py-2.5 text-right">{t('reports.col.frt_avg')}</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
               <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Sem dados no período.
+                {t('reports.empty_period')}
               </td>
             </tr>
           ) : (
@@ -1149,7 +1170,9 @@ function KpiCard({
           <p className="mt-1 text-2xl font-bold">{value}</p>
           {subtitle && <p className="mt-1 text-[11px] text-muted-foreground">{subtitle}</p>}
         </div>
-        <div className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${ACCENT_BG[accent]}`}>
+        <div
+          className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${ACCENT_BG[accent]}`}
+        >
           <Icon className="h-4 w-4" />
         </div>
       </div>

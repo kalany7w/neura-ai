@@ -18,14 +18,14 @@ Resultado esperado: classificação automática reduz tempo de qualificação do
 
 ## Decisões de produto (confirmadas com Kalan)
 
-| # | Pergunta | Decisão |
-|---|---|---|
-| 1 | Cliente já conhecido volta a escrever — re-disparar welcome? | Não. Welcome dispara uma vez por contato. Check via `Contact.welcomeRespondedAt`. |
-| 2 | Cliente responde algo fora das opções | 1ª vez: re-enviar prompt com prefixo "Não entendi". 2ª vez: aplicar tag default + soltar pra humano. |
-| 3 | Cliente já tem card e novo tag rotearia pra outro funil | Criar card paralelo no novo funil. Nunca mover card existente. |
-| 4 | Sender do welcome | "Agente IA" — novo `sender_type` enum, avatar configurável por workspace. |
-| 5 | Formato do menu | Híbrido: tentar `listMessage` interativo do Baileys. Fallback automático pra texto plano numerado após N minutos sem resposta. |
-| 6 | Cliente responde com áudio | Transcrever com Whisper (`OPENAI_API_KEY` já configurada) antes de matchear opções. |
+| #   | Pergunta                                                     | Decisão                                                                                                                        |
+| --- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Cliente já conhecido volta a escrever — re-disparar welcome? | Não. Welcome dispara uma vez por contato. Check via `Contact.welcomeRespondedAt`.                                              |
+| 2   | Cliente responde algo fora das opções                        | 1ª vez: re-enviar prompt com prefixo "Não entendi". 2ª vez: aplicar tag default + soltar pra humano.                           |
+| 3   | Cliente já tem card e novo tag rotearia pra outro funil      | Criar card paralelo no novo funil. Nunca mover card existente.                                                                 |
+| 4   | Sender do welcome                                            | "Agente IA" — novo `sender_type` enum, avatar configurável por workspace.                                                      |
+| 5   | Formato do menu                                              | Híbrido: tentar `listMessage` interativo do Baileys. Fallback automático pra texto plano numerado após N minutos sem resposta. |
+| 6   | Cliente responde com áudio                                   | Transcrever com Whisper (`OPENAI_API_KEY` já configurada) antes de matchear opções.                                            |
 
 ## Arquitetura de alto nivel
 
@@ -197,6 +197,7 @@ model Message {
 ### `apps/api/src/services/welcome-flow.ts` (novo)
 
 Responsabilidades:
+
 - `shouldTriggerWelcome(conversation, contact)`: retorna boolean. Checa: contact.welcomeRespondedAt IS NULL, flow da inbox está enabled, conversa não está awaiting já.
 - `triggerWelcome(conversation)`: marca `isAwaitingWelcomeChoice = true`, `welcomeSentAt = now`, enfileira job BullMQ no waworker pra enviar `listMessage`.
 - `retryWelcomeAsText(conversation)`: se passou `fallbackTimeoutMinutes`, enfileira reenvio em texto plano numerado. Marca `welcomeFallbackSent = true`.
@@ -206,6 +207,7 @@ Responsabilidades:
 ### `apps/api/src/services/welcome-parser.ts` (novo)
 
 Responsabilidades:
+
 - `parseReply(conversation, message)`: detecta a opção escolhida.
   - Se `message.type === 'BUTTON_REPLY'` (vem com `selectedDisplayText` ou `selectedRowId` do Baileys): match exato com `WelcomeOption.label` ou `WelcomeOption.id`.
   - Se `message.type === 'AUDIO'`: chama `transcribeAudio(message)` do serviço existente, parseia a transcrição.
@@ -219,7 +221,8 @@ Responsabilidades:
 ### `apps/api/src/services/auto-routing.ts` (novo)
 
 Responsabilidades:
-- `applyTagWithRouting(conversationId, labelId, source)`: 
+
+- `applyTagWithRouting(conversationId, labelId, source)`:
   - Aplica `ConversationLabel`.
   - Se a label tem `routesToFunnelId`:
     - Verifica se já existe Card ativo (não won/lost) dessa conversa nesse funil. Se sim, no-op (idempotente).
@@ -230,12 +233,14 @@ Responsabilidades:
 ### `apps/api/src/services/welcome-scheduler.ts` (novo)
 
 Worker periódico (cron BullMQ a cada 30s):
+
 - Busca conversas com `isAwaitingWelcomeChoice = true` e `welcomeFallbackSent = false` cujo `welcomeSentAt` é mais antigo que `fallbackTimeoutMinutes`.
 - Pra cada uma, chama `welcome-flow.retryWelcomeAsText`.
 
 ### `apps/waworker/src/queue/welcome.ts` (novo)
 
 Handler BullMQ no waworker pra enviar o listMessage via Baileys:
+
 - Recebe `{ conversationId, options, prompt }`.
 - Monta payload `interactiveMessage` ou `listMessage` da Baileys API.
 - Envia. Se falhar com error específico de "interactive não suportado", retorna erro pro api, que cai em fallback texto plano imediato.
@@ -271,6 +276,7 @@ Permissões: admin + supervisor podem ler/escrever. Agent só lê.
 ### Página nova: `apps/web/src/app/(app)/settings/welcome-flows/page.tsx`
 
 Lista de inboxes do workspace com:
+
 - Nome da inbox + número.
 - Status do welcome flow: ativo (verde) / inativo (cinza) / não configurado (laranja).
 - Quantidade de opções.
@@ -279,6 +285,7 @@ Lista de inboxes do workspace com:
 ### Página nova: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx`
 
 Editor com:
+
 - Toggle "Ativo" geral.
 - Textarea do prompt (com preview de como vai sair em WhatsApp, suporta `{{contact.name}}` se nome existir).
 - Lista de opções drag-drop (`@dnd-kit`):
@@ -298,6 +305,7 @@ Editor com:
 ### Atualização: `apps/web/src/app/(app)/settings/labels/page.tsx`
 
 Adicionar no form de criar/editar label:
+
 - Select opcional "Funil destino" (`routesToFunnelId`).
 - Select opcional "Etapa inicial" (`routesToStageId`, cascata do funil).
 
@@ -306,6 +314,7 @@ Indicador visual na lista: chip pequeno "→ Vendas / Lead" se a label tem routi
 ### Atualização: `apps/web/src/components/inbox/conversation-side-panel.tsx`
 
 Refactor pra layout estilo Kommo:
+
 - Header: avatar (com badge "Agente IA" se aplicável), nome, telefone clicável, status badge (CALIENTE/TIBIO/FRIO derivado do SLA).
 - Seção colapsável **Embudo**: nome do funil + stage atual + select pra mover stage inline.
 - Seção colapsável **Atributos**: render automático de todos `CustomAttributeDef` do workspace com valores editáveis inline.
@@ -320,11 +329,13 @@ Loading states com skeleton. Mutations otimistas via react-query. WS subscribe a
 ### Endpoint pro side panel: `apps/api/src/routes/conversations.ts`
 
 Adicionar `GET /api/conversations/:id/lead-detail`:
+
 - Retorna contact + custom attributes (def + values) + labels + card atual + funnel + stage + summary IA cached + welcome state — tudo em uma query única pra evitar round-trips.
 
 ### Atualização: Chat timeline
 
 `apps/web/src/components/inbox/conversation-chat.tsx` (ou onde estiver):
+
 - Separadores visuais de dia (`Hoje`, `Ontem`, `Segunda 18 de maio`).
 - Botão flutuante "Ir pra última mensagem" quando scroll não está no fundo + chegou msg nova.
 - Linha "Lido até aqui" entre msgs novas e antigas desde última visita.
@@ -333,35 +344,38 @@ Adicionar `GET /api/conversations/:id/lead-detail`:
 
 ## Edge cases tratados
 
-| Caso | Comportamento |
-|---|---|
-| Cliente conhecido (welcomeRespondedAt set) volta a escrever | Welcome não dispara. Conversa vai pro funil default da inbox como hoje. |
-| Cliente manda 5 mensagens seguidas antes de responder | Welcome envia só uma vez (idempotência via `isAwaitingWelcomeChoice` flag). |
-| Cliente responde "1" e a opção 1 existe | Match imediato, aplica tag, cria card, marca `welcomeRespondedAt`. |
-| Cliente responde "quero comprar" sem número | Match por keyword "comprar". |
-| Cliente responde "olá" (texto fora) | Attempt 1: re-envia prompt com prefixo "Não entendi, escolha:". Attempt 2: aplica fallbackLabel, libera pra humano. |
-| Cliente manda áudio | Transcreve com Whisper, processa transcrição como texto. |
-| Cliente manda imagem ou doc durante welcome | Considera attempt sem match. Não tenta interpretar mídia. |
-| `listMessage` não chega no cliente (sem button reply em N min) | Worker periódico detecta `welcomeSentAt > timeout && !welcomeFallbackSent`, reenvia em texto plano. |
-| Cliente já tem card em funil X e agora matcheou opção pro funil Y | Cria card paralelo em funil Y. Card de funil X fica intocado. |
-| Cliente desconecta WhatsApp no meio (msg falha) | Job BullMQ retry com backoff. Após N falhas, marca welcome como falhado, libera conversa. |
-| Admin desabilita welcome flow no meio de uma conversa awaiting | Conversa fica awaiting até cliente responder ou timeout. Welcome desabilitado só afeta novas conversas. |
-| Workspace tem 0 funis ou 0 labels configurados | UI bloqueia ativação do welcome flow com mensagem "Configure pelo menos 1 funil e 1 label antes". |
+| Caso                                                              | Comportamento                                                                                                       |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Cliente conhecido (welcomeRespondedAt set) volta a escrever       | Welcome não dispara. Conversa vai pro funil default da inbox como hoje.                                             |
+| Cliente manda 5 mensagens seguidas antes de responder             | Welcome envia só uma vez (idempotência via `isAwaitingWelcomeChoice` flag).                                         |
+| Cliente responde "1" e a opção 1 existe                           | Match imediato, aplica tag, cria card, marca `welcomeRespondedAt`.                                                  |
+| Cliente responde "quero comprar" sem número                       | Match por keyword "comprar".                                                                                        |
+| Cliente responde "olá" (texto fora)                               | Attempt 1: re-envia prompt com prefixo "Não entendi, escolha:". Attempt 2: aplica fallbackLabel, libera pra humano. |
+| Cliente manda áudio                                               | Transcreve com Whisper, processa transcrição como texto.                                                            |
+| Cliente manda imagem ou doc durante welcome                       | Considera attempt sem match. Não tenta interpretar mídia.                                                           |
+| `listMessage` não chega no cliente (sem button reply em N min)    | Worker periódico detecta `welcomeSentAt > timeout && !welcomeFallbackSent`, reenvia em texto plano.                 |
+| Cliente já tem card em funil X e agora matcheou opção pro funil Y | Cria card paralelo em funil Y. Card de funil X fica intocado.                                                       |
+| Cliente desconecta WhatsApp no meio (msg falha)                   | Job BullMQ retry com backoff. Após N falhas, marca welcome como falhado, libera conversa.                           |
+| Admin desabilita welcome flow no meio de uma conversa awaiting    | Conversa fica awaiting até cliente responder ou timeout. Welcome desabilitado só afeta novas conversas.             |
+| Workspace tem 0 funis ou 0 labels configurados                    | UI bloqueia ativação do welcome flow com mensagem "Configure pelo menos 1 funil e 1 label antes".                   |
 
 ## Tests
 
 ### Unit
+
 - `welcome-parser`: matchea número, texto exato, keyword, texto via OpenAI mock (não rodar OpenAI em CI).
 - `auto-routing`: idempotência (chamar 2x não cria 2 cards), edge case sem `routesToFunnelId`.
 - `welcome-flow.shouldTriggerWelcome`: todas as combinações de flags.
 
 ### Integration
+
 - Conversa nova: simula primeira mensagem inbound → confirma que job BullMQ é enfileirado.
 - Reply com "2" → confirma aplicação de tag + card criado no funil correto.
 - Reply fora de opções 2x → confirma fallbackLabel aplicada.
 - Welcome flow desabilitado: confirma que primeira msg não dispara nada.
 
 ### E2E (Playwright)
+
 - Admin entra em `/settings/welcome-flows`, configura flow com 3 opções, salva.
 - Simula recebimento de inbound (via mock waworker) → vê welcome ser enviado.
 - Simula reply "1" → vê tag aplicado e card criado no kanban no funil esperado.
@@ -370,6 +384,7 @@ Adicionar `GET /api/conversations/:id/lead-detail`:
 ## Ordem de implementação
 
 ### Fase A — Backend do welcome flow (sem UI ainda)
+
 **Estimativa**: 3-4 dias
 
 1. Migration Prisma: novos models + colunas novas em models existentes.
@@ -384,12 +399,14 @@ Adicionar `GET /api/conversations/:id/lead-detail`:
 10. WS events.
 11. Testes unit + integration.
 
-Critério de aceite Fase A: 
+Critério de aceite Fase A:
+
 - Endpoint admin pode criar/editar welcome flow via curl com payload manual.
 - Simulação de inbound dispara welcome via mock waworker.
 - Reply de cliente é parseado e ações executadas corretamente.
 
 ### Fase B — Routes API + UI de configuração
+
 **Estimativa**: 2-3 dias
 
 1. `routes/welcome-flows.ts` completo (GET/POST/PUT/DELETE + test endpoint).
@@ -400,10 +417,12 @@ Critério de aceite Fase A:
 6. Test mode funcional (botão "enviar teste pra meu número").
 
 Critério de aceite Fase B:
+
 - Admin configura welcome flow inteiro só pela UI.
 - Test mode envia mensagem real pro número de teste.
 
 ### Fase C — Lead detail panel + chat timeline
+
 **Estimativa**: 3-4 dias
 
 1. Endpoint `GET /api/conversations/:id/lead-detail`.
@@ -415,11 +434,13 @@ Critério de aceite Fase B:
 7. Render diferenciado de `senderType = AI_AGENT`.
 
 Critério de aceite Fase C:
+
 - Side panel mostra toda info do lead sem precisar abrir modal.
 - Chat scroll mostra contexto histórico decente sem lentidão.
 - Mensagens do bot são visualmente distinguíveis das humanas.
 
 ### Fase D — Test mode + onboarding wizard + polish
+
 **Estimativa**: 1-2 dias
 
 1. Onboarding wizard ao criar inbox nova: "Configurar welcome flow agora?".
@@ -439,13 +460,13 @@ Critério de aceite Fase C:
 
 ## Riscos conhecidos
 
-| Risco | Mitigação |
-|---|---|
-| Baileys interactive messages podem parar de funcionar (Meta restringe) | Fallback automático a texto plano numerado já no design. |
-| OpenAI down e fuzzy match falha | Cair pra fallbackLabel após attempts. Não bloquear o flow. |
-| Cliente fica permanentemente em `isAwaitingWelcomeChoice` se algo der erro | Worker periódico de cleanup: após 24h em awaiting, força fallback. |
-| Welcome dispara em conversa de teste interna do agente | Welcome só dispara em mensagem inbound (direção CUSTOMER), não em mensagens criadas internamente. |
-| Migration adiciona colunas nullable, sem impacto em dados existentes | `welcomeRespondedAt` nullable, `welcomeAttempts` default 0, `isAwaitingWelcomeChoice` default false. Backfill desnecessário. |
+| Risco                                                                      | Mitigação                                                                                                                    |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Baileys interactive messages podem parar de funcionar (Meta restringe)     | Fallback automático a texto plano numerado já no design.                                                                     |
+| OpenAI down e fuzzy match falha                                            | Cair pra fallbackLabel após attempts. Não bloquear o flow.                                                                   |
+| Cliente fica permanentemente em `isAwaitingWelcomeChoice` se algo der erro | Worker periódico de cleanup: após 24h em awaiting, força fallback.                                                           |
+| Welcome dispara em conversa de teste interna do agente                     | Welcome só dispara em mensagem inbound (direção CUSTOMER), não em mensagens criadas internamente.                            |
+| Migration adiciona colunas nullable, sem impacto em dados existentes       | `welcomeRespondedAt` nullable, `welcomeAttempts` default 0, `isAwaitingWelcomeChoice` default false. Backfill desnecessário. |
 
 ## Próximos passos
 

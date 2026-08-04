@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, CheckCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT, formatRelativeTime } from '@/lib/i18n';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
 import {
   DropdownMenu,
@@ -32,26 +33,16 @@ const KIND_BADGE: Record<string, string> = {
   'card.outcome': 'bg-emerald-100 text-emerald-700',
 };
 
+// Mapeia o kind da notificação pra chave de tradução do label.
 const KIND_LABEL: Record<string, string> = {
-  'message.new': 'Mensagem',
-  'conversation.assigned': 'Atribuição',
-  'sla.critical': 'SLA',
-  'card.outcome': 'Card',
+  'message.new': 'c_layout_notifications_bell.kind_message',
+  'conversation.assigned': 'c_layout_notifications_bell.kind_assigned',
+  'sla.critical': 'c_layout_notifications_bell.kind_sla',
+  'card.outcome': 'c_layout_notifications_bell.kind_card',
 };
 
-function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'agora';
-  if (m < 60) return `${m}min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d`;
-  return new Date(iso).toLocaleDateString('pt-BR');
-}
-
 export function NotificationsBell() {
+  const { t, lang } = useT();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
 
@@ -76,17 +67,17 @@ export function NotificationsBell() {
       await api(`/api/notifications/${id}/read`, { method: 'POST' });
       await qc.invalidateQueries({ queryKey: ['notifications'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function markAllRead() {
     try {
       await api('/api/notifications/read-all', { method: 'POST' });
-      toast.success('Tudo marcado como lido');
+      toast.success(t('c_layout_notifications_bell.all_marked_read'));
       await qc.invalidateQueries({ queryKey: ['notifications'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -95,7 +86,7 @@ export function NotificationsBell() {
       await api(`/api/notifications/${id}`, { method: 'DELETE' });
       await qc.invalidateQueries({ queryKey: ['notifications'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -105,7 +96,8 @@ export function NotificationsBell() {
         <button
           type="button"
           className="relative rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-          title="Notificações"
+          title={t('c_layout_notifications_bell.title')}
+          aria-label={t('c_layout_notifications_bell.title')}
         >
           <Bell className="h-5 w-5" />
           {unread > 0 && (
@@ -118,7 +110,8 @@ export function NotificationsBell() {
       <DropdownMenuContent align="end" className="w-96 max-h-[80vh] overflow-y-auto p-0">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-popover px-3 py-2">
           <span className="text-sm font-semibold">
-            Notificações {unread > 0 && <span className="text-muted-foreground">({unread})</span>}
+            {t('c_layout_notifications_bell.title')}{' '}
+            {unread > 0 && <span className="text-muted-foreground">({unread})</span>}
           </span>
           {unread > 0 && (
             <Button
@@ -128,14 +121,14 @@ export function NotificationsBell() {
               className="h-7 gap-1 px-2 text-xs"
             >
               <CheckCheck className="h-3 w-3" />
-              Marcar tudo como lido
+              {t('c_layout_notifications_bell.mark_all_read')}
             </Button>
           )}
         </div>
         {items.length === 0 ? (
           <div className="p-8 text-center text-sm text-muted-foreground">
             <Bell className="mx-auto mb-2 h-8 w-8 opacity-50" />
-            Sem notificações por ora.
+            {t('c_layout_notifications_bell.empty')}
           </div>
         ) : (
           <ul className="divide-y">
@@ -165,10 +158,10 @@ export function NotificationsBell() {
                             KIND_BADGE[n.kind] ?? 'bg-muted'
                           }`}
                         >
-                          {KIND_LABEL[n.kind] ?? n.kind}
+                          {t(KIND_LABEL[n.kind] ?? n.kind)}
                         </span>
                         <span className="ml-auto text-[10px] text-muted-foreground">
-                          {formatRelative(n.createdAt)}
+                          {formatRelativeTime(n.createdAt, lang)}
                         </span>
                       </div>
                       <p className="mt-1 truncate text-sm font-medium">{n.title}</p>
@@ -185,7 +178,7 @@ export function NotificationsBell() {
                     <button
                       type="button"
                       onClick={() => markRead(n.id)}
-                      title="Marcar como lida"
+                      title={t('c_layout_notifications_bell.mark_read')}
                       className="rounded p-1 text-muted-foreground hover:bg-background hover:text-foreground"
                     >
                       <Check className="h-3 w-3" />
@@ -194,7 +187,7 @@ export function NotificationsBell() {
                   <button
                     type="button"
                     onClick={() => remove(n.id)}
-                    title="Excluir"
+                    title={t('action.delete')}
                     className="rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
                   >
                     <Trash2 className="h-3 w-3" />

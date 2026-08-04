@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { signOut, useSession } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
+import { useT } from '@/lib/i18n';
 
 /**
  * Tela de seleção de workspace pós-login. Lista todas as empresas/workspaces
@@ -29,10 +30,10 @@ interface WorkspaceListItem {
   role: 'ADMIN' | 'SUPERVISOR' | 'AGENT';
 }
 
-const ROLE_LABEL: Record<WorkspaceListItem['role'], string> = {
-  ADMIN: 'Administrador',
-  SUPERVISOR: 'Supervisor',
-  AGENT: 'Agente',
+const ROLE_KEY: Record<WorkspaceListItem['role'], string> = {
+  ADMIN: 'role.admin',
+  SUPERVISOR: 'role.supervisor',
+  AGENT: 'role.agent',
 };
 
 const ROLE_COLOR: Record<WorkspaceListItem['role'], string> = {
@@ -43,6 +44,7 @@ const ROLE_COLOR: Record<WorkspaceListItem['role'], string> = {
 
 export default function SelectWorkspacePage() {
   const router = useRouter();
+  const { t } = useT();
   const { data: session } = useSession();
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
@@ -78,7 +80,7 @@ export default function SelectWorkspacePage() {
       // diferente após switch.
       window.location.href = '/dashboard';
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao entrar');
+      toast.error(err instanceof Error ? err.message : t('select_workspace.enter_error'));
       setSubmittingId(null);
     }
   }
@@ -91,7 +93,7 @@ export default function SelectWorkspacePage() {
   if (isLoading || !data || data.workspaces.length <= 1) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Carregando…
+        {t('action.loading')}
       </div>
     );
   }
@@ -105,11 +107,10 @@ export default function SelectWorkspacePage() {
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
             <Building2 className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-bold">Em qual empresa você quer entrar?</h1>
+          <h1 className="text-2xl font-bold">{t('select_workspace.title')}</h1>
           <p className="text-sm text-muted-foreground">
-            Olá, <span className="font-medium">{userName}</span>. Você tem acesso a{' '}
-            {data.workspaces.length} empresas. Selecione qual deseja usar agora —
-            você pode trocar a qualquer momento pela barra lateral.
+            {t('select_workspace.greeting')} <span className="font-medium">{userName}</span>.{' '}
+            {t('select_workspace.access_info', { count: data.workspaces.length })}
           </p>
         </div>
 
@@ -136,7 +137,7 @@ export default function SelectWorkspacePage() {
                     {isActive && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                         <Check className="h-2.5 w-2.5" />
-                        Última sessão
+                        {t('select_workspace.last_session')}
                       </span>
                     )}
                   </div>
@@ -144,13 +145,13 @@ export default function SelectWorkspacePage() {
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${ROLE_COLOR[w.role]}`}
                     >
-                      {ROLE_LABEL[w.role]}
+                      {t(ROLE_KEY[w.role])}
                     </span>
                     <span className="text-[11px] text-muted-foreground">/{w.slug}</span>
                   </div>
                 </div>
                 <span className="text-sm font-medium text-primary opacity-0 transition group-hover:opacity-100">
-                  {isSubmitting ? 'Entrando…' : 'Entrar →'}
+                  {isSubmitting ? t('select_workspace.entering') : t('select_workspace.enter')}
                 </span>
               </button>
             );
@@ -165,11 +166,11 @@ export default function SelectWorkspacePage() {
             onClick={() => router.push('/onboarding')}
           >
             <Plus className="mr-1 h-3.5 w-3.5" />
-            Criar nova empresa
+            {t('select_workspace.create_company')}
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={handleSignOut}>
             <LogOut className="mr-1 h-3.5 w-3.5" />
-            Sair
+            {t('user.sign_out')}
           </Button>
         </div>
       </div>

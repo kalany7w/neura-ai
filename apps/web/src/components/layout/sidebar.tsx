@@ -1,7 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { realtimeClient } from '@/lib/ws-client';
 import {
   LayoutDashboard,
   MessageCircle,
@@ -87,16 +90,41 @@ const groups: NavGroup[] = [
     label: 'sidebar.group.settings',
     items: [
       { href: '/settings/templates', label: 'sidebar.templates', icon: FileText },
-      { href: '/settings/welcome-flows', label: 'sidebar.welcome_flows', icon: MessageSquarePlus, roles: ['ADMIN', 'SUPERVISOR'] },
+      {
+        href: '/settings/welcome-flows',
+        label: 'sidebar.welcome_flows',
+        icon: MessageSquarePlus,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
       { href: '/settings/kb', label: 'sidebar.kb', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
       { href: '/settings/labels', label: 'sidebar.labels', icon: Tag, roles: ['ADMIN'] },
-      { href: '/settings/members', label: 'sidebar.members', icon: UserCog, roles: ['ADMIN', 'SUPERVISOR'] },
+      {
+        href: '/settings/members',
+        label: 'sidebar.members',
+        icon: UserCog,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
       { href: '/settings/automations', label: 'sidebar.automations', icon: Bot, roles: ['ADMIN'] },
       { href: '/settings/sla', label: 'sidebar.sla', icon: Timer, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/csat', label: 'sidebar.csat', icon: Smile, roles: ['ADMIN', 'SUPERVISOR'] },
-      { href: '/settings/integrations', label: 'sidebar.integrations', icon: Zap, roles: ['ADMIN'] },
+      {
+        href: '/settings/csat',
+        label: 'sidebar.csat',
+        icon: Smile,
+        roles: ['ADMIN', 'SUPERVISOR'],
+      },
+      {
+        href: '/settings/integrations',
+        label: 'sidebar.integrations',
+        icon: Zap,
+        roles: ['ADMIN'],
+      },
       { href: '/settings/import', label: 'sidebar.import', icon: Upload, roles: ['ADMIN'] },
-      { href: '/settings/custom-attributes', label: 'sidebar.custom_attributes', icon: Tag, roles: ['ADMIN'] },
+      {
+        href: '/settings/custom-attributes',
+        label: 'sidebar.custom_attributes',
+        icon: Tag,
+        roles: ['ADMIN'],
+      },
       { href: '/settings/api-keys', label: 'sidebar.api_keys', icon: Key, roles: ['ADMIN'] },
       { href: '/settings/audit', label: 'sidebar.audit', icon: ScrollText, roles: ['ADMIN'] },
     ],
@@ -124,14 +152,15 @@ interface SidebarProps {
 }
 
 function RealtimeDot({ state }: { state: string }) {
+  const { t } = useT();
   return (
     <div
       title={
         state === 'open'
-          ? 'Tempo real conectado'
+          ? t('c_layout_sidebar.realtime_connected')
           : state === 'connecting'
-            ? 'Conectando…'
-            : 'Desconectado'
+            ? t('c_layout_sidebar.realtime_connecting')
+            : t('c_layout_sidebar.realtime_disconnected')
       }
     >
       {state === 'open' ? (
@@ -150,19 +179,29 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
   const role = workspace?.role;
   const hasMultiple = (workspaces?.length ?? 0) > 1;
   const { t } = useT();
+  const queryClient = useQueryClient();
+  const [isSwitching, setIsSwitching] = useState(false);
 
   async function switchWorkspace(wsId: string) {
-    if (wsId === activeWorkspaceId) return;
+    if (wsId === activeWorkspaceId || isSwitching) return;
+    setIsSwitching(true);
     try {
       await api('/api/workspaces/switch', {
         method: 'POST',
         body: JSON.stringify({ workspaceId: wsId }),
       });
       toast.success(t('workspace.switched'));
+      // Limpa o cache (dados são por-workspace) e revalida — sem reload de página.
+      queryClient.clear();
+      // O servidor escopa as subscriptions do WS no upgrade (activeWorkspaceId da
+      // sessão) — reconecta pra sair dos canais do workspace antigo e entrar nos novos.
+      realtimeClient.disconnect();
+      realtimeClient.connect();
       router.refresh();
-      window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('workspace.switch_error'));
+    } finally {
+      setIsSwitching(false);
     }
   }
 
@@ -266,8 +305,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
               <ul className="space-y-0.5">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
-                  const active =
-                    pathname === item.href || pathname.startsWith(item.href + '/');
+                  const active = pathname === item.href || pathname.startsWith(item.href + '/');
                   return (
                     <li key={item.href}>
                       <Link
@@ -304,13 +342,15 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
           <Link
             href="/settings/profile"
             className="flex min-w-0 flex-1 items-center gap-2 rounded-md p-1.5 hover:bg-muted"
-            title="Meu perfil"
+            title={t('c_layout_sidebar.my_profile')}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
               {initials || '?'}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.name ?? 'Sem nome'}</p>
+              <p className="truncate text-sm font-medium">
+                {user.name ?? t('c_layout_sidebar.no_name')}
+              </p>
               <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
             </div>
           </Link>
@@ -318,7 +358,7 @@ export function Sidebar({ user, workspace, workspaces, activeWorkspaceId }: Side
           <ThemeToggle />
           <Link
             href="/settings/profile"
-            title="Configurações do perfil"
+            title={t('c_layout_sidebar.profile_settings')}
             className="rounded p-1.5 text-muted-foreground hover:bg-background hover:text-foreground"
           >
             <Settings className="h-4 w-4" />

@@ -15,7 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector/pgvector:pg16 (igual prod) — a migration phase34_knowledge_base
+        # faz CREATE EXTENSION vector; postgres:16-alpine não tem a extensão.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -72,8 +74,61 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Format check
+        run: pnpm format:check
+
       - name: Test
         run: pnpm test
 
+      # Coverage da @neura/api COM Postgres+Redis (services acima) → roda a suite
+      # completa (incl. integration) instrumentada e imprime o % repo-wide real no
+      # log. SEM gate ainda (só medição) — quando o baseline estiver claro, fixar
+      # thresholds no vitest.config.ts. continue-on-error: nunca derruba o CI.
+      - name: Coverage (api, no gate)
+        continue-on-error: true
+        run: pnpm --filter @neura/api test:coverage
+
       - name: Build
         run: pnpm build
+
+  # E2E smoke (@smoke): páginas públicas + gate de auth do middleware. Só precisa
+  # do web buildado + rodando — sem api/db (por isso é um job à parte, leve).
+  # Os testes @fullstack (signup→app) exigem o stack completo e ficam pra um job
+  # dedicado/staging (ver apps/web/e2e/README.md).
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:7301
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Build web (+ deps)
+        run: pnpm --filter @neura/web... build
+
+      - name: Install Playwright browser
+        run: pnpm --filter @neura/web exec playwright install --with-deps chromium
+
+      - name: Run @smoke E2E
+        run: |
+          pnpm --filter @neura/web start &
+          for i in $(seq 1 60); do curl -sf http://localhost:7302/login >/dev/null && break; sleep 2; done
+          E2E_BASE_URL=http://localhost:7302 pnpm --filter @neura/web test:e2e:smoke
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

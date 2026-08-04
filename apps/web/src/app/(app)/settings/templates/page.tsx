@@ -30,10 +30,10 @@ interface TemplateItem {
 }
 
 const schema = z.object({
-  name: z.string().min(1).max(80),
+  name: z.string().min(1, 'validation.name_required').max(80, 'validation.name_long'),
   shortcut: z
     .string()
-    .regex(/^\/[a-z0-9_-]{1,30}$/i, 'Atalho deve ser /palavra')
+    .regex(/^\/[a-z0-9_-]{1,30}$/i, 'validation.shortcut')
     .or(z.literal(''))
     .optional()
     .transform((v) => (v ? v : null)),
@@ -90,14 +90,14 @@ export default function TemplatesPage() {
     setSubmitting(true);
     try {
       await api('/api/templates', { method: 'POST', body: JSON.stringify(values) });
-      toast.success('Template criado');
+      toast.success(t('settings_templates.toast_created'));
       reset();
       await qc.invalidateQueries({ queryKey: ['templates'] });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'name_taken') {
-        toast.error('Já existe template com esse nome');
+        toast.error(t('settings_templates.name_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -107,18 +107,18 @@ export default function TemplatesPage() {
   async function remove(id: string) {
     if (
       !(await confirm({
-        title: 'Remover template?',
-        confirmLabel: 'Remover',
+        title: t('settings_templates.remove_title'),
+        confirmLabel: t('settings_templates.remove_confirm'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/templates/${id}`, { method: 'DELETE' });
-      toast.success('Removido');
+      toast.success(t('settings_templates.toast_removed'));
       await qc.invalidateQueries({ queryKey: ['templates'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -126,9 +126,13 @@ export default function TemplatesPage() {
     try {
       await api(`/api/templates/${tpl.id}/${tpl.pinnedAt ? 'unpin' : 'pin'}`, { method: 'POST' });
       await qc.invalidateQueries({ queryKey: ['templates'] });
-      toast.success(tpl.pinnedAt ? 'Desafixado' : 'Fixado no composer');
+      toast.success(
+        tpl.pinnedAt
+          ? t('settings_templates.toast_unpinned')
+          : t('settings_templates.toast_pinned'),
+      );
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -143,20 +147,30 @@ export default function TemplatesPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <div className="rounded-lg border bg-card p-5">
-          <h2 className="mb-4 font-semibold">Novo template</h2>
+          <h2 className="mb-4 font-semibold">{t('settings_templates.new_template')}</h2>
           <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nome</Label>
-              <Input id="name" placeholder="Saudação" {...register('name')} />
+              <Label htmlFor="name">{t('common.name')}</Label>
+              <Input
+                id="name"
+                placeholder={t('settings_templates.name_placeholder')}
+                {...register('name')}
+              />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="shortcut">Atalho (opcional)</Label>
-              <Input id="shortcut" placeholder="/saudacao" {...register('shortcut')} />
-              {errors.shortcut && <p className="text-xs text-destructive">{errors.shortcut.message}</p>}
+              <Label htmlFor="shortcut">{t('settings_templates.shortcut_label')}</Label>
+              <Input
+                id="shortcut"
+                placeholder={t('settings_templates.shortcut_placeholder')}
+                {...register('shortcut')}
+              />
+              {errors.shortcut && (
+                <p className="text-xs text-destructive">{t(errors.shortcut.message ?? '')}</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="body">Texto</Label>
+              <Label htmlFor="body">{t('settings_templates.body_label')}</Label>
               <textarea
                 id="body"
                 rows={5}
@@ -167,7 +181,7 @@ export default function TemplatesPage() {
                   bodyRef.current = el;
                   register('body').ref(el);
                 }}
-                placeholder={"Olá {{contact.firstName | default 'amigo'}}, tudo bem?"}
+                placeholder={t('settings_templates.body_placeholder')}
                 className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
               />
               {errors.body && <p className="text-xs text-destructive">{errors.body.message}</p>}
@@ -176,7 +190,7 @@ export default function TemplatesPage() {
             {/* Placeholders disponíveis — clicar injeta no caret */}
             <div className="space-y-1.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Placeholders
+                {t('settings_templates.placeholders_label')}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {TEMPLATE_VARIABLES.map((v) => (
@@ -192,8 +206,9 @@ export default function TemplatesPage() {
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Adicione fallback com <code className="text-[11px]">{`| default 'valor'`}</code> —
-                exibido quando o campo estiver vazio.
+                {t('settings_templates.fallback_help_before')}{' '}
+                <code className="text-[11px]">{`| default 'valor'`}</code>
+                {t('settings_templates.fallback_help_after')}
               </p>
             </div>
 
@@ -202,84 +217,87 @@ export default function TemplatesPage() {
               <div className="space-y-1.5 rounded-md border border-dashed bg-muted/20 p-3">
                 <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <Eye className="h-3 w-3" />
-                  Preview com dados de exemplo
+                  {t('settings_templates.preview_label')}
                 </p>
                 <p className="whitespace-pre-wrap break-words text-sm">
                   {previewRendered || (
                     <span className="italic text-muted-foreground">
-                      (placeholders resolvem pra vazio)
+                      {t('settings_templates.preview_empty')}
                     </span>
                   )}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
-                  contact = Maria Silva · +5511999998888 · inbox = Suporte · agent = Ana
+                  {t('settings_templates.preview_sample')}
                 </p>
               </div>
             )}
 
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? 'Salvando...' : 'Salvar template'}
+              {submitting ? t('action.saving') : t('settings_templates.save_template')}
             </Button>
           </form>
         </div>
 
         <div className="rounded-lg border bg-card p-5">
           <div className="mb-4 flex items-center justify-between gap-2">
-            <h2 className="font-semibold">Existentes</h2>
+            <h2 className="font-semibold">{t('settings_templates.existing')}</h2>
             <p className="text-[11px] text-muted-foreground">
               {pinnedCount > 0
-                ? `${pinnedCount} fixado${pinnedCount > 1 ? 's' : ''} no composer (top 3 aparecem)`
-                : 'Fixe até 3 pra aparecerem como botão no composer'}
+                ? t(
+                    pinnedCount > 1
+                      ? 'settings_templates.pinned_count_many'
+                      : 'settings_templates.pinned_count_one',
+                    { n: pinnedCount },
+                  )
+                : t('settings_templates.pin_hint')}
             </p>
           </div>
           {isLoading ? (
-            <p className="text-sm text-muted-foreground">Carregando…</p>
+            <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : !data?.templates.length ? (
-            <p className="text-sm text-muted-foreground">Nenhum template.</p>
+            <p className="text-sm text-muted-foreground">{t('settings_templates.empty')}</p>
           ) : (
             <ul className="space-y-2">
-              {data.templates.map((t) => {
-                const isPinned = !!t.pinnedAt;
+              {data.templates.map((tpl) => {
+                const isPinned = !!tpl.pinnedAt;
                 return (
                   <li
-                    key={t.id}
+                    key={tpl.id}
                     className={`rounded-md border p-3 ${isPinned ? 'border-indigo-300 bg-indigo-50/40 dark:border-indigo-800 dark:bg-indigo-950/30' : ''}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                          <p className="font-medium">{t.name}</p>
-                          {t.shortcut && (
+                          <p className="font-medium">{tpl.name}</p>
+                          {tpl.shortcut && (
                             <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                              {t.shortcut}
+                              {tpl.shortcut}
                             </span>
                           )}
                           {isPinned && (
                             <span className="inline-flex items-center gap-0.5 rounded bg-indigo-500/15 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:text-indigo-300">
                               <Pin className="h-2.5 w-2.5" />
-                              Fixado
+                              {t('settings_templates.pinned_badge')}
                             </span>
                           )}
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap line-clamp-3">
-                          {t.body}
+                          {tpl.body}
                         </p>
                       </div>
                       <div className="flex items-center gap-0.5">
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => togglePin(t)}
-                          title={isPinned ? 'Desafixar' : 'Fixar no composer'}
+                          onClick={() => togglePin(tpl)}
+                          title={
+                            isPinned ? t('settings_templates.unpin') : t('settings_templates.pin')
+                          }
                         >
-                          {isPinned ? (
-                            <PinOff className="h-4 w-4" />
-                          ) : (
-                            <Pin className="h-4 w-4" />
-                          )}
+                          {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => remove(t.id)}>
+                        <Button size="icon" variant="ghost" onClick={() => remove(tpl.id)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>

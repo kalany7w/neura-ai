@@ -66,7 +66,7 @@ export default function CalendarPage() {
   const activeWorkspaceId = wsData?.activeWorkspaceId ?? null;
   const activeWorkspace = wsData?.workspaces.find((w) => w.id === activeWorkspaceId);
 
-  const { data } = useQuery<{ events: CalEvent[] }>({
+  const { data, isLoading } = useQuery<{ events: CalEvent[] }>({
     // activeWorkspaceId na key: troca de empresa → nova key → refetch limpo
     // (não mostra eventos da empresa anterior nem que por 1 frame).
     queryKey: ['calendar', activeWorkspaceId, year, month],
@@ -105,9 +105,23 @@ export default function CalendarPage() {
   const todayDate = new Date();
   const isCurrentMonth = todayDate.getFullYear() === year && todayDate.getMonth() === month;
   // Dias da semana traduzidos (Dom/Seg/... ou Dom/Lun/...)
-  const weekdays = lang === 'es'
-    ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-    : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const weekdays =
+    lang === 'es'
+      ? ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+      : ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+  if (isLoading && !data) {
+    return (
+      <div className="space-y-4" aria-busy="true">
+        <div className="h-8 w-40 animate-pulse rounded bg-muted" />
+        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border">
+          {Array.from({ length: 42 }).map((_, i) => (
+            <div key={i} className="min-h-24 animate-pulse bg-muted/40" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -128,11 +142,21 @@ export default function CalendarPage() {
           <p className="text-muted-foreground">{t('page.calendar.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setRef(new Date(year, month - 1, 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={lang === 'es' ? 'Mes anterior' : 'Mês anterior'}
+            onClick={() => setRef(new Date(year, month - 1, 1))}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="font-medium capitalize min-w-40 text-center">{monthName}</span>
-          <Button variant="outline" size="sm" onClick={() => setRef(new Date(year, month + 1, 1))}>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-label={lang === 'es' ? 'Mes siguiente' : 'Próximo mês'}
+            onClick={() => setRef(new Date(year, month + 1, 1))}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setRef(new Date())}>
@@ -143,12 +167,15 @@ export default function CalendarPage() {
 
       <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
         {weekdays.map((d) => (
-          <div key={d} className="bg-card p-2 text-center text-xs font-semibold text-muted-foreground">
+          <div
+            key={d}
+            className="bg-card p-2 text-center text-xs font-semibold text-muted-foreground"
+          >
             {d}
           </div>
         ))}
         {cells.map((day, idx) => {
-          const dayEvents = day ? eventsByDay.get(day) ?? [] : [];
+          const dayEvents = day ? (eventsByDay.get(day) ?? []) : [];
           const isToday = isCurrentMonth && day === todayDate.getDate();
           return (
             <div key={idx} className={`bg-card min-h-24 p-1.5 ${day ? '' : 'bg-muted/30'}`}>

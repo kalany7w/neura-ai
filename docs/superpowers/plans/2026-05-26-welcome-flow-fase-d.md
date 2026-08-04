@@ -16,13 +16,16 @@
 ## File Structure
 
 ### Shared
+
 - Create: `packages/shared/src/welcome-presets.ts` — 4 presets de negócio com opções/labels/funnels sugestões
 
 ### API
+
 - Create: `apps/api/src/routes/welcome-presets.ts` — GET presets + POST apply-preset
 - Modify: `apps/api/src/index.ts` — wire router
 
 ### Web
+
 - Create: `apps/web/src/components/inbox/welcome-flow-wizard-dialog.tsx` — dialog pós-criar-inbox com 3 opções
 - Modify: `apps/web/src/components/forms/create-inbox-form.tsx` — abrir wizard após criar
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx` — validações inline (min 1 / max 10 options)
@@ -32,6 +35,7 @@
 ## Task 1: Presets data (shared)
 
 **Files:**
+
 - Create: `packages/shared/src/welcome-presets.ts`
 
 - [ ] **Step 1: Criar arquivo de presets**
@@ -248,6 +252,7 @@ git commit -m "feat(shared): adiciona 4 welcome presets (e-commerce/services/sup
 ## Task 2: API endpoints presets
 
 **Files:**
+
 - Create: `apps/api/src/routes/welcome-presets.ts`
 - Modify: `apps/api/src/index.ts`
 
@@ -381,7 +386,7 @@ welcomePresetsRouter.post(
         maxAttempts: 2,
         fallbackTimeoutMinutes: 2,
         fallbackLabelId: preset.fallbackLabelName
-          ? labelByName.get(preset.fallbackLabelName.toLowerCase())?.id ?? null
+          ? (labelByName.get(preset.fallbackLabelName.toLowerCase())?.id ?? null)
           : null,
         options: {
           create: preset.options.map((opt) => {
@@ -473,6 +478,7 @@ git commit -m "feat(api): routes welcome-presets (GET list + POST apply-preset)"
 ## Task 3: Wizard dialog component
 
 **Files:**
+
 - Create: `apps/web/src/components/inbox/welcome-flow-wizard-dialog.tsx`
 
 - [ ] **Step 1: Criar dialog**
@@ -635,6 +641,7 @@ git commit -m "feat(web): wizard dialog 'configure welcome flow' com escolha de 
 ## Task 4: Mount wizard pós create-inbox
 
 **Files:**
+
 - Modify: `apps/web/src/components/forms/create-inbox-form.tsx`
 
 - [ ] **Step 1: Adicionar estado + render dialog**
@@ -663,6 +670,7 @@ setWizardInbox({ id: response.inbox.id, name: response.inbox.name });
 ```
 
 **Adapt to actual code**: read the file to find:
+
 1. Where create succeeds (might be `.then(r => ...)` or `await api(...)` block)
 2. The shape of the response (look for `r.inbox` or similar)
 3. Where to put the dialog render (probably at the bottom of the form's return)
@@ -685,6 +693,7 @@ git commit -m "feat(web): abrir wizard de welcome flow após criar inbox nova"
 ## Task 5: Editor — validações inline (min 1, max 10 options)
 
 **Files:**
+
 - Modify: `apps/web/src/components/settings/welcome-flow-options-editor.tsx`
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx`
 
@@ -726,6 +735,7 @@ git commit -m "feat(web): validações inline no editor (warn enabled-sem-opçõ
 ## Task 6: Empty states polish
 
 **Files:**
+
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/page.tsx`
 
 - [ ] **Step 1: Melhorar empty state da list page**

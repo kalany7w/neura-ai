@@ -20,30 +20,25 @@ const createSchema = z.object({
 });
 
 // GET /api/conversations/:id/notes — lista notas internas (só agentes veem)
-notesRouter.get(
-  '/conversations/:id/notes',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const role = c.get('role')!;
-    const userId = c.get('userId');
-    const conversationId = c.req.param('id');
-    const conv = await prisma.conversation.findFirst({
-      where: { id: conversationId, workspaceId },
-      select: { id: true, assignedAgentId: true },
-    });
-    if (!conv) return c.json({ error: 'not_found' }, 404);
-    if (role === 'AGENT' && conv.assignedAgentId && conv.assignedAgentId !== userId) {
-      return c.json({ error: 'forbidden' }, 403);
-    }
-    const notes = await prisma.conversationNote.findMany({
-      where: { conversationId: conv.id },
-      orderBy: { createdAt: 'asc' },
-    });
-    return c.json({ notes });
-  },
-);
+notesRouter.get('/conversations/:id/notes', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const role = c.get('role')!;
+  const userId = c.get('userId');
+  const conversationId = c.req.param('id');
+  const conv = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    select: { id: true, assignedAgentId: true },
+  });
+  if (!conv) return c.json({ error: 'not_found' }, 404);
+  if (role === 'AGENT' && conv.assignedAgentId && conv.assignedAgentId !== userId) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  const notes = await prisma.conversationNote.findMany({
+    where: { conversationId: conv.id },
+    orderBy: { createdAt: 'asc' },
+  });
+  return c.json({ notes });
+});
 
 // POST /api/conversations/:id/notes — cria nota interna
 notesRouter.post(
@@ -85,9 +80,7 @@ notesRouter.post(
         where: { workspaceId },
         include: { user: { select: { id: true, name: true, email: true } } },
       });
-      const targets = buildMentionTargets(
-        members.map((m) => ({ userId: m.userId, user: m.user })),
-      );
+      const targets = buildMentionTargets(members.map((m) => ({ userId: m.userId, user: m.user })));
       const mentionedIds = parseMentions(parsed.data.body, targets);
       if (mentionedIds.length > 0) {
         const author = await prisma.user.findUnique({
@@ -119,68 +112,58 @@ notesRouter.post(
 );
 
 // DELETE /api/notes/:id — autor ou admin
-notesRouter.delete(
-  '/notes/:id',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const userId = c.get('userId');
-    const role = c.get('role')!;
-    const id = c.req.param('id');
-    const note = await prisma.conversationNote.findFirst({
-      where: { id, conversation: { workspaceId } },
-    });
-    if (!note) return c.json({ error: 'not_found' }, 404);
-    if (note.authorId !== userId && role !== 'ADMIN') {
-      return c.json({ error: 'forbidden' }, 403);
-    }
-    await prisma.conversationNote.delete({ where: { id } });
-    await publishEvent(workspaceId, 'conversations', 'note.removed', {
-      conversationId: note.conversationId,
-      noteId: id,
-    });
-    return c.json({ ok: true });
-  },
-);
+notesRouter.delete('/notes/:id', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const userId = c.get('userId');
+  const role = c.get('role')!;
+  const id = c.req.param('id');
+  const note = await prisma.conversationNote.findFirst({
+    where: { id, conversation: { workspaceId } },
+  });
+  if (!note) return c.json({ error: 'not_found' }, 404);
+  if (note.authorId !== userId && role !== 'ADMIN') {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  await prisma.conversationNote.delete({ where: { id } });
+  await publishEvent(workspaceId, 'conversations', 'note.removed', {
+    conversationId: note.conversationId,
+    noteId: id,
+  });
+  return c.json({ ok: true });
+});
 
 // ============================================
 // CONTACT NOTES (long-term — sobrevivem ao fim de conversation/card)
 // ============================================
 
 // GET /api/contacts/:id/notes — lista notas do contato (com info do autor)
-notesRouter.get(
-  '/contacts/:id/notes',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const contactId = c.req.param('id');
-    const contact = await prisma.contact.findFirst({
-      where: { id: contactId, workspaceId },
-      select: { id: true },
-    });
-    if (!contact) return c.json({ error: 'not_found' }, 404);
-    const notes = await prisma.contactNote.findMany({
-      where: { contactId: contact.id },
-      orderBy: { createdAt: 'desc' },
-    });
-    // Enriquece com info do autor (1 query batch)
-    const authorIds = Array.from(new Set(notes.map((n) => n.authorId)));
-    const authors = authorIds.length
-      ? await prisma.user.findMany({
-          where: { id: { in: authorIds } },
-          select: { id: true, name: true, email: true, image: true },
-        })
-      : [];
-    const authorMap = new Map(authors.map((a) => [a.id, a]));
-    const enriched = notes.map((n) => ({
-      ...n,
-      author: authorMap.get(n.authorId) ?? null,
-    }));
-    return c.json({ notes: enriched });
-  },
-);
+notesRouter.get('/contacts/:id/notes', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const contactId = c.req.param('id');
+  const contact = await prisma.contact.findFirst({
+    where: { id: contactId, workspaceId },
+    select: { id: true },
+  });
+  if (!contact) return c.json({ error: 'not_found' }, 404);
+  const notes = await prisma.contactNote.findMany({
+    where: { contactId: contact.id },
+    orderBy: { createdAt: 'desc' },
+  });
+  // Enriquece com info do autor (1 query batch)
+  const authorIds = Array.from(new Set(notes.map((n) => n.authorId)));
+  const authors = authorIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: authorIds } },
+        select: { id: true, name: true, email: true, image: true },
+      })
+    : [];
+  const authorMap = new Map(authors.map((a) => [a.id, a]));
+  const enriched = notes.map((n) => ({
+    ...n,
+    author: authorMap.get(n.authorId) ?? null,
+  }));
+  return c.json({ notes: enriched });
+});
 
 // POST /api/contacts/:id/notes — cria nota
 notesRouter.post(
@@ -222,9 +205,7 @@ notesRouter.post(
         where: { workspaceId },
         include: { user: { select: { id: true, name: true, email: true } } },
       });
-      const targets = buildMentionTargets(
-        members.map((m) => ({ userId: m.userId, user: m.user })),
-      );
+      const targets = buildMentionTargets(members.map((m) => ({ userId: m.userId, user: m.user })));
       const mentionedIds = parseMentions(parsed.data.body, targets);
       if (mentionedIds.length > 0) {
         const contactInfo = await prisma.contact.findUnique({
@@ -255,63 +236,53 @@ const updateSchema = z.object({
   body: z.string().min(1).max(2000),
 });
 
-notesRouter.patch(
-  '/contact-notes/:id',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const userId = c.get('userId');
-    const role = c.get('role')!;
-    const id = c.req.param('id');
-    const body = await c.req.json().catch(() => null);
-    const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
-    const note = await prisma.contactNote.findFirst({
-      where: { id, contact: { workspaceId } },
-    });
-    if (!note) return c.json({ error: 'not_found' }, 404);
-    if (note.authorId !== userId && role !== 'ADMIN') {
-      return c.json({ error: 'forbidden' }, 403);
-    }
-    const updated = await prisma.contactNote.update({
-      where: { id },
-      data: { body: parsed.data.body },
-    });
-    const author = await prisma.user.findUnique({
-      where: { id: updated.authorId },
-      select: { id: true, name: true, email: true, image: true },
-    });
-    await publishEvent(workspaceId, 'contacts', 'note.updated', {
-      contactId: updated.contactId,
-      note: { ...updated, author },
-    });
-    return c.json({ note: { ...updated, author } });
-  },
-);
+notesRouter.patch('/contact-notes/:id', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const userId = c.get('userId');
+  const role = c.get('role')!;
+  const id = c.req.param('id');
+  const body = await c.req.json().catch(() => null);
+  const parsed = updateSchema.safeParse(body);
+  if (!parsed.success) return c.json({ error: 'invalid_input' }, 400);
+  const note = await prisma.contactNote.findFirst({
+    where: { id, contact: { workspaceId } },
+  });
+  if (!note) return c.json({ error: 'not_found' }, 404);
+  if (note.authorId !== userId && role !== 'ADMIN') {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  const updated = await prisma.contactNote.update({
+    where: { id },
+    data: { body: parsed.data.body },
+  });
+  const author = await prisma.user.findUnique({
+    where: { id: updated.authorId },
+    select: { id: true, name: true, email: true, image: true },
+  });
+  await publishEvent(workspaceId, 'contacts', 'note.updated', {
+    contactId: updated.contactId,
+    note: { ...updated, author },
+  });
+  return c.json({ note: { ...updated, author } });
+});
 
 // DELETE /api/contact-notes/:id — autor ou admin
-notesRouter.delete(
-  '/contact-notes/:id',
-  requireAuth,
-  requireWorkspace,
-  async (c) => {
-    const workspaceId = c.get('workspaceId') as string;
-    const userId = c.get('userId');
-    const role = c.get('role')!;
-    const id = c.req.param('id');
-    const note = await prisma.contactNote.findFirst({
-      where: { id, contact: { workspaceId } },
-    });
-    if (!note) return c.json({ error: 'not_found' }, 404);
-    if (note.authorId !== userId && role !== 'ADMIN') {
-      return c.json({ error: 'forbidden' }, 403);
-    }
-    await prisma.contactNote.delete({ where: { id } });
-    await publishEvent(workspaceId, 'contacts', 'note.removed', {
-      contactId: note.contactId,
-      noteId: id,
-    });
-    return c.json({ ok: true });
-  },
-);
+notesRouter.delete('/contact-notes/:id', requireAuth, requireWorkspace, async (c) => {
+  const workspaceId = c.get('workspaceId') as string;
+  const userId = c.get('userId');
+  const role = c.get('role')!;
+  const id = c.req.param('id');
+  const note = await prisma.contactNote.findFirst({
+    where: { id, contact: { workspaceId } },
+  });
+  if (!note) return c.json({ error: 'not_found' }, 404);
+  if (note.authorId !== userId && role !== 'ADMIN') {
+    return c.json({ error: 'forbidden' }, 403);
+  }
+  await prisma.contactNote.delete({ where: { id } });
+  await publishEvent(workspaceId, 'contacts', 'note.removed', {
+    contactId: note.contactId,
+    noteId: id,
+  });
+  return c.json({ ok: true });
+});

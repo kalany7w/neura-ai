@@ -15,9 +15,11 @@
 ## File Structure
 
 ### Schema
+
 - Modify: `packages/database/prisma/schema.prisma` — add `WelcomeOption.targetUserId String?` + `WelcomeFlow.fallbackUserId String?` + relações back em `User`
 
 ### API
+
 - Modify: `apps/api/src/services/auto-routing.ts` — `applyTagWithRouting` aceita `assignAgentId?: string | null`, faz `conversation.update({ assignedAgentId })` + publishEvent `conversation.assigned`
 - Modify: `apps/api/src/welcome-worker.ts` — passa `option.targetUserId` em `applyTagWithRouting`
 - Modify: `apps/api/src/services/welcome-flow.ts` — `markFailed` passa `flow.fallbackUserId` em `applyTagWithRouting`
@@ -25,13 +27,16 @@
 - Modify: `apps/api/src/routes/welcome-presets.ts` — `apply-preset` aceita resolve de `targetUserName` por nome
 
 ### Shared
+
 - Modify: `packages/shared/src/welcome-presets.ts` — `WelcomePresetOption` ganha `targetUserName?: string`; presets podem sugerir usuários por nome (ex: agro preset → Ariel/Marcos/Diego)
 
 ### Web
+
 - Modify: `apps/web/src/components/settings/welcome-flow-options-editor.tsx` — adicionar select "Atribuir a" por linha
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx` — select "Atribuir fallback a" na sessão fallback; carregar lista de members do workspace
 
 ### Tests
+
 - Modify: `apps/api/tests/auto-routing.test.ts` — adicionar tests pra assignAgentId
 - Modify: `apps/api/tests/welcome-flow.test.ts` — adicionar test pra markFailed com fallbackUserId
 - Modify: `apps/api/tests/welcome-flows-route.test.ts` — adicionar test pra targetUserId membership validation
@@ -41,6 +46,7 @@
 ## Task 1: Schema migration — targetUserId + fallbackUserId
 
 **Files:**
+
 - Modify: `packages/database/prisma/schema.prisma`
 
 - [ ] **Step 1: Adicionar campos no schema**
@@ -128,6 +134,7 @@ git commit -m "feat(db): adiciona WelcomeOption.targetUserId + WelcomeFlow.fallb
 ## Task 2: applyTagWithRouting aceita assignAgentId
 
 **Files:**
+
 - Modify: `apps/api/src/services/auto-routing.ts`
 - Modify: `apps/api/tests/auto-routing.test.ts`
 
@@ -136,57 +143,57 @@ git commit -m "feat(db): adiciona WelcomeOption.targetUserId + WelcomeFlow.fallb
 Em `apps/api/tests/auto-routing.test.ts`, no `describe('applyTagWithRouting', ...)`, adicionar:
 
 ```typescript
-  it('atribui conversa ao assignAgentId quando passado', async () => {
-    // Criar user + membership pro workspace
-    const user = await prisma.user.create({
-      data: { email: 'ariel@test.com', name: 'Ariel' },
-    });
-    await prisma.membership.create({
-      data: { userId: user.id, workspaceId, role: 'AGENT' },
-    });
-
-    await applyTagWithRouting({
-      workspaceId,
-      conversationId,
-      labelId,
-      source: 'welcome_flow',
-      assignAgentId: user.id,
-    });
-
-    const conv = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { assignedAgentId: true },
-    });
-    expect(conv?.assignedAgentId).toBe(user.id);
-
-    // cleanup pra próximos tests
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { assignedAgentId: null },
-    });
-    await prisma.membership.deleteMany({ where: { userId: user.id } });
-    await prisma.user.delete({ where: { id: user.id } });
+it('atribui conversa ao assignAgentId quando passado', async () => {
+  // Criar user + membership pro workspace
+  const user = await prisma.user.create({
+    data: { email: 'ariel@test.com', name: 'Ariel' },
+  });
+  await prisma.membership.create({
+    data: { userId: user.id, workspaceId, role: 'AGENT' },
   });
 
-  it('não modifica assignedAgentId quando assignAgentId é null/undefined', async () => {
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { assignedAgentId: null },
-    });
-
-    await applyTagWithRouting({
-      workspaceId,
-      conversationId,
-      labelId,
-      source: 'welcome_flow',
-    });
-
-    const conv = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { assignedAgentId: true },
-    });
-    expect(conv?.assignedAgentId).toBeNull();
+  await applyTagWithRouting({
+    workspaceId,
+    conversationId,
+    labelId,
+    source: 'welcome_flow',
+    assignAgentId: user.id,
   });
+
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { assignedAgentId: true },
+  });
+  expect(conv?.assignedAgentId).toBe(user.id);
+
+  // cleanup pra próximos tests
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { assignedAgentId: null },
+  });
+  await prisma.membership.deleteMany({ where: { userId: user.id } });
+  await prisma.user.delete({ where: { id: user.id } });
+});
+
+it('não modifica assignedAgentId quando assignAgentId é null/undefined', async () => {
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { assignedAgentId: null },
+  });
+
+  await applyTagWithRouting({
+    workspaceId,
+    conversationId,
+    labelId,
+    source: 'welcome_flow',
+  });
+
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { assignedAgentId: true },
+  });
+  expect(conv?.assignedAgentId).toBeNull();
+});
 ```
 
 - [ ] **Step 2: Rodar test para confirmar falha**
@@ -278,6 +285,7 @@ git commit -m "feat(auto-routing): aceita assignAgentId opcional + validação m
 ## Task 3: Welcome worker passa option.targetUserId
 
 **Files:**
+
 - Modify: `apps/api/src/welcome-worker.ts`
 
 - [ ] **Step 1: Adicionar targetUserId no select da option lookup**
@@ -285,10 +293,10 @@ git commit -m "feat(auto-routing): aceita assignAgentId opcional + validação m
 Localizar `prisma.welcomeFlow.findUnique` em `handleParseReply` (~linha 91):
 
 ```typescript
-  const flow = await prisma.welcomeFlow.findUnique({
-    where: { inboxId: conv.inboxId },
-    include: { options: { orderBy: { position: 'asc' } } },
-  });
+const flow = await prisma.welcomeFlow.findUnique({
+  where: { inboxId: conv.inboxId },
+  include: { options: { orderBy: { position: 'asc' } } },
+});
 ```
 
 Já inclui `options` completas → `targetUserId` já vem no objeto. Confirmar com grep.
@@ -298,19 +306,19 @@ Já inclui `options` completas → `targetUserId` já vem no objeto. Confirmar c
 Localizar a chamada de `applyTagWithRouting` no welcome-worker (~linha 155):
 
 ```typescript
-  if (match) {
-    const fullOpt = flow.options.find((o) => o.id === match.id);
-    if (fullOpt) {
-      await applyTagWithRouting({
-        workspaceId,
-        conversationId,
-        labelId: fullOpt.targetLabelId,
-        source: 'welcome_flow',
-        assignAgentId: fullOpt.targetUserId,
-      });
-    }
-    // ...
+if (match) {
+  const fullOpt = flow.options.find((o) => o.id === match.id);
+  if (fullOpt) {
+    await applyTagWithRouting({
+      workspaceId,
+      conversationId,
+      labelId: fullOpt.targetLabelId,
+      source: 'welcome_flow',
+      assignAgentId: fullOpt.targetUserId,
+    });
   }
+  // ...
+}
 ```
 
 Adicionar `assignAgentId: fullOpt.targetUserId` na chamada.
@@ -334,6 +342,7 @@ git commit -m "feat(welcome-worker): passa option.targetUserId pra atribuir agen
 ## Task 4: Welcome-flow markFailed usa fallbackUserId
 
 **Files:**
+
 - Modify: `apps/api/src/services/welcome-flow.ts`
 - Modify: `apps/api/tests/welcome-flow.test.ts`
 
@@ -342,10 +351,10 @@ git commit -m "feat(welcome-worker): passa option.targetUserId pra atribuir agen
 Em `apps/api/src/services/welcome-flow.ts`, localizar `markFailed` (~linha 220) onde busca o flow:
 
 ```typescript
-  const flow = await prisma.welcomeFlow.findUnique({
-    where: { inboxId: conv.inboxId },
-    select: { fallbackLabelId: true, fallbackUserId: true },
-  });
+const flow = await prisma.welcomeFlow.findUnique({
+  where: { inboxId: conv.inboxId },
+  select: { fallbackLabelId: true, fallbackUserId: true },
+});
 ```
 
 Adicionar `fallbackUserId` no select.
@@ -353,15 +362,15 @@ Adicionar `fallbackUserId` no select.
 E na chamada de `applyTagWithRouting` dentro de `markFailed`:
 
 ```typescript
-  if (flow?.fallbackLabelId) {
-    await applyTagWithRouting({
-      workspaceId,
-      conversationId,
-      labelId: flow.fallbackLabelId,
-      source: 'welcome_flow',
-      assignAgentId: flow.fallbackUserId,
-    });
-  }
+if (flow?.fallbackLabelId) {
+  await applyTagWithRouting({
+    workspaceId,
+    conversationId,
+    labelId: flow.fallbackLabelId,
+    source: 'welcome_flow',
+    assignAgentId: flow.fallbackUserId,
+  });
+}
 ```
 
 - [ ] **Step 2: Adicionar test pra markFailed com fallbackUserId**
@@ -369,39 +378,39 @@ E na chamada de `applyTagWithRouting` dentro de `markFailed`:
 Em `apps/api/tests/welcome-flow.test.ts`, no `describe('markFailed', ...)`, adicionar:
 
 ```typescript
-  it('atribui conversa ao fallbackUserId se configurado', async () => {
-    const user = await prisma.user.create({
-      data: { email: 'ariel-fallback@test.com', name: 'Ariel Fallback' },
-    });
-    await prisma.membership.create({
-      data: { userId: user.id, workspaceId, role: 'AGENT' },
-    });
-
-    await prisma.welcomeFlow.update({
-      where: { id: flowId },
-      data: { fallbackLabelId: labelId, fallbackUserId: user.id },
-    });
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { isAwaitingWelcomeChoice: true, welcomeAttempts: 2 },
-    });
-
-    await markFailed({ workspaceId, conversationId });
-
-    const conv = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { assignedAgentId: true },
-    });
-    expect(conv?.assignedAgentId).toBe(user.id);
-
-    // cleanup
-    await prisma.welcomeFlow.update({
-      where: { id: flowId },
-      data: { fallbackLabelId: null, fallbackUserId: null },
-    });
-    await prisma.membership.deleteMany({ where: { userId: user.id } });
-    await prisma.user.delete({ where: { id: user.id } });
+it('atribui conversa ao fallbackUserId se configurado', async () => {
+  const user = await prisma.user.create({
+    data: { email: 'ariel-fallback@test.com', name: 'Ariel Fallback' },
   });
+  await prisma.membership.create({
+    data: { userId: user.id, workspaceId, role: 'AGENT' },
+  });
+
+  await prisma.welcomeFlow.update({
+    where: { id: flowId },
+    data: { fallbackLabelId: labelId, fallbackUserId: user.id },
+  });
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { isAwaitingWelcomeChoice: true, welcomeAttempts: 2 },
+  });
+
+  await markFailed({ workspaceId, conversationId });
+
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { assignedAgentId: true },
+  });
+  expect(conv?.assignedAgentId).toBe(user.id);
+
+  // cleanup
+  await prisma.welcomeFlow.update({
+    where: { id: flowId },
+    data: { fallbackLabelId: null, fallbackUserId: null },
+  });
+  await prisma.membership.deleteMany({ where: { userId: user.id } });
+  await prisma.user.delete({ where: { id: user.id } });
+});
 ```
 
 - [ ] **Step 3: Rodar tests**
@@ -429,6 +438,7 @@ git commit -m "feat(welcome-flow): markFailed atribui fallbackUserId quando conf
 ## Task 5: Routes welcome-flows estende schemas Zod
 
 **Files:**
+
 - Modify: `apps/api/src/routes/welcome-flows.ts`
 
 - [ ] **Step 1: Estender schemas Zod**
@@ -480,7 +490,10 @@ async function assertUserInWorkspace(
 Em todos os handlers POST/PUT que aceitam `targetUserId` ou `fallbackUserId`, após o `parsed.success` check e antes do `create`/`update`:
 
 ```typescript
-if (parsed.data.targetUserId && !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))) {
+if (
+  parsed.data.targetUserId &&
+  !(await assertUserInWorkspace(parsed.data.targetUserId, workspaceId))
+) {
   return c.json({ error: 'user_not_in_workspace' }, 400);
 }
 ```
@@ -488,12 +501,16 @@ if (parsed.data.targetUserId && !(await assertUserInWorkspace(parsed.data.target
 Para flow upsert handlers, aplicar a `fallbackUserId` em vez:
 
 ```typescript
-if (parsed.data.fallbackUserId && !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))) {
+if (
+  parsed.data.fallbackUserId &&
+  !(await assertUserInWorkspace(parsed.data.fallbackUserId, workspaceId))
+) {
   return c.json({ error: 'fallback_user_not_in_workspace' }, 400);
 }
 ```
 
 Adicionar nas funções:
+
 - `POST /inboxes/:inboxId/welcome-flow` (fallbackUserId)
 - `PUT /inboxes/:inboxId/welcome-flow` (fallbackUserId)
 - `POST /welcome-flows/:flowId/options` (targetUserId)
@@ -517,6 +534,7 @@ git commit -m "feat(api): welcome-flows routes aceitam targetUserId/fallbackUser
 ## Task 6: Welcome presets ganham targetUserName
 
 **Files:**
+
 - Modify: `packages/shared/src/welcome-presets.ts`
 - Modify: `apps/api/src/routes/welcome-presets.ts`
 
@@ -610,52 +628,52 @@ Adicionar ao array `WELCOME_PRESETS` (depois do `agency`):
 Em `apps/api/src/routes/welcome-presets.ts`, no handler `apply-preset`, depois da resolução de labels/funnels:
 
 ```typescript
-    // Resolve targetUserName por nome (case-insensitive, busca members do workspace via User.name)
-    const userNamesNeeded = new Set<string>();
-    for (const opt of preset.options) {
-      if (opt.targetUserName) userNamesNeeded.add(opt.targetUserName);
-    }
-    if (preset.fallbackUserName) userNamesNeeded.add(preset.fallbackUserName);
+// Resolve targetUserName por nome (case-insensitive, busca members do workspace via User.name)
+const userNamesNeeded = new Set<string>();
+for (const opt of preset.options) {
+  if (opt.targetUserName) userNamesNeeded.add(opt.targetUserName);
+}
+if (preset.fallbackUserName) userNamesNeeded.add(preset.fallbackUserName);
 
-    const memberships = await prisma.membership.findMany({
-      where: { workspaceId },
-      include: { user: { select: { id: true, name: true } } },
-    });
-    const userByName = new Map<string, string>();
-    for (const m of memberships) {
-      if (m.user.name) userByName.set(m.user.name.toLowerCase(), m.user.id);
-    }
+const memberships = await prisma.membership.findMany({
+  where: { workspaceId },
+  include: { user: { select: { id: true, name: true } } },
+});
+const userByName = new Map<string, string>();
+for (const m of memberships) {
+  if (m.user.name) userByName.set(m.user.name.toLowerCase(), m.user.id);
+}
 ```
 
 E na criação do flow:
 
 ```typescript
-    const flow = await prisma.welcomeFlow.create({
-      data: {
-        // ...campos existentes...
-        fallbackUserId: preset.fallbackUserName
-          ? userByName.get(preset.fallbackUserName.toLowerCase()) ?? null
-          : null,
-        options: {
-          create: preset.options.map((opt) => {
-            // ...lookup label/funnel/stage como antes...
-            return {
-              position: opt.position,
-              label: opt.label,
-              description: opt.description ?? null,
-              matchKeywords: opt.matchKeywords,
-              targetLabelId: label.id,
-              targetFunnelId: funnelId ?? null,
-              targetStageId: stageId ?? null,
-              targetUserId: opt.targetUserName
-                ? userByName.get(opt.targetUserName.toLowerCase()) ?? null
-                : null,
-            };
-          }),
-        },
-      },
-      // ...
-    });
+const flow = await prisma.welcomeFlow.create({
+  data: {
+    // ...campos existentes...
+    fallbackUserId: preset.fallbackUserName
+      ? (userByName.get(preset.fallbackUserName.toLowerCase()) ?? null)
+      : null,
+    options: {
+      create: preset.options.map((opt) => {
+        // ...lookup label/funnel/stage como antes...
+        return {
+          position: opt.position,
+          label: opt.label,
+          description: opt.description ?? null,
+          matchKeywords: opt.matchKeywords,
+          targetLabelId: label.id,
+          targetFunnelId: funnelId ?? null,
+          targetStageId: stageId ?? null,
+          targetUserId: opt.targetUserName
+            ? (userByName.get(opt.targetUserName.toLowerCase()) ?? null)
+            : null,
+        };
+      }),
+    },
+  },
+  // ...
+});
 ```
 
 **Importante**: se `targetUserName` aparece no preset mas nenhum member do workspace tem esse nome → `targetUserId = null` (silencioso, fallback). Admin pode editar depois.
@@ -679,6 +697,7 @@ git commit -m "feat(presets): adiciona drones-agro preset + targetUserName resol
 ## Task 7: UI editor — select "Atribuir a" por opção
 
 **Files:**
+
 - Modify: `apps/web/src/components/settings/welcome-flow-options-editor.tsx`
 - Modify: `apps/web/src/app/(app)/settings/welcome-flows/[inboxId]/page.tsx`
 

@@ -33,12 +33,12 @@ import {
 
 type StatusFilter = 'ALL' | 'CONNECTED' | 'DISCONNECTED' | 'AWAITING_QR' | 'ERROR';
 
-const STATUS_TABS: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'ALL', label: 'Todas' },
-  { value: 'CONNECTED', label: 'Conectadas' },
-  { value: 'AWAITING_QR', label: 'Aguardando QR' },
-  { value: 'DISCONNECTED', label: 'Desconectadas' },
-  { value: 'ERROR', label: 'Com erro' },
+const STATUS_TABS: Array<{ value: StatusFilter; labelKey: string }> = [
+  { value: 'ALL', labelKey: 'inboxes.status.all' },
+  { value: 'CONNECTED', labelKey: 'inboxes.status.connected' },
+  { value: 'AWAITING_QR', labelKey: 'inboxes.status.awaiting_qr' },
+  { value: 'DISCONNECTED', labelKey: 'inboxes.status.disconnected' },
+  { value: 'ERROR', labelKey: 'inboxes.status.error' },
 ];
 
 export default function InboxesPage() {
@@ -125,15 +125,16 @@ export default function InboxesPage() {
             <DialogTrigger asChild>
               <Button variant="outline">
                 <Globe className="h-4 w-4" />
-                Conectar Webchat
+                {t('inboxes.connect_webchat')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Conectar widget de webchat</DialogTitle>
+                <DialogTitle>{t('inboxes.webchat_dialog.title')}</DialogTitle>
                 <DialogDescription>
-                  Crie um inbox e cole o <code>&lt;script&gt;</code> gerado no HTML do
-                  seu site. Visitantes anônimos abrem chat direto na página.
+                  {t('inboxes.webchat_dialog.desc_1')}
+                  <code>&lt;script&gt;</code>
+                  {t('inboxes.webchat_dialog.desc_2')}
                 </DialogDescription>
               </DialogHeader>
               <WebchatConnectForm
@@ -150,16 +151,13 @@ export default function InboxesPage() {
             <DialogTrigger asChild>
               <Button variant="outline">
                 <Mail className="h-4 w-4" />
-                Conectar Email
+                {t('inboxes.connect_email')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Conectar inbox de Email</DialogTitle>
-                <DialogDescription>
-                  Configure o endereço from. Depois você cola o webhook gerado no painel
-                  do seu provedor (Resend Inbound, Postmark, AWS SES + Lambda etc.).
-                </DialogDescription>
+                <DialogTitle>{t('inboxes.email_dialog.title')}</DialogTitle>
+                <DialogDescription>{t('inboxes.email_dialog.desc')}</DialogDescription>
               </DialogHeader>
               <EmailConnectForm
                 onCancel={() => setEmailOpen(false)}
@@ -175,14 +173,14 @@ export default function InboxesPage() {
             <DialogTrigger asChild>
               <Button variant="outline">
                 <Send className="h-4 w-4" />
-                Conectar Telegram
+                {t('inboxes.connect_telegram')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Conectar bot do Telegram</DialogTitle>
+                <DialogTitle>{t('inboxes.telegram_dialog.title')}</DialogTitle>
                 <DialogDescription>
-                  Crie um bot via{' '}
+                  {t('inboxes.telegram_dialog.desc_1')}
                   <a
                     href="https://t.me/BotFather"
                     target="_blank"
@@ -190,8 +188,8 @@ export default function InboxesPage() {
                     className="font-medium underline"
                   >
                     @BotFather
-                  </a>{' '}
-                  e cole o token. O webhook é configurado automaticamente.
+                  </a>
+                  {t('inboxes.telegram_dialog.desc_2')}
                 </DialogDescription>
               </DialogHeader>
               <TelegramConnectForm
@@ -206,15 +204,13 @@ export default function InboxesPage() {
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4" />
-                Nova inbox WhatsApp
+                {t('inboxes.new_whatsapp')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Nova inbox WhatsApp</DialogTitle>
-                <DialogDescription>
-                  Depois de criar, clique em Conectar e escaneie o QR Code com o WhatsApp.
-                </DialogDescription>
+                <DialogTitle>{t('inboxes.new_whatsapp')}</DialogTitle>
+                <DialogDescription>{t('inboxes.whatsapp_dialog.desc')}</DialogDescription>
               </DialogHeader>
               <CreateInboxForm onDone={() => setOpen(false)} />
             </DialogContent>
@@ -225,23 +221,23 @@ export default function InboxesPage() {
       {(data?.inboxes?.length ?? 0) > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
-            {STATUS_TABS.map((t) => {
-              const count = totalsByStatus[t.value];
+            {STATUS_TABS.map((tab) => {
+              const count = totalsByStatus[tab.value];
               return (
                 <button
-                  key={t.value}
+                  key={tab.value}
                   type="button"
-                  onClick={() => setStatusFilter(t.value)}
+                  onClick={() => setStatusFilter(tab.value)}
                   className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors ${
-                    statusFilter === t.value
+                    statusFilter === tab.value
                       ? 'bg-background shadow-sm font-medium'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {t.label}
+                  {t(tab.labelKey)}
                   <span
                     className={`rounded-full px-1.5 text-[10px] font-medium ${
-                      statusFilter === t.value
+                      statusFilter === tab.value
                         ? 'bg-muted text-foreground'
                         : 'bg-background/60 text-muted-foreground'
                     }`}
@@ -257,7 +253,7 @@ export default function InboxesPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Nome ou número…"
+              placeholder={t('inboxes.search_placeholder')}
               className="w-64 pl-8"
             />
           </div>
@@ -265,17 +261,15 @@ export default function InboxesPage() {
       )}
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.inboxes.length ? (
         <div className="rounded-lg border border-dashed bg-muted/30 p-12 text-center">
-          <h3 className="font-semibold">Nenhuma inbox ainda</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Crie sua primeira inbox pra conectar um número WhatsApp.
-          </p>
+          <h3 className="font-semibold">{t('inboxes.empty.title')}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{t('inboxes.empty.subtitle')}</p>
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nenhuma inbox bate com o filtro.{' '}
+          {t('inboxes.filter_empty')}
           <button
             type="button"
             onClick={() => {
@@ -284,7 +278,7 @@ export default function InboxesPage() {
             }}
             className="text-foreground underline hover:text-primary"
           >
-            Limpar
+            {t('inboxes.filter_clear')}
           </button>
         </p>
       ) : (
@@ -305,20 +299,14 @@ function WebchatConnectForm({
   onDone,
   onCancel,
 }: {
-  onDone: (r: {
-    script: string;
-    slug: string;
-    primaryColor: string;
-    inboxName: string;
-  }) => void;
+  onDone: (r: { script: string; slug: string; primaryColor: string; inboxName: string }) => void;
   onCancel: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [primaryColor, setPrimaryColor] = useState('#6366f1');
-  const [title, setTitle] = useState('Atendimento');
-  const [welcomeMessage, setWelcomeMessage] = useState(
-    'Olá! Como podemos te ajudar hoje?',
-  );
+  const [title, setTitle] = useState(t('inboxes.webchat.default_title'));
+  const [welcomeMessage, setWelcomeMessage] = useState(t('inboxes.webchat.default_welcome'));
   const [submitting, setSubmitting] = useState(false);
   async function submit() {
     if (!name.trim() || submitting) return;
@@ -336,7 +324,7 @@ function WebchatConnectForm({
           welcomeMessage: welcomeMessage.trim() || undefined,
         }),
       });
-      toast.success(`Webchat criado · ${res.inbox.name}`);
+      toast.success(t('inboxes.toast.webchat_created', { name: res.inbox.name }));
       onDone({
         script: res.widget.script,
         slug: res.widget.slug,
@@ -344,7 +332,7 @@ function WebchatConnectForm({
         inboxName: res.inbox.name,
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar widget');
+      toast.error(err instanceof Error ? err.message : t('inboxes.toast.webchat_error'));
     } finally {
       setSubmitting(false);
     }
@@ -353,19 +341,19 @@ function WebchatConnectForm({
     <div className="space-y-4">
       <div className="space-y-2">
         <label htmlFor="wc-name" className="text-sm font-medium">
-          Nome da inbox
+          {t('inboxes.form.inbox_name')}
         </label>
         <Input
           id="wc-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Site institucional"
+          placeholder={t('inboxes.webchat.name_placeholder')}
         />
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="wc-color" className="text-sm font-medium">
-            Cor primária
+            {t('inboxes.webchat.color_label')}
           </label>
           <div className="flex gap-2">
             <input
@@ -384,19 +372,19 @@ function WebchatConnectForm({
         </div>
         <div className="space-y-2">
           <label htmlFor="wc-title" className="text-sm font-medium">
-            Título do widget
+            {t('inboxes.webchat.title_label')}
           </label>
           <Input
             id="wc-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Atendimento"
+            placeholder={t('inboxes.webchat.default_title')}
           />
         </div>
       </div>
       <div className="space-y-2">
         <label htmlFor="wc-welcome" className="text-sm font-medium">
-          Mensagem de boas-vindas (opcional)
+          {t('inboxes.webchat.welcome_label')}
         </label>
         <textarea
           id="wc-welcome"
@@ -406,16 +394,14 @@ function WebchatConnectForm({
           maxLength={500}
           className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Enviada automaticamente assim que o visitante abre o chat pela primeira vez.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.webchat.welcome_help')}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-          Cancelar
+          {t('action.cancel')}
         </Button>
         <Button onClick={submit} disabled={submitting || !name.trim()}>
-          {submitting ? 'Criando…' : 'Criar widget'}
+          {submitting ? t('inboxes.creating') : t('inboxes.webchat.create')}
         </Button>
       </div>
     </div>
@@ -434,6 +420,7 @@ function WebchatScriptDialog({
   } | null;
   onClose: () => void;
 }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
   if (!result) return null;
 
@@ -444,7 +431,7 @@ function WebchatScriptDialog({
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      toast.error('Falha ao copiar — copie manualmente.');
+      toast.error(t('inboxes.toast.copy_failed'));
     }
   }
 
@@ -452,17 +439,20 @@ function WebchatScriptDialog({
     <Dialog open={!!result} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Widget &quot;{result.inboxName}&quot; pronto</DialogTitle>
+          <DialogTitle>{t('inboxes.webchat_script.title', { name: result.inboxName })}</DialogTitle>
           <DialogDescription>
-            Cole o <code>&lt;script&gt;</code> abaixo antes do <code>&lt;/body&gt;</code>{' '}
-            de cada página onde o chat deve aparecer.
+            {t('inboxes.webchat_script.desc_1')}
+            <code>&lt;script&gt;</code>
+            {t('inboxes.webchat_script.desc_2')}
+            <code>&lt;/body&gt;</code>
+            {t('inboxes.webchat_script.desc_3')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Snippet (HTML)
+              {t('inboxes.webchat_script.snippet_label')}
             </label>
             <div className="relative">
               <pre className="max-h-[120px] overflow-x-auto rounded-md bg-muted px-3 py-2.5 text-xs font-mono">
@@ -472,7 +462,7 @@ function WebchatScriptDialog({
                 size="icon"
                 variant="outline"
                 onClick={copy}
-                title="Copiar snippet"
+                title={t('inboxes.webchat_script.copy_snippet')}
                 className="absolute right-1.5 top-1.5"
               >
                 {copied ? (
@@ -486,41 +476,36 @@ function WebchatScriptDialog({
 
           <div className="rounded-md border border-indigo-200 bg-indigo-50/50 p-3 text-xs dark:border-indigo-800 dark:bg-indigo-950/30">
             <p className="mb-1.5 font-semibold text-indigo-900 dark:text-indigo-200">
-              Como funciona
+              {t('inboxes.webchat_script.how_title')}
             </p>
             <ul className="space-y-1.5 text-indigo-900/80 dark:text-indigo-200/80">
               <li>
-                Cliente abre o chat → widget cria <strong>sessão anônima</strong>{' '}
-                (persiste em localStorage) e gera <strong>Contact + Conversation</strong>{' '}
-                no Neura.
+                {t('inboxes.webchat_script.how_1a')}
+                <strong>{t('inboxes.webchat_script.how_1b')}</strong>
+                {t('inboxes.webchat_script.how_1c')}
+                <strong>Contact + Conversation</strong>
+                {t('inboxes.webchat_script.how_1d')}
               </li>
               <li>
-                Mensagens do cliente aparecem instantaneamente no <strong>/inbox</strong>{' '}
-                como se fossem WhatsApp/Telegram.
+                {t('inboxes.webchat_script.how_2a')}
+                <strong>/inbox</strong>
+                {t('inboxes.webchat_script.how_2b')}
               </li>
-              <li>
-                Agente responde no Neura → widget puxa via polling 3s e mostra a resposta
-                no chat.
-              </li>
-              <li>
-                IA Copilot (classify, KB suggest, summarize) funcionam idêntico ao
-                WhatsApp.
-              </li>
-              <li>
-                Sessão persiste — se o cliente fechar e voltar 2 dias depois, mesma
-                conversa continua.
-              </li>
+              <li>{t('inboxes.webchat_script.how_3')}</li>
+              <li>{t('inboxes.webchat_script.how_4')}</li>
+              <li>{t('inboxes.webchat_script.how_5')}</li>
             </ul>
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            Snippet disponível novamente em{' '}
-            <code>GET /api/inboxes/&lt;id&gt;/webchat/snippet</code> via API.
+            {t('inboxes.webchat_script.footer_1')}
+            <code>GET /api/inboxes/&lt;id&gt;/webchat/snippet</code>
+            {t('inboxes.via_api')}
           </p>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button onClick={onClose}>Fechar</Button>
+          <Button onClick={onClose}>{t('action.close')}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -539,6 +524,7 @@ function EmailConnectForm({
   }) => void;
   onCancel: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [fromAddress, setFromAddress] = useState('');
   const [fromName, setFromName] = useState('');
@@ -558,7 +544,7 @@ function EmailConnectForm({
           fromName: fromName.trim() || undefined,
         }),
       });
-      toast.success(`Inbox Email criada · ${fromAddress.trim()}`);
+      toast.success(t('inboxes.toast.email_created', { email: fromAddress.trim() }));
       onDone({
         url: res.webhook.url,
         secret: res.webhook.secret,
@@ -566,7 +552,7 @@ function EmailConnectForm({
         inboxName: res.inbox.name,
       });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao conectar');
+      toast.error(err instanceof Error ? err.message : t('inboxes.toast.connect_error'));
     } finally {
       setSubmitting(false);
     }
@@ -575,18 +561,18 @@ function EmailConnectForm({
     <div className="space-y-4">
       <div className="space-y-2">
         <label htmlFor="em-name" className="text-sm font-medium">
-          Nome da inbox
+          {t('inboxes.form.inbox_name')}
         </label>
         <Input
           id="em-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Suporte Email"
+          placeholder={t('inboxes.email.name_placeholder')}
         />
       </div>
       <div className="space-y-2">
         <label htmlFor="em-from" className="text-sm font-medium">
-          Endereço from
+          {t('inboxes.email.from_label')}
         </label>
         <Input
           id="em-from"
@@ -596,33 +582,26 @@ function EmailConnectForm({
           placeholder="suporte@empresa.com"
           autoComplete="off"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Domínio precisa estar verificado no Resend pra emails saírem.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.email.from_help')}</p>
       </div>
       <div className="space-y-2">
         <label htmlFor="em-from-name" className="text-sm font-medium">
-          Nome humano (opcional)
+          {t('inboxes.email.from_name_label')}
         </label>
         <Input
           id="em-from-name"
           value={fromName}
           onChange={(e) => setFromName(e.target.value)}
-          placeholder="Suporte Acme"
+          placeholder={t('inboxes.email.from_name_placeholder')}
         />
-        <p className="text-[11px] text-muted-foreground">
-          Aparece como remetente no Gmail/Outlook. Default = nome da inbox.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.email.from_name_help')}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={submitting}>
-          Cancelar
+          {t('action.cancel')}
         </Button>
-        <Button
-          onClick={submit}
-          disabled={submitting || !name.trim() || !fromAddress.trim()}
-        >
-          {submitting ? 'Criando…' : 'Criar inbox'}
+        <Button onClick={submit} disabled={submitting || !name.trim() || !fromAddress.trim()}>
+          {submitting ? t('inboxes.creating') : t('inboxes.email.create')}
         </Button>
       </div>
     </div>
@@ -641,6 +620,7 @@ function EmailWebhookDialog({
   } | null;
   onClose: () => void;
 }) {
+  const { t } = useT();
   const [copiedField, setCopiedField] = useState<'url' | 'secret' | null>(null);
   if (!webhook) return null;
 
@@ -650,7 +630,7 @@ function EmailWebhookDialog({
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 1500);
     } catch {
-      toast.error('Falha ao copiar — copie manualmente.');
+      toast.error(t('inboxes.toast.copy_failed'));
     }
   }
 
@@ -658,17 +638,18 @@ function EmailWebhookDialog({
     <Dialog open={!!webhook} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Inbox &quot;{webhook.inboxName}&quot; criada</DialogTitle>
+          <DialogTitle>{t('inboxes.email_webhook.title', { name: webhook.inboxName })}</DialogTitle>
           <DialogDescription>
-            Configure agora o webhook no provedor de email pra encaminhar mensagens
-            recebidas em <strong>{webhook.fromAddress}</strong> pro Neura.
+            {t('inboxes.email_webhook.desc_1')}
+            <strong>{webhook.fromAddress}</strong>
+            {t('inboxes.email_webhook.desc_2')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Webhook URL
+              {t('inboxes.email_webhook.url_label')}
             </label>
             <div className="flex items-center gap-1.5">
               <code className="flex-1 truncate rounded-md bg-muted px-2.5 py-2 text-xs font-mono">
@@ -678,7 +659,7 @@ function EmailWebhookDialog({
                 size="icon"
                 variant="outline"
                 onClick={() => copy('url', webhook.url)}
-                title="Copiar URL"
+                title={t('inboxes.email_webhook.copy_url')}
               >
                 {copiedField === 'url' ? (
                   <CheckIcon className="h-4 w-4 text-emerald-500" />
@@ -691,7 +672,7 @@ function EmailWebhookDialog({
 
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Header secret (X-Neura-Email-Secret)
+              {t('inboxes.email_webhook.secret_label')}
             </label>
             <div className="flex items-center gap-1.5">
               <code className="flex-1 truncate rounded-md bg-muted px-2.5 py-2 text-xs font-mono">
@@ -701,7 +682,7 @@ function EmailWebhookDialog({
                 size="icon"
                 variant="outline"
                 onClick={() => copy('secret', webhook.secret)}
-                title="Copiar secret"
+                title={t('inboxes.email_webhook.copy_secret')}
               >
                 {copiedField === 'secret' ? (
                   <CheckIcon className="h-4 w-4 text-emerald-500" />
@@ -711,32 +692,30 @@ function EmailWebhookDialog({
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Adicione como header HTTP na configuração do webhook do provedor.
+              {t('inboxes.email_webhook.secret_help')}
             </p>
           </div>
 
           <div className="rounded-md border border-indigo-200 bg-indigo-50/50 p-3 text-xs dark:border-indigo-800 dark:bg-indigo-950/30">
             <p className="mb-1.5 font-semibold text-indigo-900 dark:text-indigo-200">
-              Configurar no provedor
+              {t('inboxes.email_webhook.provider_title')}
             </p>
             <ul className="space-y-1.5 text-indigo-900/80 dark:text-indigo-200/80">
               <li>
-                <strong>Resend Inbound:</strong> Dashboard → Inbound → Add address →{' '}
+                <strong>Resend Inbound:</strong> {t('inboxes.email_webhook.resend_a')}
                 <code className="rounded bg-indigo-100 px-1 dark:bg-indigo-900">
                   {webhook.fromAddress}
-                </code>{' '}
-                → Forward to webhook URL acima.
+                </code>
+                {t('inboxes.email_webhook.resend_b')}
               </li>
               <li>
-                <strong>Postmark:</strong> Servers → Inbound stream → Webhook URL = URL
-                acima · Custom Headers = secret acima.
+                <strong>Postmark:</strong> {t('inboxes.email_webhook.postmark')}
               </li>
               <li>
-                <strong>AWS SES + Lambda:</strong> Receipt rule → Lambda function parsea
-                MIME → POST com payload Postmark-style + header secret.
+                <strong>AWS SES + Lambda:</strong> {t('inboxes.email_webhook.ses')}
               </li>
               <li>
-                <strong>Cloudflare Email Workers:</strong> Worker parsea {`message`} →{' '}
+                <strong>Cloudflare Email Workers:</strong> {t('inboxes.email_webhook.cloudflare')}
                 <code className="rounded bg-indigo-100 px-1 dark:bg-indigo-900">
                   fetch(url, {`{ method: 'POST', headers, body: JSON }`})
                 </code>
@@ -745,13 +724,14 @@ function EmailWebhookDialog({
           </div>
 
           <p className="text-[11px] text-muted-foreground">
-            Esses dados estão disponíveis novamente em{' '}
-            <code>GET /api/inboxes/&lt;id&gt;/email/webhook</code> via API.
+            {t('inboxes.email_webhook.footer_1')}
+            <code>GET /api/inboxes/&lt;id&gt;/email/webhook</code>
+            {t('inboxes.via_api')}
           </p>
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button onClick={onClose}>Fechar</Button>
+          <Button onClick={onClose}>{t('action.close')}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -759,6 +739,7 @@ function EmailWebhookDialog({
 }
 
 function TelegramConnectForm({ onDone }: { onDone: () => void }) {
+  const { t } = useT();
   const [name, setName] = useState('');
   const [botToken, setBotToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -772,11 +753,13 @@ function TelegramConnectForm({ onDone }: { onDone: () => void }) {
         method: 'POST',
         body: JSON.stringify({ name: name.trim(), botToken: botToken.trim() }),
       });
-      const handle = res.inbox.botUsername ? `@${res.inbox.botUsername}` : 'bot conectado';
-      toast.success(`Inbox Telegram criada · ${handle}`);
+      const handle = res.inbox.botUsername
+        ? `@${res.inbox.botUsername}`
+        : t('inboxes.telegram.bot_connected');
+      toast.success(t('inboxes.toast.telegram_created', { handle }));
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao conectar');
+      toast.error(err instanceof Error ? err.message : t('inboxes.toast.connect_error'));
     } finally {
       setSubmitting(false);
     }
@@ -785,18 +768,18 @@ function TelegramConnectForm({ onDone }: { onDone: () => void }) {
     <div className="space-y-4">
       <div className="space-y-2">
         <label htmlFor="tg-name" className="text-sm font-medium">
-          Nome
+          {t('common.name')}
         </label>
         <Input
           id="tg-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Suporte Telegram"
+          placeholder={t('inboxes.telegram.name_placeholder')}
         />
       </div>
       <div className="space-y-2">
         <label htmlFor="tg-token" className="text-sm font-medium">
-          Bot token
+          {t('inboxes.telegram.token_label')}
         </label>
         <Input
           id="tg-token"
@@ -806,20 +789,14 @@ function TelegramConnectForm({ onDone }: { onDone: () => void }) {
           placeholder="123456789:ABCdefGhIJKlmnoPQRstuVWxyZ"
           autoComplete="off"
         />
-        <p className="text-[11px] text-muted-foreground">
-          Token nunca aparece de volta — criptografado AES-256-GCM. Pra trocar, desconecte
-          e reconecte.
-        </p>
+        <p className="text-[11px] text-muted-foreground">{t('inboxes.telegram.token_help')}</p>
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" onClick={onDone} disabled={submitting}>
-          Cancelar
+          {t('action.cancel')}
         </Button>
-        <Button
-          onClick={submit}
-          disabled={submitting || !name.trim() || !botToken.trim()}
-        >
-          {submitting ? 'Conectando…' : 'Conectar bot'}
+        <Button onClick={submit} disabled={submitting || !name.trim() || !botToken.trim()}>
+          {submitting ? t('inboxes.telegram.connecting') : t('inboxes.telegram.connect')}
         </Button>
       </div>
     </div>

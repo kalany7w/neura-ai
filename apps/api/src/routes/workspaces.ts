@@ -152,10 +152,56 @@ workspacesRouter.get('/', requireAuth, async (c) => {
       name: m.workspace.name,
       slug: m.workspace.slug,
       role: m.role,
+      currency: readCurrency(m.workspace.settings),
     })),
     activeWorkspaceId,
   });
 });
+
+// Moeda do workspace (persistida em settings.currency). Default USD.
+const CURRENCIES = ['USD', 'BRL', 'PYG', 'EUR', 'ARS'] as const;
+function readCurrency(settings: unknown): string {
+  const c = (settings as Record<string, unknown> | null)?.currency;
+  return typeof c === 'string' && (CURRENCIES as readonly string[]).includes(c) ? c : 'USD';
+}
+
+const patchSettingsSchema = z.object({
+  currency: z.enum(CURRENCIES),
+});
+
+// PATCH /api/workspaces/me/settings — atualiza settings do workspace (moeda). Admin only.
+workspacesRouter.patch(
+  '/me/settings',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('workspace.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const actorId = c.get('userId');
+    const body = await c.req.json().catch(() => null);
+    const parsed = patchSettingsSchema.safeParse(body);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+
+    const ws = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { settings: true },
+    });
+    const merged = {
+      ...((ws?.settings as Record<string, unknown> | null) ?? {}),
+      currency: parsed.data.currency,
+    };
+    await prisma.workspace.update({ where: { id: workspaceId }, data: { settings: merged } });
+    await audit({
+      workspaceId,
+      actorId,
+      action: 'workspace.settings_updated',
+      resource: `Workspace:${workspaceId}`,
+      metadata: { currency: parsed.data.currency },
+    });
+    return c.json({ ok: true, currency: parsed.data.currency });
+  },
+);
 
 // POST /api/workspaces/switch — muda activeWorkspaceId da sessão
 workspacesRouter.post('/switch', requireAuth, async (c) => {
@@ -215,11 +261,7 @@ workspacesRouter.get('/me/presence', requireAuth, requireWorkspace, async (c) =>
   const minScore = Date.now() - PRESENCE_TTL_MS;
   // Limpa scores velhos antes de listar (housekeeping leve, fire-and-forget)
   void redis.zremrangebyscore(`presence:agents:${workspaceId}`, 0, minScore - 1);
-  const online = await redis.zrangebyscore(
-    `presence:agents:${workspaceId}`,
-    minScore,
-    '+inf',
-  );
+  const online = await redis.zrangebyscore(`presence:agents:${workspaceId}`, minScore, '+inf');
   return c.json({ online });
 });
 
@@ -230,9 +272,7 @@ workspacesRouter.get('/me/mention-targets', requireAuth, requireWorkspace, async
     where: { workspaceId },
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
   });
-  const targets = buildMentionTargets(
-    members.map((m) => ({ userId: m.userId, user: m.user })),
-  );
+  const targets = buildMentionTargets(members.map((m) => ({ userId: m.userId, user: m.user })));
   // Enriquece com avatar pro picker
   const userMap = new Map(members.map((m) => [m.userId, m.user]));
   return c.json({
@@ -433,7 +473,8 @@ workspacesRouter.patch(
 
     const body = await c.req.json().catch(() => null);
     const parsed = patchMemberSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
 
     const target = await prisma.membership.findUnique({
       where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
@@ -446,7 +487,10 @@ workspacesRouter.patch(
         where: { workspaceId, role: 'ADMIN' },
       });
       if (adminCount <= 1) {
-        return c.json({ error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' }, 409);
+        return c.json(
+          { error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' },
+          409,
+        );
       }
     }
 
@@ -487,7 +531,10 @@ workspacesRouter.delete(
         where: { workspaceId, role: 'ADMIN' },
       });
       if (adminCount <= 1) {
-        return c.json({ error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' }, 409);
+        return c.json(
+          { error: 'last_admin', message: 'O workspace precisa ter ao menos um ADMIN.' },
+          409,
+        );
       }
     }
 
@@ -504,7 +551,24 @@ workspacesRouter.delete(
       prisma.membership.delete({
         where: { userId_workspaceId: { userId: targetUserId, workspaceId } },
       }),
+      // Sessões do removido apontando pra este workspace perdem o vínculo na
+      // hora — sem isto ele mantinha WS/HTTP no workspace até a sessão expirar.
+      prisma.session.updateMany({
+        where: { userId: targetUserId, activeWorkspaceId: workspaceId },
+        data: { activeWorkspaceId: null },
+      }),
     ]);
+
+    // Derruba os WS abertos do removido neste workspace (canal interno :control —
+    // publish direto no Redis; não é evento de domínio, não passa por webhooks).
+    await redis.publish(
+      `workspace:${workspaceId}:control`,
+      JSON.stringify({
+        event: 'member.removed',
+        payload: { userId: targetUserId },
+        ts: Date.now(),
+      }),
+    );
 
     await audit({
       workspaceId,

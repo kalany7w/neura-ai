@@ -2,6 +2,13 @@
 # IMPORTANTE: SEM `ports:` — Coolify faz roteamento via Caddy.
 # Cada serviço expõe sua porta INTERNA (7301/7302/7303) e Coolify direciona o domínio.
 
+# Rotação de logs: evita que o stdout (Pino/Next/Baileys) encha o disco da VPS.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
 services:
   api:
     build:
@@ -9,6 +16,9 @@ services:
       dockerfile: Dockerfile
       target: api-runner
     restart: unless-stopped
+    logging: *default-logging
+    # Teto de memória (anti-leak). Ajuste conforme a VPS via env.
+    mem_limit: ${API_MEM_LIMIT:-1g}
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -24,6 +34,12 @@ services:
       RESEND_FROM_NAME: ${RESEND_FROM_NAME}
       RATE_LIMIT_LOGIN_MAX: ${RATE_LIMIT_LOGIN_MAX:-5}
       RATE_LIMIT_LOGIN_WINDOW_SEC: ${RATE_LIMIT_LOGIN_WINDOW_SEC:-60}
+      # Alertas operacionais (opcional): webhook Discord/Slack pra erros não tratados.
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      # Sentry (opcional): error tracking. Sem DSN, é no-op.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # Protege GET /metrics (Prometheus). Vazio = aberto (assume rede interna).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
@@ -45,7 +61,7 @@ services:
       - redis
       - minio
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:7301/health"]
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:7301/health']
       interval: 30s
       timeout: 5s
       retries: 5
@@ -56,7 +72,15 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web-runner
+      # NEXT_PUBLIC_* do Sentry precisam estar no BUILD (o Next inlina no bundle).
+      args:
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
     restart: unless-stopped
+    logging: *default-logging
+    mem_limit: ${WEB_MEM_LIMIT:-1g}
     environment:
       NODE_ENV: production
       WEB_PORT: 7302
@@ -66,7 +90,7 @@ services:
       - api
     healthcheck:
       # Next responde 200 em / (página landing redireciona pra /login). Wget em alpine vem builtin.
-      test: ["CMD", "wget", "-q", "-O-", "http://localhost:7302/"]
+      test: ['CMD', 'wget', '-q', '-O-', 'http://localhost:7302/']
       interval: 30s
       timeout: 5s
       retries: 5
@@ -78,6 +102,9 @@ services:
       dockerfile: Dockerfile
       target: waworker-runner
     restart: unless-stopped
+    logging: *default-logging
+    # Baileys usa ~80-150MB por sessão — teto maior. Ajuste via env conforme a VPS.
+    mem_limit: ${WAWORKER_MEM_LIMIT:-2g}
     environment:
       NODE_ENV: production
       LOG_LEVEL: info
@@ -91,10 +118,26 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET:-neura-media}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     depends_on:
       - postgres
       - redis
       - minio
+    healthcheck:
+      # Usa node (fetch nativo) pra não depender de wget na imagem do worker.
+      # Lê WAWORKER_PORT do ambiente do container (default 7303 = env.ts).
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:'+(process.env.WAWORKER_PORT||7303)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   postgres:
     # pgvector/pgvector:pg16 = Postgres 16 oficial + extensão pgvector pré-instalada.
@@ -102,6 +145,7 @@ services:
     # Usado pra Knowledge Base + RAG (busca semântica via embeddings OpenAI).
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-neura}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -109,7 +153,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neura} -d ${POSTGRES_DB:-neura_ai}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-neura} -d ${POSTGRES_DB:-neura_ai}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -117,11 +161,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --appendonly yes
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -129,6 +174,7 @@ services:
   minio:
     image: minio/minio:latest
     restart: unless-stopped
+    logging: *default-logging
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -136,10 +182,33 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ['CMD', 'mc', 'ready', 'local']
       interval: 30s
       timeout: 5s
       retries: 5
+
+  # Backup periódico da mídia (bucket MinIO) pra um destino S3/B2. Idle enquanto
+  # BACKUP_S3_* não estiver setado — não afeta o deploy. Ver backup/backup.sh.
+  minio-backup:
+    image: minio/mc:latest
+    restart: unless-stopped
+    logging: *default-logging
+    entrypoint: ['/bin/sh', '/backup.sh']
+    volumes:
+      - ./backup/backup.sh:/backup.sh:ro
+    environment:
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-neura-media}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY:-}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    depends_on:
+      - minio
 
 volumes:
   postgres-data:

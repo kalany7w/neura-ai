@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Forward, Search } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import {
   Dialog,
   DialogContent,
@@ -40,7 +41,9 @@ export function ForwardMessageDialog({
   excludeConversationId,
   onForwarded,
 }: Props) {
-  const ids: string[] = messageIds && messageIds.length > 0 ? messageIds : messageId ? [messageId] : [];
+  const { t } = useT();
+  const ids: string[] =
+    messageIds && messageIds.length > 0 ? messageIds : messageId ? [messageId] : [];
   const isBatch = ids.length > 1;
 
   const [search, setSearch] = useState('');
@@ -93,15 +96,18 @@ export function ForwardMessageDialog({
         });
         if (res.sent.length > 0) {
           toast.success(
-            `${res.totalMessages} mensagem(ns) encaminhada(s) pra ${res.sent.length} conversa(s)`,
+            t('c_inbox_forward_message_dialog.toast_forwarded_batch', {
+              n: res.totalMessages,
+              count: res.sent.length,
+            }),
           );
         }
         if (res.skipped.length > 0) {
-          toast.error(`${res.skipped.length} pulada(s) — inbox desconectada ou outro erro.`);
+          toast.error(t('c_inbox_forward_message_dialog.toast_skipped', { n: res.skipped.length }));
         }
         if (res.invalidMessages.length > 0) {
           toast.error(
-            `${res.invalidMessages.length} mensagem(ns) ignorada(s) (apagada ou tipo não suportado).`,
+            t('c_inbox_forward_message_dialog.toast_invalid', { n: res.invalidMessages.length }),
           );
         }
         onForwarded?.(res.sent.map((s) => s.conversationId));
@@ -114,16 +120,20 @@ export function ForwardMessageDialog({
           },
         );
         if (res.sent.length > 0) {
-          toast.success(`Encaminhada pra ${res.sent.length} conversa(s)`);
+          toast.success(
+            t('c_inbox_forward_message_dialog.toast_forwarded_single', { count: res.sent.length }),
+          );
         }
         if (res.skipped.length > 0) {
-          toast.error(`${res.skipped.length} pulada(s) — inbox desconectada ou outro erro.`);
+          toast.error(t('c_inbox_forward_message_dialog.toast_skipped', { n: res.skipped.length }));
         }
         onForwarded?.(res.sent);
       }
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao encaminhar');
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_forward_message_dialog.toast_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -135,13 +145,15 @@ export function ForwardMessageDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Forward className="h-4 w-4" />
-            {isBatch ? `Encaminhar ${ids.length} mensagens` : 'Encaminhar mensagem'}
+            {isBatch
+              ? t('c_inbox_forward_message_dialog.title_batch', { n: ids.length })
+              : t('c_inbox_forward_message_dialog.title_single')}
           </DialogTitle>
           <DialogDescription>
-            Selecione até 10 conversas.{' '}
+            {t('c_inbox_forward_message_dialog.select_up_to')}{' '}
             {isBatch
-              ? 'As mensagens são reenviadas em ordem cronológica original pra cada conversa selecionada.'
-              : 'Mídia é reenviada (não usa "forwarded" do WhatsApp).'}
+              ? t('c_inbox_forward_message_dialog.desc_batch')
+              : t('c_inbox_forward_message_dialog.desc_single')}
           </DialogDescription>
         </DialogHeader>
 
@@ -150,16 +162,18 @@ export function ForwardMessageDialog({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar contato…"
+            placeholder={t('c_inbox_forward_message_dialog.search_placeholder')}
             className="pl-8"
           />
         </div>
 
         <div className="flex-1 overflow-y-auto rounded-md border divide-y">
           {isLoading ? (
-            <p className="p-3 text-sm text-muted-foreground">Carregando…</p>
+            <p className="p-3 text-sm text-muted-foreground">{t('action.loading')}</p>
           ) : items.length === 0 ? (
-            <p className="p-3 text-sm text-muted-foreground">Nenhuma conversa.</p>
+            <p className="p-3 text-sm text-muted-foreground">
+              {t('c_inbox_forward_message_dialog.empty')}
+            </p>
           ) : (
             items.map((c) => {
               const isSelected = selected.has(c.id);
@@ -193,14 +207,16 @@ export function ForwardMessageDialog({
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
-            {selected.size} de 10 selecionada(s)
+            {t('c_inbox_forward_message_dialog.selected_count', { n: selected.size })}
           </p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button onClick={submit} disabled={selected.size === 0 || submitting}>
-              {submitting ? 'Encaminhando…' : 'Encaminhar'}
+              {submitting
+                ? t('c_inbox_forward_message_dialog.submitting')
+                : t('c_inbox_forward_message_dialog.submit')}
             </Button>
           </div>
         </div>

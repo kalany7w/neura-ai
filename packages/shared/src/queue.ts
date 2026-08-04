@@ -79,13 +79,13 @@ export interface SendMessageJob {
   text?: string;
   /** Para type === 'INTERACTIVE': estrutura do listMessage do Baileys */
   interactivePayload?: {
-    title: string;          // header do listMessage
-    body: string;           // texto principal (o prompt)
-    footer?: string;        // footer opcional
-    buttonText: string;     // label do botão que abre a lista (ex: "Ver opções")
+    title: string; // header do listMessage
+    body: string; // texto principal (o prompt)
+    footer?: string; // footer opcional
+    buttonText: string; // label do botão que abre a lista (ex: "Ver opções")
     options: Array<{
-      rowId: string;        // = WelcomeOption.id
-      title: string;        // = WelcomeOption.label
+      rowId: string; // = WelcomeOption.id
+      title: string; // = WelcomeOption.label
       description?: string; // = WelcomeOption.description
     }>;
   };

@@ -31,10 +31,7 @@ export function createCrypto(hexKey: string): {
       const [ivHex, tagHex, encHex] = parts as [string, string, string];
       const decipher = createDecipheriv(ALGO, KEY, Buffer.from(ivHex, 'hex'));
       decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-      const dec = Buffer.concat([
-        decipher.update(Buffer.from(encHex, 'hex')),
-        decipher.final(),
-      ]);
+      const dec = Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]);
       return dec.toString('utf8');
     },
   };

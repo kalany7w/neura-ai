@@ -23,7 +23,12 @@ const baseSchema = {
   name: z.string().min(1).max(80),
   scoreType: z.enum(['CSAT', 'NPS', 'THUMBS']),
   channelScope: z.enum(['ALL', 'WHATSAPP', 'TELEGRAM', 'EMAIL', 'WEBCHAT']).default('ALL'),
-  delayMinutes: z.number().int().min(0).max(7 * 24 * 60).default(5),
+  delayMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(7 * 24 * 60)
+    .default(5),
   messageBody: z.string().min(1).max(2000),
   thankYouMessage: z.string().max(2000).nullable().optional(),
   enabled: z.boolean().default(true),
@@ -42,14 +47,20 @@ const patchSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
-csatSurveysRouter.get('/', requireAuth, requireWorkspace, requirePermission('csat.read'), async (c) => {
-  const workspaceId = c.get('workspaceId') as string;
-  const surveys = await prisma.csatSurvey.findMany({
-    where: { workspaceId },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-  });
-  return c.json({ surveys });
-});
+csatSurveysRouter.get(
+  '/',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('csat.read'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const surveys = await prisma.csatSurvey.findMany({
+      where: { workspaceId },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    });
+    return c.json({ surveys });
+  },
+);
 
 csatSurveysRouter.post(
   '/',
@@ -59,7 +70,8 @@ csatSurveysRouter.post(
   async (c) => {
     const body = await c.req.json().catch(() => null);
     const parsed = createSchema.safeParse(body);
-    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    if (!parsed.success)
+      return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
     const workspaceId = c.get('workspaceId') as string;
     const userId = c.get('userId');
 
@@ -127,7 +139,8 @@ csatSurveysRouter.patch(
     if (parsed.data.channelScope !== undefined) data.channelScope = parsed.data.channelScope;
     if (parsed.data.delayMinutes !== undefined) data.delayMinutes = parsed.data.delayMinutes;
     if (parsed.data.messageBody !== undefined) data.messageBody = parsed.data.messageBody;
-    if (parsed.data.thankYouMessage !== undefined) data.thankYouMessage = parsed.data.thankYouMessage;
+    if (parsed.data.thankYouMessage !== undefined)
+      data.thankYouMessage = parsed.data.thankYouMessage;
     if (parsed.data.enabled !== undefined) data.enabled = parsed.data.enabled;
     if (parsed.data.isDefault !== undefined) data.isDefault = parsed.data.isDefault;
     try {

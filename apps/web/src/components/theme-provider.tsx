@@ -32,10 +32,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Hidrata do localStorage
   useEffect(() => {
-    const saved = (typeof window !== 'undefined' && window.localStorage.getItem(STORAGE_KEY)) as
-      | Theme
-      | null;
-    const initial: Theme = saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+    const saved = (typeof window !== 'undefined' &&
+      window.localStorage.getItem(STORAGE_KEY)) as Theme | null;
+    const initial: Theme =
+      saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
     setThemeState(initial);
     const resolved = initial === 'system' ? resolveSystem() : initial;
     setResolvedTheme(resolved);

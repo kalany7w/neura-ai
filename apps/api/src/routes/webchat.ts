@@ -16,9 +16,10 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { RateLimiterRedis, RateLimiterMemory } from 'rate-limiter-flexible';
 import { prisma } from '../db.js';
 import { publishEvent } from '../redis-pub.js';
+import { redis } from '../redis.js';
 import { aiQueue } from '../queue.js';
 import { enqueueWelcomeProcess } from '../welcome-worker.js';
 
@@ -28,16 +29,33 @@ export const webchatRouter = new Hono();
 // Bucket key: prefere IP real (x-forwarded-for/x-real-ip/cf-connecting-ip), fallback
 // pra sessionToken quando disponível, fallback final pra slug+'anon' (toda visita
 // anônima sem IP compartilha bucket — aceito porque é cenário degradado raro).
-const webchatLimiter = new RateLimiterMemory({
+// Redis (não memória): sobrevive a restart e vale pra todas as instâncias —
+// endpoint público, limite in-memory multiplicava por instância.
+// insuranceLimiter: com Redis fora, cai no limite em memória em vez de
+// bloquear o webchat público inteiro (fail-closed de disponibilidade).
+const webchatLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:webchat',
   points: 30,
   duration: 60,
+  insuranceLimiter: new RateLimiterMemory({ points: 30, duration: 60 }),
 });
 
-function extractClientIp(headerForwarded: string | undefined, headerReal: string | undefined, headerCf: string | undefined): string | null {
-  // x-forwarded-for pode vir como "client, proxy1, proxy2" — pega o primeiro.
+function extractClientIp(
+  headerForwarded: string | undefined,
+  headerReal: string | undefined,
+  headerCf: string | undefined,
+): string | null {
+  // x-forwarded-for vem como "client, proxy1, proxy2" e o Caddy APPENDA o IP
+  // real que ele viu — o primeiro token é do cliente (spoofável); o último é
+  // o hop escrito pelo proxy confiável.
   if (headerForwarded) {
-    const first = headerForwarded.split(',')[0]?.trim();
-    if (first) return first;
+    const parts = headerForwarded
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last;
   }
   if (headerReal && headerReal.trim()) return headerReal.trim();
   if (headerCf && headerCf.trim()) return headerCf.trim();
@@ -98,7 +116,11 @@ async function resolveInbox(slug: string): Promise<{
 // repetidas com mesmo token são no-op (só atualizam name/email se informados).
 
 const sessionSchema = z.object({
-  sessionToken: z.string().min(16).max(128).regex(/^[a-f0-9-]+$/i, 'token inválido'),
+  sessionToken: z
+    .string()
+    .min(16)
+    .max(128)
+    .regex(/^[a-f0-9-]+$/i, 'token inválido'),
   name: z.string().min(1).max(80).optional(),
   email: z.string().email().max(120).optional(),
 });
@@ -112,7 +134,8 @@ webchatRouter.post('/:widgetSlug/session', async (c) => {
     c.req.header('x-real-ip'),
     c.req.header('cf-connecting-ip'),
   );
-  const bucket = ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
+  const bucket =
+    ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
   if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);
@@ -291,7 +314,8 @@ webchatRouter.post('/:widgetSlug/messages', async (c) => {
     c.req.header('x-real-ip'),
     c.req.header('cf-connecting-ip'),
   );
-  const bucket = ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
+  const bucket =
+    ip ?? (typeof body?.sessionToken === 'string' ? `tok:${body.sessionToken}` : 'anon');
   if (!(await applyRateLimit(slug, bucket))) return c.json({ error: 'rate_limited' }, 429);
 
   const inbox = await resolveInbox(slug);

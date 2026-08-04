@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "next start --port 7302",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -25,6 +29,7 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-toast": "^1.2.4",
+    "@sentry/nextjs": "^10.66.0",
     "@tanstack/react-query": "^5.62.11",
     "better-auth": "^1.4.0",
     "class-variance-authority": "^0.7.1",
@@ -43,6 +48,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.10.5",
     "@types/papaparse": "^5.3.16",
     "@types/react": "^19.0.4",

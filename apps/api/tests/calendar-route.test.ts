@@ -72,7 +72,13 @@ describe('CalendarEvent — DB layer', () => {
       data: { workspaceId, phoneNumber: '+595981777666', name: 'Temp' },
     });
     const ev = await prisma.calendarEvent.create({
-      data: { workspaceId, title: 'Test', eventDate: new Date(), contactId: contact2.id, createdBy: userId },
+      data: {
+        workspaceId,
+        title: 'Test',
+        eventDate: new Date(),
+        contactId: contact2.id,
+        createdBy: userId,
+      },
     });
     await prisma.contact.delete({ where: { id: contact2.id } });
     const refetch = await prisma.calendarEvent.findUnique({ where: { id: ev.id } });
@@ -94,7 +100,10 @@ describe('CalendarEvent — DB layer', () => {
     });
     expect(due.map((e) => e.id)).toContain(ev.id);
 
-    await prisma.calendarEvent.update({ where: { id: ev.id }, data: { reminderSentAt: new Date() } });
+    await prisma.calendarEvent.update({
+      where: { id: ev.id },
+      data: { reminderSentAt: new Date() },
+    });
     const dueAfter = await prisma.calendarEvent.findMany({
       where: { eventDate: { lte: new Date() }, status: 'SCHEDULED', reminderSentAt: null },
     });

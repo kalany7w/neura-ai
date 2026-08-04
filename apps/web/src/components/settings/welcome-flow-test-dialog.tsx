@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { Send } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,8 +21,10 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 
+// Mensagem = chave i18n (traduzida ao exibir com t()). Mantém o schema em escopo
+// de módulo sem precisar do hook useT aqui.
 const schema = z.object({
-  phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'Use formato E.164: +5511999999999'),
+  phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'welcome_test.err_e164'),
 });
 type Input = z.infer<typeof schema>;
 
@@ -32,6 +35,7 @@ interface Props {
 }
 
 export function WelcomeFlowTestDialog({ flowId, flowEnabled, optionsCount }: Props) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,11 +55,11 @@ export function WelcomeFlowTestDialog({ flowId, flowEnabled, optionsCount }: Pro
         method: 'POST',
         body: JSON.stringify(values),
       });
-      toast.success('Mensagem de teste enviada! Verifica seu WhatsApp.');
+      toast.success(t('welcome_test.toast_sent'));
       reset();
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao enviar teste');
+      toast.error(err instanceof Error ? err.message : t('welcome_test.toast_error'));
     } finally {
       setSubmitting(false);
     }
@@ -68,37 +72,30 @@ export function WelcomeFlowTestDialog({ flowId, flowEnabled, optionsCount }: Pro
       <DialogTrigger asChild>
         <Button type="button" variant="outline" disabled={disabled}>
           <Send className="mr-2 h-4 w-4" />
-          Enviar teste
+          {t('welcome_test.send')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Enviar teste do fluxo</DialogTitle>
-          <DialogDescription>
-            O número receberá a mensagem real com as opções configuradas. Use seu próprio celular
-            pra validar que aparece corretamente.
-          </DialogDescription>
+          <DialogTitle>{t('welcome_test.title')}</DialogTitle>
+          <DialogDescription>{t('welcome_test.desc')}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="phoneNumber">Número (E.164)</Label>
-            <Input
-              id="phoneNumber"
-              placeholder="+5511999999999"
-              {...register('phoneNumber')}
-            />
+            <Label htmlFor="phoneNumber">{t('welcome_test.number_label')}</Label>
+            <Input id="phoneNumber" placeholder="+5959991234567" {...register('phoneNumber')} />
             {errors.phoneNumber && (
-              <p className="text-xs text-destructive">{errors.phoneNumber.message}</p>
+              <p className="text-xs text-destructive">{t(errors.phoneNumber.message ?? '')}</p>
             )}
           </div>
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancelar
+              {t('action.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting ? 'Enviando…' : 'Enviar'}
+              {submitting ? t('welcome_test.sending') : t('welcome_test.submit')}
             </Button>
           </DialogFooter>
         </form>

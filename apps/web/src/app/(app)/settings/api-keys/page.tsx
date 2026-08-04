@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { useT } from '@/lib/i18n';
+import { useT, formatDateShort, localeFor } from '@/lib/i18n';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,7 +46,7 @@ interface CreateResp {
 export default function ApiKeysPage() {
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [createOpen, setCreateOpen] = useState(false);
   const [revealed, setRevealed] = useState<{ plain: string; name: string } | null>(null);
 
@@ -61,29 +61,31 @@ export default function ApiKeysPage() {
         method: 'PATCH',
         body: JSON.stringify({ enabled: !key.enabled }),
       });
-      toast.success(key.enabled ? 'Desativada' : 'Ativada');
+      toast.success(
+        key.enabled ? t('settings_api_keys.deactivated') : t('settings_api_keys.activated'),
+      );
       await qc.invalidateQueries({ queryKey: ['api-keys'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
   async function remove(key: ApiKey) {
     if (
       !(await confirm({
-        title: `Revogar a chave "${key.name}"?`,
-        description: 'Integrações que usam esta chave deixam de funcionar imediatamente.',
-        confirmLabel: 'Revogar',
+        title: t('settings_api_keys.revoke_confirm_title', { name: key.name }),
+        description: t('settings_api_keys.revoke_confirm_desc'),
+        confirmLabel: t('settings_api_keys.revoke'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/api-keys/${key.id}`, { method: 'DELETE' });
-      toast.success('Chave revogada');
+      toast.success(t('settings_api_keys.revoked_toast'));
       await qc.invalidateQueries({ queryKey: ['api-keys'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -99,7 +101,7 @@ export default function ApiKeysPage() {
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
-          Nova chave
+          {t('settings_api_keys.new_key')}
         </Button>
       </div>
 
@@ -107,23 +109,24 @@ export default function ApiKeysPage() {
         <div className="flex gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
           <div>
-            <h3 className="font-semibold">Cuidado com chaves expostas</h3>
+            <h3 className="font-semibold">{t('settings_api_keys.warn_title')}</h3>
             <p className="text-xs text-muted-foreground">
-              A chave aparece em texto plano <strong>uma única vez</strong>, no momento da criação.
-              Guarde-a no seu cofre — não há como recuperar depois. Se vazar, revogue e crie outra.
+              {t('settings_api_keys.warn_body_1')}
+              <strong>{t('settings_api_keys.warn_body_strong')}</strong>
+              {t('settings_api_keys.warn_body_2')}
             </p>
           </div>
         </div>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.keys.length ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-12 text-center">
           <Key className="mx-auto h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">Nenhuma chave ainda</h3>
+          <h3 className="mt-3 font-semibold">{t('settings_api_keys.empty_title')}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Crie uma chave pra começar a integrar.
+            {t('settings_api_keys.empty_subtitle')}
           </p>
         </div>
       ) : (
@@ -131,11 +134,11 @@ export default function ApiKeysPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-2.5">Nome</th>
-                <th className="px-4 py-2.5">Prefixo</th>
-                <th className="px-4 py-2.5">Último uso</th>
-                <th className="px-4 py-2.5">Criada em</th>
-                <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">{t('common.name')}</th>
+                <th className="px-4 py-2.5">{t('settings_api_keys.col_prefix')}</th>
+                <th className="px-4 py-2.5">{t('settings_api_keys.col_last_used')}</th>
+                <th className="px-4 py-2.5">{t('settings_api_keys.col_created')}</th>
+                <th className="px-4 py-2.5">{t('common.status')}</th>
                 <th className="px-4 py-2.5"></th>
               </tr>
             </thead>
@@ -148,21 +151,21 @@ export default function ApiKeysPage() {
                   </td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground">
                     {key.lastUsedAt
-                      ? new Date(key.lastUsedAt).toLocaleString('pt-BR')
-                      : 'Nunca'}
+                      ? new Date(key.lastUsedAt).toLocaleString(localeFor(lang))
+                      : t('settings_api_keys.never')}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                    {new Date(key.createdAt).toLocaleDateString('pt-BR')}
+                    {formatDateShort(key.createdAt, lang)}
                   </td>
                   <td className="px-4 py-2.5">
                     {key.enabled ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
                         <Check className="h-3 w-3" />
-                        Ativa
+                        {t('settings_api_keys.status_active')}
                       </span>
                     ) : (
                       <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                        Desativada
+                        {t('settings_api_keys.status_inactive')}
                       </span>
                     )}
                   </td>
@@ -172,19 +175,19 @@ export default function ApiKeysPage() {
                         size="icon"
                         variant="ghost"
                         onClick={() => toggle(key)}
-                        title={key.enabled ? 'Desativar' : 'Ativar'}
+                        title={
+                          key.enabled
+                            ? t('settings_api_keys.deactivate')
+                            : t('settings_api_keys.activate')
+                        }
                       >
-                        <Power
-                          className={
-                            key.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'
-                          }
-                        />
+                        <Power className={key.enabled ? 'h-4 w-4 text-emerald-500' : 'h-4 w-4'} />
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
                         onClick={() => remove(key)}
-                        title="Revogar"
+                        title={t('settings_api_keys.revoke')}
                         className="text-muted-foreground hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -224,6 +227,7 @@ function CreateKeyDialog({
   onRevealed: (plain: string, name: string) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -240,7 +244,7 @@ function CreateKeyDialog({
       setName('');
       await qc.invalidateQueries({ queryKey: ['api-keys'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     } finally {
       setSubmitting(false);
     }
@@ -250,25 +254,23 @@ function CreateKeyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova API Key</DialogTitle>
-          <DialogDescription>
-            Dê um nome descritivo (ex: “n8n produção”, “backend interno”).
-          </DialogDescription>
+          <DialogTitle>{t('settings_api_keys.create_title')}</DialogTitle>
+          <DialogDescription>{t('settings_api_keys.create_desc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="key-name">Nome</Label>
+            <Label htmlFor="key-name">{t('common.name')}</Label>
             <Input
               id="key-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: integração CRM"
+              placeholder={t('settings_api_keys.name_placeholder')}
               maxLength={80}
               autoFocus
             />
           </div>
           <Button onClick={submit} className="w-full" disabled={submitting || !name.trim()}>
-            {submitting ? 'Gerando…' : 'Gerar chave'}
+            {submitting ? t('settings_api_keys.generating') : t('settings_api_keys.generate_key')}
           </Button>
         </div>
       </DialogContent>
@@ -285,16 +287,15 @@ function RevealDialog({
   name: string;
   onClose: () => void;
 }) {
+  const { t } = useT();
   const [copied, setCopied] = useState(false);
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Chave criada — copie agora!</DialogTitle>
-          <DialogDescription>
-            Esta é a única vez que “{name}” aparece em texto plano. Cole no seu cofre/integração.
-          </DialogDescription>
+          <DialogTitle>{t('settings_api_keys.reveal_title')}</DialogTitle>
+          <DialogDescription>{t('settings_api_keys.reveal_desc', { name })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="rounded-md border-2 border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
@@ -304,7 +305,7 @@ function RevealDialog({
             onClick={async () => {
               await navigator.clipboard.writeText(plain);
               setCopied(true);
-              toast.success('Chave copiada');
+              toast.success(t('settings_api_keys.copied_toast'));
               setTimeout(() => setCopied(false), 2000);
             }}
             className="w-full"
@@ -313,21 +314,23 @@ function RevealDialog({
             {copied ? (
               <>
                 <ClipboardCheck className="h-4 w-4" />
-                Copiado!
+                {t('settings_api_keys.copied')}
               </>
             ) : (
               <>
                 <Clipboard className="h-4 w-4" />
-                Copiar chave
+                {t('settings_api_keys.copy_key')}
               </>
             )}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Uso: header{' '}
-            <code className="rounded bg-muted px-1 py-0.5">Authorization: Bearer {plain.slice(0, 14)}…</code>
+            {t('settings_api_keys.usage_hint')}{' '}
+            <code className="rounded bg-muted px-1 py-0.5">
+              Authorization: Bearer {plain.slice(0, 14)}…
+            </code>
           </p>
           <Button onClick={onClose} className="w-full">
-            Já guardei a chave
+            {t('settings_api_keys.saved_key')}
           </Button>
         </div>
       </DialogContent>

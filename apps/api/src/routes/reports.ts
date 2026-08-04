@@ -33,9 +33,7 @@ async function computeFrt(
   since: Date,
   until: Date,
 ): Promise<Map<string, number>> {
-  const rows = await prisma.$queryRaw<
-    Array<{ conversationId: string; frt: number | null }>
-  >`
+  const rows = await prisma.$queryRaw<Array<{ conversationId: string; frt: number | null }>>`
     SELECT
       c.id AS "conversationId",
       EXTRACT(EPOCH FROM (MIN(out_msg."createdAt") - MIN(in_msg."createdAt")))::int AS frt
@@ -322,9 +320,7 @@ function csvEscape(v: unknown): string {
 
 reportsRouter.get('/export.csv', requireAuth, requireWorkspace, async (c) => {
   const workspaceId = c.get('workspaceId') as string;
-  const parsed = exportSchema.safeParse(
-    Object.fromEntries(new URL(c.req.url).searchParams),
-  );
+  const parsed = exportSchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!parsed.success) return c.json({ error: 'invalid_query' }, 400);
   const { since, until } = parseRange(c);
 
@@ -373,7 +369,8 @@ reportsRouter.get('/export.csv', requireAuth, requireWorkspace, async (c) => {
       orderBy: { createdAt: 'desc' },
       take: 10_000,
     });
-    csv = 'id,status,contact_name,contact_phone,inbox,assigned_agent_id,created_at,last_message_at,unread,messages_total\n';
+    csv =
+      'id,status,contact_name,contact_phone,inbox,assigned_agent_id,created_at,last_message_at,unread,messages_total\n';
     for (const r of rows) {
       csv +=
         [
@@ -445,12 +442,8 @@ reportsRouter.get('/sla', requireAuth, requireWorkspace, async (c) => {
   const defaultPolicy = await prisma.slaPolicy.findFirst({
     where: { workspaceId, scope: 'default', enabled: true },
   });
-  const frtThresholdSec = defaultPolicy
-    ? defaultPolicy.firstResponseThresholdMin * 60
-    : 15 * 60;
-  const rtThresholdSec = defaultPolicy
-    ? defaultPolicy.resolutionThresholdMin * 60
-    : 1440 * 60;
+  const frtThresholdSec = defaultPolicy ? defaultPolicy.firstResponseThresholdMin * 60 : 15 * 60;
+  const rtThresholdSec = defaultPolicy ? defaultPolicy.resolutionThresholdMin * 60 : 1440 * 60;
 
   // Conversas no range com FRT registrada
   const convs = await prisma.conversation.findMany({
@@ -469,9 +462,7 @@ reportsRouter.get('/sla', requireAuth, requireWorkspace, async (c) => {
   });
 
   const frtValues = convs.map((c) => c.firstResponseSeconds ?? 0);
-  const rtValues = convs
-    .map((c) => c.resolutionSeconds)
-    .filter((v): v is number => v != null);
+  const rtValues = convs.map((c) => c.resolutionSeconds).filter((v): v is number => v != null);
 
   const frtStats = stats(frtValues);
   const rtStats = stats(rtValues);
@@ -496,10 +487,7 @@ reportsRouter.get('/sla', requireAuth, requireWorkspace, async (c) => {
   });
 
   // Stats por agente — agrupa FRT/RT pela pessoa que respondeu primeiro
-  const byAgent = new Map<
-    string,
-    { frt: number[]; rt: number[] }
-  >();
+  const byAgent = new Map<string, { frt: number[]; rt: number[] }>();
   for (const conv of convs) {
     const agentId = conv.lastAgentRepliedId ?? conv.assignedAgentId;
     if (!agentId) continue;
@@ -626,7 +614,8 @@ reportsRouter.get('/csat', requireAuth, requireWorkspace, async (c) => {
 
   // CSAT: avg (1-5), satisfação=score>=4
   const csatScores = byType.CSAT;
-  const csatAvg = csatScores.length > 0 ? csatScores.reduce((a, b) => a + b, 0) / csatScores.length : null;
+  const csatAvg =
+    csatScores.length > 0 ? csatScores.reduce((a, b) => a + b, 0) / csatScores.length : null;
   const csatSatisfiedCount = csatScores.filter((s) => s >= 4).length;
   const csatSatisfactionRate =
     csatScores.length > 0 ? Math.round((csatSatisfiedCount / csatScores.length) * 100) : null;
@@ -637,9 +626,7 @@ reportsRouter.get('/csat', requireAuth, requireWorkspace, async (c) => {
   const detractors = npsScores.filter((s) => s <= 6).length;
   const passives = npsScores.filter((s) => s >= 7 && s <= 8).length;
   const npsScore =
-    npsScores.length > 0
-      ? Math.round(((promoters - detractors) / npsScores.length) * 100)
-      : null;
+    npsScores.length > 0 ? Math.round(((promoters - detractors) / npsScores.length) * 100) : null;
 
   // THUMBS: positivos vs negativos
   const thumbsScores = byType.THUMBS;
@@ -680,7 +667,11 @@ reportsRouter.get('/csat', requireAuth, requireWorkspace, async (c) => {
       const csatAvg = b.csat.length > 0 ? b.csat.reduce((a, x) => a + x, 0) / b.csat.length : null;
       const npsScore =
         b.nps.length > 0
-          ? Math.round(((b.nps.filter((s) => s >= 9).length - b.nps.filter((s) => s <= 6).length) / b.nps.length) * 100)
+          ? Math.round(
+              ((b.nps.filter((s) => s >= 9).length - b.nps.filter((s) => s <= 6).length) /
+                b.nps.length) *
+                100,
+            )
           : null;
       const thumbsRate =
         b.thumbs.length > 0
@@ -775,8 +766,7 @@ reportsRouter.get('/kb', requireAuth, requireWorkspace, async (c) => {
       },
     }),
   ]);
-  const acceptRate =
-    suggestedTotal > 0 ? Math.round((acceptedTotal / suggestedTotal) * 100) : null;
+  const acceptRate = suggestedTotal > 0 ? Math.round((acceptedTotal / suggestedTotal) * 100) : null;
 
   // Top artigos por viewCount (views agentes via composer + insert). Limita 10.
   const topArticles = await prisma.kbArticle.findMany({

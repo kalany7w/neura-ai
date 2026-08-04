@@ -46,9 +46,7 @@ async function tgCall<T>(
     });
     const data = (await res.json()) as TelegramApiResponse<T>;
     if (!data.ok) {
-      throw new Error(
-        `Telegram ${method} failed: ${data.description ?? `HTTP ${res.status}`}`,
-      );
+      throw new Error(`Telegram ${method} failed: ${data.description ?? `HTTP ${res.status}`}`);
     }
     return data.result as T;
   } finally {

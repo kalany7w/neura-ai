@@ -108,7 +108,9 @@ export default function WelcomeFlowEditorPage() {
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
-  const { data, isLoading, isError } = useQuery<FlowResponse | { error: string; inbox: { id: string; name: string } }>({
+  const { data, isLoading, isError } = useQuery<
+    FlowResponse | { error: string; inbox: { id: string; name: string } }
+  >({
     queryKey: ['welcome-flow', inboxId],
     queryFn: async () => {
       try {
@@ -155,7 +157,7 @@ export default function WelcomeFlowEditorPage() {
   } = useForm<FlowInput>({
     resolver: zodResolver(flowSchema),
     defaultValues: {
-      prompt: 'Olá! Como podemos ajudar?\n\n1. Compra\n2. Suporte',
+      prompt: t('settings_welcome_flows_inboxid.default_prompt'),
       enabled: true,
       fallbackLabelId: null,
       fallbackFunnelId: null,
@@ -187,8 +189,7 @@ export default function WelcomeFlowEditorPage() {
   // (Mesmo escopo multi-empresa que kanban: label de XAG não aparece em fluxo apontando pra Caltech.)
   const visibleFallbackLabels = (labelsData?.labels ?? []).filter(
     (l) =>
-      !l.routesToFunnelId ||
-      (fallbackFunnelId ? l.routesToFunnelId === fallbackFunnelId : true),
+      !l.routesToFunnelId || (fallbackFunnelId ? l.routesToFunnelId === fallbackFunnelId : true),
   );
 
   // Auto-reset fallbackLabelId quando muda o funnel e a label atual não está mais visível.
@@ -202,7 +203,14 @@ export default function WelcomeFlowEditorPage() {
     if (fallbackStageId && !fallbackStages.some((s) => s.id === fallbackStageId)) {
       setValue('fallbackStageId', null);
     }
-  }, [fallbackFunnelId, fallbackLabelId, fallbackStageId, visibleFallbackLabels, fallbackStages, setValue]);
+  }, [
+    fallbackFunnelId,
+    fallbackLabelId,
+    fallbackStageId,
+    visibleFallbackLabels,
+    fallbackStages,
+    setValue,
+  ]);
 
   async function onSave(values: FlowInput) {
     setSubmitting(true);
@@ -212,22 +220,30 @@ export default function WelcomeFlowEditorPage() {
         method,
         body: JSON.stringify(values),
       });
-      toast.success(hasFlow ? 'Fluxo atualizado' : 'Fluxo criado');
+      toast.success(
+        hasFlow
+          ? t('settings_welcome_flows_inboxid.flow_updated')
+          : t('settings_welcome_flows_inboxid.flow_created'),
+      );
       await qc.invalidateQueries({ queryKey: ['welcome-flow', inboxId] });
       await qc.invalidateQueries({ queryKey: ['welcome-flows-list'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar');
+      toast.error(
+        err instanceof Error ? err.message : t('settings_welcome_flows_inboxid.save_error'),
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (isLoading) return <p className="text-muted-foreground">Carregando…</p>;
+  if (isLoading) return <p className="text-muted-foreground">{t('action.loading')}</p>;
   if (isError || !inbox) {
     return (
       <div className="space-y-4">
-        <p className="text-destructive">Erro ao carregar fluxo. Inbox existe?</p>
-        <Button onClick={() => router.push('/settings/welcome-flows')}>Voltar</Button>
+        <p className="text-destructive">{t('settings_welcome_flows_inboxid.load_error')}</p>
+        <Button onClick={() => router.push('/settings/welcome-flows')}>
+          {t('settings_welcome_flows_inboxid.back')}
+        </Button>
       </div>
     );
   }
@@ -235,7 +251,10 @@ export default function WelcomeFlowEditorPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <Link href="/settings/welcome-flows" className="text-muted-foreground hover:text-foreground">
+        <Link
+          href="/settings/welcome-flows"
+          className="text-muted-foreground hover:text-foreground"
+        >
           <ChevronLeft className="h-5 w-5" />
         </Link>
         <div>
@@ -247,10 +266,12 @@ export default function WelcomeFlowEditorPage() {
       <form onSubmit={handleSubmit(onSave)} className="space-y-6">
         <div className="rounded-lg border bg-card p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Configurações gerais</h2>
+            <h2 className="font-semibold">
+              {t('settings_welcome_flows_inboxid.general_settings')}
+            </h2>
             <div className="flex items-center gap-2">
               <Label htmlFor="enabled" className="text-sm">
-                Ativo
+                {t('settings_welcome_flows_inboxid.active')}
               </Label>
               <Switch
                 id="enabled"
@@ -261,23 +282,26 @@ export default function WelcomeFlowEditorPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="prompt">Mensagem inicial</Label>
+            <Label htmlFor="prompt">{t('settings_welcome_flows_inboxid.initial_message')}</Label>
             <Textarea
               id="prompt"
               {...register('prompt')}
               rows={6}
-              placeholder="Olá {{contact.name}}! Como podemos ajudar?"
+              placeholder={t('settings_welcome_flows_inboxid.prompt_placeholder')}
             />
             <p className="text-xs text-muted-foreground">
-              Suporta placeholder <code>{'{{contact.name}}'}</code>. Quando o nome do contato for
-              vazio, substitui por &quot;cliente&quot;.
+              {t('settings_welcome_flows_inboxid.placeholder_hint_pre')}
+              <code>{'{{contact.name}}'}</code>
+              {t('settings_welcome_flows_inboxid.placeholder_hint_post')}
             </p>
             {errors.prompt && <p className="text-xs text-destructive">{errors.prompt.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="maxAttempts">Máx. tentativas do cliente</Label>
+              <Label htmlFor="maxAttempts">
+                {t('settings_welcome_flows_inboxid.max_attempts_label')}
+              </Label>
               <Input
                 id="maxAttempts"
                 type="number"
@@ -286,11 +310,13 @@ export default function WelcomeFlowEditorPage() {
                 {...register('maxAttempts', { valueAsNumber: true })}
               />
               <p className="text-xs text-muted-foreground">
-                Após N respostas sem match, aplica fallback.
+                {t('settings_welcome_flows_inboxid.max_attempts_hint')}
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fallbackTimeoutMinutes">Timeout pra texto plano (min)</Label>
+              <Label htmlFor="fallbackTimeoutMinutes">
+                {t('settings_welcome_flows_inboxid.timeout_label')}
+              </Label>
               <Input
                 id="fallbackTimeoutMinutes"
                 type="number"
@@ -299,33 +325,33 @@ export default function WelcomeFlowEditorPage() {
                 {...register('fallbackTimeoutMinutes', { valueAsNumber: true })}
               />
               <p className="text-xs text-muted-foreground">
-                Se cliente não responder o botão interativo em X min, reenviamos como texto. 0 =
-                desativado.
+                {t('settings_welcome_flows_inboxid.timeout_hint')}
               </p>
             </div>
           </div>
         </div>
 
         <div className="rounded-lg border bg-card p-5 space-y-4">
-          <h2 className="font-semibold">Fallback (se nenhuma opção matchea)</h2>
+          <h2 className="font-semibold">{t('settings_welcome_flows_inboxid.fallback_section')}</h2>
 
           <div className="space-y-2">
-            <Label>Etiqueta aplicada</Label>
+            <Label>{t('settings_welcome_flows_inboxid.applied_label')}</Label>
             <Select
               value={fallbackLabelId ?? 'none'}
               onValueChange={(v) => setValue('fallbackLabelId', v === 'none' ? null : v)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Nenhuma" />
+                <SelectValue placeholder={t('settings_welcome_flows_inboxid.none_fem')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Nenhuma</SelectItem>
+                <SelectItem value="none">{t('settings_welcome_flows_inboxid.none_fem')}</SelectItem>
                 {visibleFallbackLabels.map((l) => (
                   <SelectItem key={l.id} value={l.id}>
                     {l.name}
                     {l.routesToFunnelId && (
                       <span className="ml-2 text-[10px] text-muted-foreground">
-                        · {funnelsData?.funnels.find((f) => f.id === l.routesToFunnelId)?.name ?? ''}
+                        ·{' '}
+                        {funnelsData?.funnels.find((f) => f.id === l.routesToFunnelId)?.name ?? ''}
                       </span>
                     )}
                   </SelectItem>
@@ -334,14 +360,14 @@ export default function WelcomeFlowEditorPage() {
             </Select>
             {fallbackFunnelId && (
               <p className="text-[11px] text-muted-foreground">
-                Mostrando apenas labels globais + do funil selecionado.
+                {t('settings_welcome_flows_inboxid.labels_filtered_hint')}
               </p>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Funil destino</Label>
+              <Label>{t('settings_welcome_flows_inboxid.target_funnel')}</Label>
               <Select
                 value={watch('fallbackFunnelId') ?? 'none'}
                 onValueChange={(v) => {
@@ -350,10 +376,12 @@ export default function WelcomeFlowEditorPage() {
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Nenhum" />
+                  <SelectValue placeholder={t('settings_welcome_flows_inboxid.none_masc')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
+                  <SelectItem value="none">
+                    {t('settings_welcome_flows_inboxid.none_masc')}
+                  </SelectItem>
                   {funnelsData?.funnels.map((f) => (
                     <SelectItem key={f.id} value={f.id}>
                       {f.name}
@@ -363,17 +391,25 @@ export default function WelcomeFlowEditorPage() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Etapa inicial</Label>
+              <Label>{t('settings_welcome_flows_inboxid.initial_stage')}</Label>
               <Select
                 value={watch('fallbackStageId') ?? 'none'}
                 onValueChange={(v) => setValue('fallbackStageId', v === 'none' ? null : v)}
                 disabled={!fallbackFunnelId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={fallbackFunnelId ? 'Selecione' : 'Escolha funil antes'} />
+                  <SelectValue
+                    placeholder={
+                      fallbackFunnelId
+                        ? t('settings_welcome_flows_inboxid.select_option')
+                        : t('settings_welcome_flows_inboxid.choose_funnel_first')
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
+                  <SelectItem value="none">
+                    {t('settings_welcome_flows_inboxid.none_masc')}
+                  </SelectItem>
                   {fallbackStages.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
@@ -385,16 +421,16 @@ export default function WelcomeFlowEditorPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>Atribuir fallback a</Label>
+            <Label>{t('settings_welcome_flows_inboxid.assign_fallback_to')}</Label>
             <Select
               value={watch('fallbackUserId') ?? 'none'}
               onValueChange={(v) => setValue('fallbackUserId', v === 'none' ? null : v)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Ninguém" />
+                <SelectValue placeholder={t('settings_welcome_flows_inboxid.nobody')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Ninguém</SelectItem>
+                <SelectItem value="none">{t('settings_welcome_flows_inboxid.nobody')}</SelectItem>
                 {members.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.name ?? m.email}
@@ -403,15 +439,15 @@ export default function WelcomeFlowEditorPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Se nenhuma opção matchear após N attempts, atribui a este usuário.
+              {t('settings_welcome_flows_inboxid.assign_fallback_hint')}
             </p>
           </div>
         </div>
 
         {watch('enabled') && hasFlow && data.flow.options.length === 0 && (
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-            <strong>Atenção:</strong> O fluxo está marcado como ativo mas não tem opções configuradas.
-            Adicione pelo menos uma opção abaixo antes de salvar, ou desative o toggle.
+            <strong>{t('settings_welcome_flows_inboxid.warning_label')}</strong>{' '}
+            {t('settings_welcome_flows_inboxid.warning_no_options')}
           </div>
         )}
 
@@ -425,7 +461,7 @@ export default function WelcomeFlowEditorPage() {
           )}
           <Button type="submit" disabled={submitting}>
             <Save className="mr-2 h-4 w-4" />
-            {submitting ? 'Salvando…' : 'Salvar'}
+            {submitting ? t('action.saving') : t('action.save')}
           </Button>
         </div>
       </form>

@@ -1,8 +1,13 @@
+import './instrument.js'; // Sentry init — precisa ser o primeiro import
+import * as Sentry from '@sentry/node';
+import { timingSafeEqual } from 'node:crypto';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
 import { logger as honoLogger } from 'hono/logger';
 import { auth } from './auth.js';
+import { loginLimiter, clientIp } from './rate-limit.js';
 import { env } from './env.js';
 import { logger } from './logger.js';
 import { healthRouter } from './routes/health.js';
@@ -55,7 +60,30 @@ import { telegramOutboundWorker } from './telegram-outbound.js';
 import { emailOutboundWorker } from './email-outbound.js';
 import { csatWorker } from './csat-worker.js';
 import { welcomeWorker } from './welcome-worker.js';
+import { webhookWorker } from './webhook-worker.js';
 import { startWelcomeScheduler } from './welcome-scheduler.js';
+import { sendAlert } from './services/alert.js';
+import { registry, metricsMiddleware } from './metrics.js';
+
+// Erros não tratados no processo da API — logam e alertam (webhook opcional).
+// unhandledRejection não derruba o processo; uncaughtException encerra pro
+// container reiniciar num estado limpo.
+process.on('unhandledRejection', (reason) => {
+  void sendAlert('error', 'unhandledRejection na API', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+});
+process.on('uncaughtException', (err) => {
+  // Espera o alerta (fetch timeout 5s) e o flush do Sentry saírem antes do exit
+  // — com exit em 1s fixo o alerta fatal quase nunca chegava. Teto de 6s.
+  const finish = (): void => process.exit(1);
+  const cap = setTimeout(finish, 6_000);
+  cap.unref?.();
+  void Promise.allSettled([
+    sendAlert('fatal', 'uncaughtException na API — reiniciando', { error: err.message }),
+    Sentry.flush(2_000),
+  ]).then(finish);
+});
 
 const app = new Hono();
 
@@ -69,7 +97,38 @@ app.use(
   }),
 );
 
-app.use('*', honoLogger((msg) => logger.info(msg)));
+app.use(
+  '*',
+  honoLogger((msg) => logger.info(msg)),
+);
+
+// Limite global de body: nada na API recebe arquivo direto (uploads são via
+// presigned URL pro MinIO) — 2MB cobre JSON grande com folga e corta DoS de
+// payload gigante (inclusive nos webhooks públicos, que leem o body pro HMAC).
+app.use('*', bodyLimit({ maxSize: 2 * 1024 * 1024 }));
+
+// Métricas Prometheus — mede toda request (contagem + duração por rota/status).
+app.use('*', metricsMiddleware());
+
+// GET /metrics — scrape do Prometheus. Exige METRICS_TOKEN em produção
+// (fail-closed: a API é pública via Caddy; métricas expõem rotas/volumes).
+// Comparação timing-safe como no resto do repo.
+if (env.NODE_ENV === 'production' && !env.METRICS_TOKEN) {
+  logger.warn('METRICS_TOKEN ausente — GET /metrics vai responder 403 em produção');
+}
+app.get('/metrics', async (c) => {
+  if (env.NODE_ENV === 'production' || env.METRICS_TOKEN) {
+    if (!env.METRICS_TOKEN) return c.text('metrics_disabled', 403);
+    const got = c.req.header('Authorization') ?? '';
+    const want = `Bearer ${env.METRICS_TOKEN}`;
+    const a = Buffer.from(got);
+    const b = Buffer.from(want);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      return c.text('unauthorized', 401);
+    }
+  }
+  return c.text(await registry.metrics(), 200, { 'Content-Type': registry.contentType });
+});
 
 // Raiz da API redireciona pro web app (UX + fallback pra links antigos
 // de verify-email que usavam baseURL como callbackURL).
@@ -79,7 +138,26 @@ app.get('/', (c) => {
 });
 
 // Better Auth handler (signup, login, verify email, reset password, etc.)
-app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+// Endpoints de credencial ganham brute-force guard (loginLimiter, por IP) —
+// o handler do Better Auth não passa pelo requireAuth e ficava sem limite.
+const AUTH_RATE_LIMITED = new Set([
+  '/api/auth/sign-in/email',
+  '/api/auth/sign-up/email',
+  '/api/auth/forget-password',
+]);
+app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
+  if (c.req.method === 'POST' && AUTH_RATE_LIMITED.has(c.req.path)) {
+    try {
+      await loginLimiter.consume(clientIp(c));
+    } catch {
+      return c.json(
+        { error: 'rate_limited', message: 'Muitas tentativas. Aguarde um instante.' },
+        429,
+      );
+    }
+  }
+  return auth.handler(c.req.raw);
+});
 
 // Healthcheck
 app.route('/health', healthRouter);
@@ -169,10 +247,7 @@ startScheduledMsgsScheduler().catch((err) =>
 );
 
 if (env.OPENAI_API_KEY) {
-  logger.info(
-    { model: env.WHISPER_MODEL, concurrency: 2 },
-    'Whisper transcribe worker started',
-  );
+  logger.info({ model: env.WHISPER_MODEL, concurrency: 2 }, 'Whisper transcribe worker started');
 } else {
   logger.warn(
     'OPENAI_API_KEY not set — Whisper worker idle (jobs will fail). Configure OPENAI_API_KEY pra ativar transcrição.',
@@ -186,5 +261,33 @@ void telegramOutboundWorker;
 void emailOutboundWorker;
 void csatWorker;
 void welcomeWorker;
+void webhookWorker;
+
+// Graceful shutdown: fecha os workers BullMQ (espera o job ativo terminar) antes
+// de sair — deploy no meio de uma entrega gerava job stalled → retry → webhook
+// duplicado. Teto de 10s pro Coolify não precisar de SIGKILL.
+let shuttingDown = false;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info({ signal }, 'Shutdown: fechando workers…');
+  const cap = setTimeout(() => process.exit(0), 10_000);
+  cap.unref();
+  await Promise.allSettled([
+    webhookWorker.close(),
+    aiWorker.close(),
+    kbEmbedWorker.close(),
+    transcribeWorker.close(),
+    telegramOutboundWorker.close(),
+    emailOutboundWorker.close(),
+    csatWorker.close(),
+    welcomeWorker.close(),
+    calendarWorker.close(),
+  ]);
+  server.close();
+  process.exit(0);
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 export { app };

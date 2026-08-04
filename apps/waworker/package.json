@@ -15,6 +15,7 @@
     "@aws-sdk/client-s3": "^3.1045.0",
     "@neura/database": "workspace:*",
     "@neura/shared": "workspace:*",
+    "@sentry/node": "^10.66.0",
     "baileys": "7.0.0-rc13",
     "bullmq": "^5.76.8",
     "file-type": "^22.0.1",

@@ -27,10 +27,13 @@
  */
 
 import { Hono } from 'hono';
+import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { logger } from '../logger.js';
 import { publishEvent } from '../redis-pub.js';
+import { RateLimiterRedis } from 'rate-limiter-flexible';
+import { redis } from '../redis.js';
 import { aiQueue } from '../queue.js';
 import { enqueueWelcomeProcess } from '../welcome-worker.js';
 import {
@@ -40,6 +43,15 @@ import {
 } from '../services/email-client.js';
 
 export const inboundEmailRouter = new Hono();
+
+/** Compara dois secrets em tempo constante (evita timing side-channel). */
+function secretsMatch(provided: string | undefined, expected: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 // Aceita variants comuns (Postmark capitaliza, Resend usa camelCase, AWS uppercase).
 // Esse schema é union-friendly: tenta primeiro lower então cap.
@@ -73,8 +85,23 @@ function pickField(obj: z.infer<typeof payloadSchema>, ...keys: string[]): strin
   return undefined;
 }
 
+// Rate limit por slug ANTES do lookup ($queryRaw JSONB sem índice) — mesmo
+// padrão do inbound.ts.
+const inboundEmailLimiter = new RateLimiterRedis({
+  storeClient: redis,
+  keyPrefix: 'rl:email-inbound',
+  points: 60,
+  duration: 60,
+  blockDuration: 60,
+});
+
 inboundEmailRouter.post('/:slug', async (c) => {
   const slug = c.req.param('slug');
+  try {
+    await inboundEmailLimiter.consume(slug);
+  } catch {
+    return c.json({ error: 'rate_limited' }, 429);
+  }
 
   // Lookup inbox por slug (channelConfig.inboundSlug)
   const inboxes = await prisma.$queryRaw<
@@ -99,9 +126,16 @@ inboundEmailRouter.post('/:slug', async (c) => {
 
   const cfg = (inbox.channelConfig as Record<string, unknown> | null) ?? {};
   const expectedSecret = cfg.inboundSecret as string | undefined;
-  const headerSecret =
-    c.req.header('X-Neura-Email-Secret') || c.req.header('x-neura-email-secret');
-  if (expectedSecret && headerSecret !== expectedSecret) {
+  const headerSecret = c.req.header('X-Neura-Email-Secret') || c.req.header('x-neura-email-secret');
+  // Fail-closed: sem secret configurado no inbox, REJEITA (não aceita sem auth).
+  if (!expectedSecret) {
+    logger.warn(
+      { inboxId: inbox.id },
+      'inbound email: inbox sem inboundSecret — reconecte o inbox',
+    );
+    return c.json({ ok: false }, 403);
+  }
+  if (!secretsMatch(headerSecret, expectedSecret)) {
     logger.warn({ inboxId: inbox.id }, 'inbound email: invalid secret');
     return c.json({ ok: false }, 403);
   }
@@ -113,7 +147,10 @@ inboundEmailRouter.post('/:slug', async (c) => {
   const raw = await c.req.json().catch(() => null);
   const parsed = payloadSchema.safeParse(raw);
   if (!parsed.success) {
-    logger.warn({ inboxId: inbox.id, issues: parsed.error.issues.slice(0, 3) }, 'inbound email: invalid payload');
+    logger.warn(
+      { inboxId: inbox.id, issues: parsed.error.issues.slice(0, 3) },
+      'inbound email: invalid payload',
+    );
     return c.json({ ok: false, error: 'invalid_payload' }, 400);
   }
 
@@ -139,12 +176,15 @@ async function processInbound(
   const fromName =
     pickField(payload, 'FromName') || fromParsed.name || fromParsed.address.split('@')[0];
 
-  const subject =
-    pickField(payload, 'Subject', 'subject')?.trim() || '(sem assunto)';
+  const subject = pickField(payload, 'Subject', 'subject')?.trim() || '(sem assunto)';
 
   const textBody = pickField(payload, 'TextBody', 'text');
   const htmlBody = pickField(payload, 'HtmlBody', 'html');
-  const content = (textBody ?? (htmlBody ? htmlToPlainText(htmlBody) : '')).slice(0, 50_000);
+  // Capa o HTML ANTES do parse (htmlToPlainText num body ilimitado = CPU/mem).
+  const content = (textBody ?? (htmlBody ? htmlToPlainText(htmlBody.slice(0, 500_000)) : '')).slice(
+    0,
+    50_000,
+  );
   if (!content.trim()) {
     logger.warn({ inboxId, from: fromParsed.address }, 'inbound email: empty body');
     return;
@@ -163,9 +203,11 @@ async function processInbound(
     create: {
       workspaceId,
       email: fromParsed.address,
-      name: fromName,
+      name: (fromName ?? fromParsed.address).slice(0, 120),
     },
-    update: { name: fromName },
+    // NÃO sobrescreve o nome a cada e-mail: o From é forjável (sem SPF/DKIM
+    // aqui) — qualquer um que saiba o e-mail do contato renomearia o contato.
+    update: {},
   });
 
   // Threading: se inReplyTo casa com algum emailMessageId nosso, reusa a conversa.
@@ -173,9 +215,15 @@ async function processInbound(
   if (inReplyTo) {
     const original = await prisma.message.findFirst({
       where: { emailMessageId: inReplyTo },
-      select: { conversationId: true, conversation: { select: { workspaceId: true, inboxId: true } } },
+      select: {
+        conversationId: true,
+        conversation: { select: { workspaceId: true, inboxId: true } },
+      },
     });
-    if (original?.conversation.workspaceId === workspaceId && original.conversation.inboxId === inboxId) {
+    if (
+      original?.conversation.workspaceId === workspaceId &&
+      original.conversation.inboxId === inboxId
+    ) {
       conversationId = original.conversationId;
     }
   }

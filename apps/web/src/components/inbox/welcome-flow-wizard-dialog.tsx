@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Sparkles, Wand2, ArrowRight, X } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -34,6 +35,7 @@ interface Props {
 export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: Props) {
   const router = useRouter();
   const qc = useQueryClient();
+  const { t } = useT();
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
 
   const { data } = useQuery<{ presets: Preset[] }>({
@@ -49,7 +51,7 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
         body: JSON.stringify({ presetId }),
       }),
     onSuccess: () => {
-      toast.success('Fluxo aplicado!');
+      toast.success(t('c_inbox_welcome_flow_wizard_dialog.toast_applied'));
       qc.invalidateQueries({ queryKey: ['welcome-flows-list'] });
       qc.invalidateQueries({ queryKey: ['welcome-flow', inboxId] });
       onClose();
@@ -57,11 +59,15 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'flow_already_exists') {
-        toast.error('Esta inbox já tem um fluxo configurado');
+        toast.error(t('c_inbox_welcome_flow_wizard_dialog.toast_already_exists'));
         onClose();
         return;
       }
-      toast.error(err instanceof Error ? err.message : 'Erro ao aplicar preset');
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('c_inbox_welcome_flow_wizard_dialog.toast_apply_error'),
+      );
     },
   });
 
@@ -71,21 +77,28 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+    >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5 text-violet-600" />
-            Configurar fluxo de boas-vindas
+            {t('c_inbox_welcome_flow_wizard_dialog.title')}
           </DialogTitle>
           <DialogDescription>
-            Inbox <strong>{inboxName}</strong> está pronta. Quer configurar uma mensagem
-            automática inicial com opções pra classificar conversas?
+            {t('c_inbox_welcome_flow_wizard_dialog.desc_before')} <strong>{inboxName}</strong>{' '}
+            {t('c_inbox_welcome_flow_wizard_dialog.desc_after')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          <p className="text-sm font-medium">Escolha um preset:</p>
+          <p className="text-sm font-medium">
+            {t('c_inbox_welcome_flow_wizard_dialog.choose_preset')}
+          </p>
           <div className="grid grid-cols-2 gap-3">
             {data?.presets.map((p) => {
               const isSelected = selectedPreset === p.id;
@@ -106,7 +119,7 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
                   </div>
                   <p className="text-xs text-muted-foreground mb-2">{p.description}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {p.options.length} opções
+                    {t('c_inbox_welcome_flow_wizard_dialog.options_count', { n: p.options.length })}
                   </p>
                 </button>
               );
@@ -117,10 +130,10 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
         <DialogFooter className="gap-2">
           <Button type="button" variant="ghost" onClick={onClose}>
             <X className="mr-1 h-4 w-4" />
-            Pular
+            {t('c_inbox_welcome_flow_wizard_dialog.skip')}
           </Button>
           <Button type="button" variant="outline" onClick={startFromScratch}>
-            Começar do zero
+            {t('c_inbox_welcome_flow_wizard_dialog.start_from_scratch')}
             <ArrowRight className="ml-1 h-4 w-4" />
           </Button>
           <Button
@@ -128,7 +141,9 @@ export function WelcomeFlowWizardDialog({ inboxId, inboxName, open, onClose }: P
             disabled={!selectedPreset || applyMut.isPending}
             onClick={() => selectedPreset && applyMut.mutate(selectedPreset)}
           >
-            {applyMut.isPending ? 'Aplicando…' : 'Aplicar preset'}
+            {applyMut.isPending
+              ? t('c_inbox_welcome_flow_wizard_dialog.applying')
+              : t('c_inbox_welcome_flow_wizard_dialog.apply_preset')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -27,6 +27,7 @@ Atendentes operam conversas WhatsApp dentro de um kanban interativo com tempo re
 ## Stack
 
 ### apps/api — Hono + Prisma + Postgres + Better Auth
+
 - Hono 4.x (HTTP + WebSocket nativo)
 - Prisma 5.x ORM (extension global pra `account_id` isolation)
 - Postgres 16 (com pgvector se for usar embeddings depois)
@@ -38,6 +39,7 @@ Atendentes operam conversas WhatsApp dentro de um kanban interativo com tempo re
 - Audit log helper: `audit(actor, action, resource, payload)`
 
 ### apps/web — Next.js 15 + shadcn/ui + dnd-kit
+
 - App Router
 - shadcn/ui (componentes)
 - Zustand (estado real-time vindo do WS)
@@ -46,12 +48,14 @@ Atendentes operam conversas WhatsApp dentro de um kanban interativo com tempo re
 - next-intl (PT-BR padrão, EN depois)
 
 ### apps/waworker — Node + Baileys
+
 - @whiskeysockets/baileys (multi-sessão)
 - Auth state criptografado AES-256 em Postgres (não em arquivo plano)
 - Worker isolado, comunica com api via Redis pub/sub
 - Reconexão automática + circuit breaker
 
 ### Infra
+
 - Redis 7 (pub/sub real-time + fila BullMQ + cache + rate limit)
 - MinIO (mídia S3-compatible self-hosted)
 - Caddy via Coolify (HTTPS automático + proxy)
@@ -103,12 +107,14 @@ web (Next.js) conectado ao WS desde login
 ```
 
 ### Resiliência
+
 - Eventos idempotentes (ID único)
 - WS reconecta automaticamente + refetch delta por timestamp
 - Reconciliação periódica 30s (rede de segurança)
 - Polling fallback se WS indisponível >60s
 
 ### Segurança
+
 - WS autenticado com JWT do Better Auth (token na primeira mensagem)
 - Canais isolados por `account_id` (não tem chance de cliente A receber evento de B)
 - Webhook outbound: HMAC SHA-256 nos payloads
@@ -123,6 +129,7 @@ web (Next.js) conectado ao WS desde login
 ## Conventions
 
 A serem populadas durante o desenvolvimento. Aderir aos padrões do `~/.claude/CLAUDE.md` global:
+
 - Paginação em toda tabela (10/25/50/100, default 25)
 - `await` + `try/catch` + toast em toda operação de escrita
 - Dialog fecha só em sucesso

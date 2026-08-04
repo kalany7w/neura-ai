@@ -80,9 +80,12 @@ async function handleAction(
     case 'send_message': {
       // Resolve conversation (passada ou via inboxId+phone)
       let conversationId = action.conversationId;
-      let conv:
-        | { id: string; inboxId: string; contact: { phoneNumber: string | null }; inbox: { status: string } }
-        | null = null;
+      let conv: {
+        id: string;
+        inboxId: string;
+        contact: { phoneNumber: string | null };
+        inbox: { status: string };
+      } | null = null;
 
       if (conversationId) {
         conv = await prisma.conversation.findFirst({
@@ -177,8 +180,7 @@ async function handleAction(
           phoneNumber: action.phoneNumber,
           name: action.contactName ?? null,
         },
-        update:
-          action.contactName !== undefined ? { name: action.contactName } : {},
+        update: action.contactName !== undefined ? { name: action.contactName } : {},
       });
 
       // Reusa conversa OPEN/PENDING/SNOOZED existente, senão cria
@@ -364,10 +366,7 @@ inboundRouter.post('/:slug', async (c) => {
   }
 
   // Checa allowedActions (vazio = todas)
-  if (
-    hook.allowedActions.length > 0 &&
-    !hook.allowedActions.includes(parsed.data.action)
-  ) {
+  if (hook.allowedActions.length > 0 && !hook.allowedActions.includes(parsed.data.action)) {
     return c.json({ error: 'action_not_allowed', action: parsed.data.action }, 403);
   }
 

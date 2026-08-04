@@ -1,3 +1,6 @@
+import './instrument.js'; // Sentry init — precisa ser o primeiro import
+import * as Sentry from '@sentry/node';
+import { createServer } from 'node:http';
 import { logger } from './logger.js';
 import { env } from './env.js';
 import { sessionManager } from './baileys/manager.js';
@@ -5,9 +8,65 @@ import { outboundWorker } from './queue/outbound.js';
 import { startCommandsListener, shutdownCommandsListener } from './commands.js';
 import { prisma } from './db.js';
 import { redis } from './redis.js';
+import { sendAlert } from './alert.js';
+
+/**
+ * Health server mínimo: o compose/Coolify usa /health pra detectar um worker
+ * "vivo mas travado" (processo de pé mas event loop parado). Responder 200 já
+ * prova que o event loop responde; o body inclui o snapshot de sessões Baileys.
+ */
+function startHealthServer(): void {
+  const server = createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      const snap = sessionManager.healthSnapshot();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', ...snap }));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not_found' }));
+    }
+  });
+  server.listen(env.WAWORKER_PORT, () => {
+    logger.info({ port: env.WAWORKER_PORT }, 'Health server listening');
+  });
+  server.on('error', (err) => logger.error({ err }, 'Health server error'));
+}
+
+// Erros não tratados: sem isto, uma promise rejeitada some silenciosamente
+// (e o worker pode ficar num estado inconsistente sem ninguém saber).
+process.on('unhandledRejection', (reason) => {
+  void sendAlert('error', 'unhandledRejection no waworker', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+  });
+});
+process.on('uncaughtException', (err) => {
+  // Deixa o alerta (fetch timeout 5s) e o flush do Sentry saírem antes do exit
+  // — com exit em 1s fixo o alerta fatal quase nunca chegava. Teto de 6s.
+  const finish = (): void => process.exit(1);
+  const cap = setTimeout(finish, 6_000);
+  cap.unref?.();
+  void Promise.allSettled([
+    sendAlert('fatal', 'uncaughtException no waworker — reiniciando', { error: err.message }),
+    Sentry.flush(2_000),
+  ]).then(finish);
+});
+
+/**
+ * Heartbeat no Redis pra a API expor a saúde do worker em /health/worker (o
+ * worker não tem URL pública, então o uptime externo o observa via API).
+ * TTL 60s: se o worker morrer, a chave expira e /health/worker vira 503.
+ */
+function startHeartbeat(): void {
+  const write = () =>
+    void redis.set('waworker:heartbeat', String(Date.now()), 'EX', 60).catch(() => {});
+  write();
+  setInterval(write, 15_000).unref();
+}
 
 async function main() {
   logger.info({ env: env.NODE_ENV }, '🟡 Neura waworker booting');
+  startHealthServer();
+  startHeartbeat();
 
   await prisma.$connect();
   logger.info('DB connected');

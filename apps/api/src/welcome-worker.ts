@@ -93,7 +93,13 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
 
   const msg = await prisma.message.findFirst({
     where: { id: messageId, conversationId },
-    select: { type: true, content: true, metadata: true, transcription: true, transcriptionStatus: true },
+    select: {
+      type: true,
+      content: true,
+      metadata: true,
+      transcription: true,
+      transcriptionStatus: true,
+    },
   });
   if (!msg) return;
 
@@ -120,9 +126,7 @@ async function handleParseReply(job: WelcomeProcessJob): Promise<void> {
       kind: 'button_reply' as const,
       rowId: meta.interactiveRowId,
       selectedDisplayText:
-        typeof meta.interactiveDisplayText === 'string'
-          ? meta.interactiveDisplayText
-          : undefined,
+        typeof meta.interactiveDisplayText === 'string' ? meta.interactiveDisplayText : undefined,
     };
   } else if (msg.type === 'AUDIO') {
     // Esperar transcrição (Whisper worker grava em Message.transcription quando

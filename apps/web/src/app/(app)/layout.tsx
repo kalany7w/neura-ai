@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter, usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Menu } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
@@ -11,19 +12,57 @@ import { NotificationsBell } from '@/components/layout/notifications-bell';
 import { GlobalSearch } from '@/components/layout/global-search';
 import { DesktopNotificationsProvider } from '@/components/desktop-notifications-provider';
 import { OfflineBanner } from '@/components/offline-banner';
-import { I18nProvider } from '@/lib/i18n';
+import { I18nProvider, useT } from '@/lib/i18n';
 
 interface WorkspaceListItem {
   id: string;
   name: string;
   slug: string;
   role: 'ADMIN' | 'SUPERVISOR' | 'AGENT';
+  currency?: string;
+}
+
+// Componente separado pra poder usar useT (o I18nProvider é montado pelo AppLayout).
+function MobileMenuButton({ onOpen }: { onOpen: () => void }) {
+  const { t } = useT();
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="rounded-md p-1.5 hover:bg-muted lg:hidden"
+      aria-label={t('layout.open_menu')}
+    >
+      <Menu className="h-5 w-5" />
+    </button>
+  );
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: session, isPending } = useSession();
+  // Drawer do sidebar no mobile (< lg). No desktop o sidebar é fixo no fluxo.
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Fecha o drawer ao trocar de rota.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Drawer aberto: Esc fecha e o body não rola por trás (scroll-lock).
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileNavOpen]);
 
   const { data: workspaces, isLoading: workspacesLoading } = useQuery<{
     workspaces: WorkspaceListItem[];
@@ -77,23 +116,41 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <RealtimeProvider>
         <DesktopNotificationsProvider />
         <div className="flex h-screen overflow-hidden">
-          <Sidebar
-            user={{
-              id: session.user.id,
-              name: session.user.name,
-              email: session.user.email,
-            }}
-            workspace={activeWorkspace ?? null}
-            workspaces={workspaces?.workspaces}
-            activeWorkspaceId={activeWorkspace?.id}
-          />
+          {/* Backdrop (só mobile, quando o drawer está aberto) */}
+          {mobileNavOpen && (
+            <div
+              className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+              onClick={() => setMobileNavOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+          {/* Sidebar: drawer off-canvas no mobile, fixo no fluxo no desktop */}
+          <div
+            className={`fixed inset-y-0 left-0 z-50 flex shrink-0 transition-transform duration-200 lg:static lg:translate-x-0 ${
+              mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
+          >
+            <Sidebar
+              user={{
+                id: session.user.id,
+                name: session.user.name,
+                email: session.user.email,
+              }}
+              workspace={activeWorkspace ?? null}
+              workspaces={workspaces?.workspaces}
+              activeWorkspaceId={activeWorkspace?.id}
+            />
+          </div>
           <main className="flex-1 overflow-y-auto">
             <OfflineBanner />
             <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-2 border-b bg-background/95 backdrop-blur px-4">
-              <GlobalSearch />
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <MobileMenuButton onOpen={() => setMobileNavOpen(true)} />
+                <GlobalSearch />
+              </div>
               <NotificationsBell />
             </header>
-            <div className="px-6 py-6 max-w-[1400px] mx-auto">{children}</div>
+            <div className="px-4 py-4 sm:px-6 sm:py-6 max-w-[1400px] mx-auto">{children}</div>
           </main>
         </div>
       </RealtimeProvider>

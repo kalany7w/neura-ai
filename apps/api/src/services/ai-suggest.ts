@@ -9,6 +9,7 @@
 
 import { env } from '../env.js';
 import { logger } from '../logger.js';
+import { UNTRUSTED_DATA_RULE, fenceUntrusted } from './ai-safety.js';
 
 export interface SuggestReplyInput {
   /** Direção da msg ('inbound' = cliente; 'outbound' = agente nosso) */
@@ -58,7 +59,12 @@ export async function suggestReplies(
     '- Apenas o texto da resposta, uma por linha, separadas por \\n---\\n',
     '- NÃO repita o que o cliente disse, responda ao que ele perguntou.',
     '- Se for cumprimento, retorne 3 saudações em estilos diferentes.',
+    UNTRUSTED_DATA_RULE,
   ].join('\n');
+
+  // Histórico não confiável (mensagens do cliente) fenceado à parte.
+  const histLines = ctx.history.map((m) => `[${m.authorLabel}] ${m.content.slice(0, 400)}`);
+  const history = fenceUntrusted(histLines.join('\n'));
 
   // Contextual user prompt
   const lines: string[] = [];
@@ -67,10 +73,7 @@ export async function suggestReplies(
   if (ctx.hint?.trim()) lines.push(`Hint do agente: ${ctx.hint.trim()}`);
   lines.push('');
   lines.push('Histórico da conversa (cronológico):');
-  for (const m of ctx.history) {
-    const truncated = m.content.slice(0, 400);
-    lines.push(`[${m.authorLabel}] ${truncated}`);
-  }
+  lines.push(history);
   lines.push('');
   lines.push(`Gere ${count} respostas que o agente pode mandar agora.`);
 

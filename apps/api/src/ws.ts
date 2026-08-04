@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { redis } from './redis.js';
 import { detectSchedule } from './services/ai-detect-schedule.js';
+import { wsConnections } from './metrics.js';
 
 /**
  * Cada cliente WS está inscrito em 3 canais do workspace ativo:
@@ -23,6 +24,31 @@ export function setupWebSocket(app: Hono) {
 
   const subscriber = new Redis(env.REDIS_URL);
   const channelClients = new Map<string, Set<WSContext>>();
+  // Metadados por socket (role/userId) pro fan-out escopado de AGENT.
+  const wsMeta = new WeakMap<WSContext, { role: string; userId: string }>();
+
+  // Cache conversationId -> assignedAgentId (TTL curto + invalidação por evento).
+  // AGENT só pode receber realtime de conversas próprias ou sem dono — mesma
+  // política do HTTP (conversations.ts). Sem isto, todo AGENT recebia
+  // message.new de TODAS as conversas do workspace via WS.
+  const ASSIGN_TTL_MS = 30_000;
+  const assignmentCache = new Map<string, { assigned: string | null; ts: number }>();
+  async function getAssignment(conversationId: string): Promise<string | null> {
+    const hit = assignmentCache.get(conversationId);
+    if (hit && Date.now() - hit.ts < ASSIGN_TTL_MS) return hit.assigned;
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedAgentId: true },
+    });
+    const assigned = conv?.assignedAgentId ?? null;
+    assignmentCache.set(conversationId, { assigned, ts: Date.now() });
+    if (assignmentCache.size > 5_000) {
+      // poda os mais velhos pra não crescer sem limite
+      const cutoff = Date.now() - ASSIGN_TTL_MS;
+      for (const [k, v] of assignmentCache) if (v.ts < cutoff) assignmentCache.delete(k);
+    }
+    return assigned;
+  }
 
   subscriber.psubscribe('workspace:*', (err) => {
     if (err) logger.error({ err }, 'WS: failed to psubscribe workspace:*');
@@ -60,18 +86,97 @@ export function setupWebSocket(app: Hono) {
     }
   }
 
-  subscriber.on('pmessage', (_pattern, channel, message) => {
-    if (channel.endsWith(':messages')) runMessageHooks(channel, message);
+  // Fan-out serializado POR CANAL (promise-chain): o filtro de AGENT pode
+  // precisar de um lookup async — a chain preserva a ordem dos eventos.
+  const channelChains = new Map<string, Promise<void>>();
 
+  async function routeToClients(channel: string, message: string): Promise<void> {
     const clients = channelClients.get(channel);
     if (!clients || clients.size === 0) return;
+
+    // Só canais com dado por-conversa precisam de escopo de AGENT.
+    const scoped = /:(messages|conversations|cards)$/.test(channel);
+    let conversationId: string | null = null;
+    if (scoped) {
+      try {
+        const parsed = JSON.parse(message) as {
+          event?: string;
+          payload?: { conversationId?: string; assignedAgentId?: string | null };
+        };
+        conversationId = parsed.payload?.conversationId ?? null;
+        // Invalidação: mudança de atribuição atualiza o cache na hora.
+        if (parsed.event === 'conversation.assigned' && conversationId) {
+          assignmentCache.set(conversationId, {
+            assigned: parsed.payload?.assignedAgentId ?? null,
+            ts: Date.now(),
+          });
+        }
+      } catch {
+        // payload não-JSON: segue sem escopo
+      }
+    }
+
+    let assigned: string | null | undefined; // undefined = ainda não resolvido
     for (const ws of clients) {
+      const meta = wsMeta.get(ws);
+      if (meta?.role === 'AGENT' && conversationId) {
+        if (assigned === undefined) {
+          try {
+            assigned = await getAssignment(conversationId);
+          } catch {
+            assigned = null; // falha de lookup: trata como sem dono (não vaza atribuída)
+          }
+        }
+        // Mesma política do HTTP: AGENT vê a própria conversa ou sem dono.
+        if (assigned !== null && assigned !== meta.userId) continue;
+      }
       try {
         ws.send(message);
       } catch (err) {
         logger.warn({ err }, 'WS send failed');
       }
     }
+  }
+
+  // Canal interno de controle (nenhum cliente assina `:control`): fecha na hora
+  // os sockets de um membro removido — sem isto a conexão JÁ aberta seguia
+  // recebendo o workspace até o próprio cliente fechar.
+  function handleControl(channel: string, raw: string): void {
+    try {
+      const workspaceId = channel.split(':')[1];
+      const parsed = JSON.parse(raw) as { event?: string; payload?: { userId?: string } };
+      if (parsed.event !== 'member.removed' || !workspaceId || !parsed.payload?.userId) return;
+      const target = parsed.payload.userId;
+      for (const [ch, clients] of channelClients) {
+        if (!ch.startsWith(`workspace:${workspaceId}:`)) continue;
+        for (const ws of clients) {
+          if (wsMeta.get(ws)?.userId === target) {
+            try {
+              ws.close(1008, 'membership_removed');
+            } catch {
+              /* já fechado */
+            }
+          }
+        }
+      }
+    } catch {
+      // ignore malformed
+    }
+  }
+
+  subscriber.on('pmessage', (_pattern, channel, message) => {
+    if (channel.endsWith(':control')) {
+      handleControl(channel, message);
+      return;
+    }
+    if (channel.endsWith(':messages')) runMessageHooks(channel, message);
+
+    const prev = channelChains.get(channel) ?? Promise.resolve();
+    const tail = prev.then(() => routeToClients(channel, message)).catch(() => undefined);
+    channelChains.set(channel, tail);
+    void tail.then(() => {
+      if (channelChains.get(channel) === tail) channelChains.delete(channel);
+    });
   });
 
   app.get(
@@ -79,11 +184,9 @@ export function setupWebSocket(app: Hono) {
     upgradeWebSocket(async (c) => {
       // Origin check (CSRF defense pra WS) — WS upgrade não passa pelo middleware CORS
       const origin = c.req.header('Origin');
-      const originOk =
-        !origin ||
-        env.TRUSTED_ORIGINS.some(
-          (allowed) => origin === allowed || origin.startsWith(allowed),
-        );
+      // Igualdade EXATA — startsWith deixava `https://app.dominio.com.evil.com`
+      // passar por `https://app.dominio.com`.
+      const originOk = !origin || env.TRUSTED_ORIGINS.some((allowed) => origin === allowed);
       if (!originOk) {
         logger.warn({ origin }, 'WS upgrade rejected: untrusted origin');
         return {
@@ -101,12 +204,24 @@ export function setupWebSocket(app: Hono) {
       const sessionId = session?.session?.id ?? null;
 
       let workspaceId: string | null = null;
-      if (sessionId) {
+      let role: string | null = null;
+      if (sessionId && userId) {
         const s = await prisma.session.findUnique({
           where: { id: sessionId },
           select: { activeWorkspaceId: true },
         });
-        workspaceId = s?.activeWorkspaceId ?? null;
+        // Membership REAL (não só activeWorkspaceId da sessão): membro removido
+        // mantinha o feed realtime do workspace até a sessão expirar (7 dias).
+        if (s?.activeWorkspaceId) {
+          const member = await prisma.membership.findFirst({
+            where: { userId, workspaceId: s.activeWorkspaceId },
+            select: { role: true },
+          });
+          if (member) {
+            workspaceId = s.activeWorkspaceId;
+            role = member.role;
+          }
+        }
       }
 
       // Validação cedo — se sem auth/workspace, fecha após open
@@ -136,6 +251,8 @@ export function setupWebSocket(app: Hono) {
             if (!channelClients.has(ch)) channelClients.set(ch, new Set());
             channelClients.get(ch)!.add(ws);
           }
+          if (userId && role) wsMeta.set(ws, { role, userId });
+          wsConnections.inc();
           // Presence: marca user como online no workspace via ZADD com score=timestamp.
           // Outras tabs do mesmo user mantêm o score atualizado via ping. Sem ZREM no
           // onClose pra evitar derrubar presence se uma tab fecha mas outras seguem.
@@ -186,6 +303,7 @@ export function setupWebSocket(app: Hono) {
           }
         },
         onClose: (_evt, ws) => {
+          if (!reject) wsConnections.dec();
           for (const ch of channels) {
             channelClients.get(ch)?.delete(ws);
           }

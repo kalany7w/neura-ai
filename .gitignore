@@ -30,3 +30,9 @@ Thumbs.db
 .minio-data
 .postgres-data
 .redis-data
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+.last-run.json

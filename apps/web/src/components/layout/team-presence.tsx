@@ -38,9 +38,7 @@ export function TeamPresence({ currentUserId }: { currentUserId: string }) {
     staleTime: 60_000,
   });
   const members = data?.workspace.members ?? [];
-  const onlineMembers = members.filter(
-    (m) => online.has(m.userId) && m.userId !== currentUserId,
-  );
+  const onlineMembers = members.filter((m) => online.has(m.userId) && m.userId !== currentUserId);
   if (onlineMembers.length === 0) return null;
 
   const visible = onlineMembers.slice(0, 4);
@@ -73,9 +71,7 @@ export function TeamPresence({ currentUserId }: { currentUserId: string }) {
           </span>
         )}
       </div>
-      <span className="font-medium">
-        {onlineMembers.length} online
-      </span>
+      <span className="font-medium">{onlineMembers.length} online</span>
     </Link>
   );
 }

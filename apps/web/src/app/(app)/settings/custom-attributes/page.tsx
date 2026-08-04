@@ -30,13 +30,6 @@ interface AttrDef {
   createdAt: string;
 }
 
-const TYPE_LABEL: Record<AttrType, string> = {
-  STRING: 'Texto',
-  NUMBER: 'Número',
-  DATE: 'Data',
-  SELECT: 'Seleção',
-};
-
 const TYPE_BADGE: Record<AttrType, string> = {
   STRING: 'bg-slate-100 text-slate-700',
   NUMBER: 'bg-blue-100 text-blue-700',
@@ -58,20 +51,19 @@ export default function CustomAttrsPage() {
   async function remove(def: AttrDef) {
     if (
       !(await confirm({
-        title: `Excluir atributo "${def.label}"?`,
-        description:
-          'Valores já preenchidos em contatos/conversas continuam no banco mas não aparecem mais na UI.',
-        confirmLabel: 'Excluir',
+        title: t('settings_custom_attributes.delete_confirm.title', { label: def.label }),
+        description: t('settings_custom_attributes.delete_confirm.description'),
+        confirmLabel: t('action.delete'),
         destructive: true,
       }))
     )
       return;
     try {
       await api(`/api/custom-attributes/${def.id}`, { method: 'DELETE' });
-      toast.success('Atributo excluído');
+      toast.success(t('settings_custom_attributes.toast.deleted'));
       await qc.invalidateQueries({ queryKey: ['custom-attributes'] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(err instanceof Error ? err.message : t('common.error'));
     }
   }
 
@@ -95,18 +87,18 @@ export default function CustomAttrsPage() {
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" />
-          Novo atributo
+          {t('settings_custom_attributes.new_attribute')}
         </Button>
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Carregando…</p>
+        <p className="text-sm text-muted-foreground">{t('action.loading')}</p>
       ) : !data?.defs.length ? (
         <div className="rounded-lg border border-dashed bg-muted/20 p-12 text-center">
           <Tag className="mx-auto h-10 w-10 text-muted-foreground" />
-          <h3 className="mt-3 font-semibold">Nenhum atributo customizado</h3>
+          <h3 className="mt-3 font-semibold">{t('settings_custom_attributes.empty.title')}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Adicione campos extras pra adaptar o sistema ao seu negócio.
+            {t('settings_custom_attributes.empty.subtitle')}
           </p>
         </div>
       ) : (
@@ -114,8 +106,7 @@ export default function CustomAttrsPage() {
           {(['CONTACT', 'CONVERSATION', 'CARD'] as const).map((scope) => {
             const items = byAppliesTo[scope];
             if (items.length === 0) return null;
-            const scopeLabel =
-              scope === 'CONTACT' ? 'Contatos' : scope === 'CONVERSATION' ? 'Conversas' : 'Cards';
+            const scopeLabel = t(`settings_custom_attributes.scope.${scope}`);
             return (
               <section key={scope}>
                 <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -125,10 +116,12 @@ export default function CustomAttrsPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr className="text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        <th className="px-4 py-2.5">Rótulo</th>
-                        <th className="px-4 py-2.5">Chave</th>
-                        <th className="px-4 py-2.5">Tipo</th>
-                        <th className="px-4 py-2.5">Opções</th>
+                        <th className="px-4 py-2.5">{t('settings_custom_attributes.col.label')}</th>
+                        <th className="px-4 py-2.5">{t('settings_custom_attributes.col.key')}</th>
+                        <th className="px-4 py-2.5">{t('settings_custom_attributes.col.type')}</th>
+                        <th className="px-4 py-2.5">
+                          {t('settings_custom_attributes.col.options')}
+                        </th>
                         <th></th>
                       </tr>
                     </thead>
@@ -137,13 +130,15 @@ export default function CustomAttrsPage() {
                         <tr key={def.id} className="border-t">
                           <td className="px-4 py-2 font-medium">{def.label}</td>
                           <td className="px-4 py-2">
-                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{def.key}</code>
+                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                              {def.key}
+                            </code>
                           </td>
                           <td className="px-4 py-2">
                             <span
                               className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${TYPE_BADGE[def.type]}`}
                             >
-                              {TYPE_LABEL[def.type]}
+                              {t(`settings_custom_attributes.type.${def.type}`)}
                             </span>
                           </td>
                           <td className="px-4 py-2 text-xs text-muted-foreground">
@@ -187,6 +182,7 @@ function CreateAttrDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const qc = useQueryClient();
+  const { t } = useT();
   const [label, setLabel] = useState('');
   const [key, setKey] = useState('');
   const [keyTouched, setKeyTouched] = useState(false);
@@ -231,7 +227,7 @@ function CreateAttrDialog({
         method: 'POST',
         body: JSON.stringify(payload),
       });
-      toast.success('Atributo criado');
+      toast.success(t('settings_custom_attributes.toast.created'));
       onOpenChange(false);
       setLabel('');
       setKey('');
@@ -241,9 +237,9 @@ function CreateAttrDialog({
       await qc.invalidateQueries({ queryKey: ['custom-attributes'] });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'key_taken') {
-        toast.error('Já existe atributo com essa chave');
+        toast.error(t('settings_custom_attributes.toast.key_taken'));
       } else {
-        toast.error(err instanceof Error ? err.message : 'Erro');
+        toast.error(err instanceof Error ? err.message : t('common.error'));
       }
     } finally {
       setSubmitting(false);
@@ -254,25 +250,25 @@ function CreateAttrDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Novo atributo customizado</DialogTitle>
+          <DialogTitle>{t('settings_custom_attributes.dialog.title')}</DialogTitle>
           <DialogDescription>
-            Defina um campo extra. A chave é o identificador estável (não pode mudar depois).
+            {t('settings_custom_attributes.dialog.description')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="attr-label">Rótulo</Label>
+            <Label htmlFor="attr-label">{t('settings_custom_attributes.col.label')}</Label>
             <Input
               id="attr-label"
               value={label}
               onChange={(e) => autoKey(e.target.value)}
-              placeholder="Ex: Origem do lead"
+              placeholder={t('settings_custom_attributes.form.label_placeholder')}
               maxLength={80}
               autoFocus
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="attr-key">Chave (snake_case)</Label>
+            <Label htmlFor="attr-key">{t('settings_custom_attributes.form.key')}</Label>
             <Input
               id="attr-key"
               value={key}
@@ -280,51 +276,57 @@ function CreateAttrDialog({
                 setKey(e.target.value);
                 setKeyTouched(true);
               }}
-              placeholder="origem_do_lead"
+              placeholder={t('settings_custom_attributes.form.key_placeholder')}
               maxLength={50}
             />
             <p className="text-[10px] text-muted-foreground">
-              Apenas a-z, 0-9 e _. Começa com letra.
+              {t('settings_custom_attributes.form.key_hint')}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="attr-type">Tipo</Label>
+              <Label htmlFor="attr-type">{t('settings_custom_attributes.col.type')}</Label>
               <select
                 id="attr-type"
                 value={type}
                 onChange={(e) => setType(e.target.value as AttrType)}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="STRING">Texto</option>
-                <option value="NUMBER">Número</option>
-                <option value="DATE">Data</option>
-                <option value="SELECT">Seleção</option>
+                <option value="STRING">{t('settings_custom_attributes.type.STRING')}</option>
+                <option value="NUMBER">{t('settings_custom_attributes.type.NUMBER')}</option>
+                <option value="DATE">{t('settings_custom_attributes.type.DATE')}</option>
+                <option value="SELECT">{t('settings_custom_attributes.type.SELECT')}</option>
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="attr-applies">Aplica em</Label>
+              <Label htmlFor="attr-applies">{t('settings_custom_attributes.form.applies')}</Label>
               <select
                 id="attr-applies"
                 value={appliesTo}
-                onChange={(e) => setAppliesTo(e.target.value as 'CONTACT' | 'CONVERSATION' | 'CARD')}
+                onChange={(e) =>
+                  setAppliesTo(e.target.value as 'CONTACT' | 'CONVERSATION' | 'CARD')
+                }
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
-                <option value="CONTACT">Contatos</option>
-                <option value="CONVERSATION">Conversas</option>
-                <option value="CARD">Cards (kanban)</option>
+                <option value="CONTACT">
+                  {t('settings_custom_attributes.form.applies.CONTACT')}
+                </option>
+                <option value="CONVERSATION">
+                  {t('settings_custom_attributes.form.applies.CONVERSATION')}
+                </option>
+                <option value="CARD">{t('settings_custom_attributes.form.applies.CARD')}</option>
               </select>
             </div>
           </div>
           {type === 'SELECT' && (
             <div className="space-y-2">
-              <Label htmlFor="attr-values">Opções (uma por linha)</Label>
+              <Label htmlFor="attr-values">{t('settings_custom_attributes.form.values')}</Label>
               <textarea
                 id="attr-values"
                 value={selectValues}
                 onChange={(e) => setSelectValues(e.target.value)}
                 rows={4}
-                placeholder={'Instagram\nGoogle\nIndicação'}
+                placeholder={t('settings_custom_attributes.form.values_placeholder')}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
               />
             </div>
@@ -334,7 +336,9 @@ function CreateAttrDialog({
             className="w-full"
             disabled={submitting || !label.trim() || !key.trim()}
           >
-            {submitting ? 'Criando…' : 'Criar atributo'}
+            {submitting
+              ? t('settings_custom_attributes.submit.creating')
+              : t('settings_custom_attributes.submit.create')}
           </Button>
         </div>
       </DialogContent>

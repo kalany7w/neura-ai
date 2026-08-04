@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Mail, CalendarPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useT } from '@/lib/i18n';
 import { realtimeClient } from '@/lib/ws-client';
 import { Button } from '@/components/ui/button';
 import { ScheduleEventDialog } from '@/components/calendar/schedule-event-dialog';
@@ -42,7 +43,12 @@ export interface LeadDetail {
     currency: string;
     customAttrs: Record<string, unknown> | null;
     funnel: { id: string; name: string };
-    stage: { id: string; name: string; color: string; outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null };
+    stage: {
+      id: string;
+      name: string;
+      color: string;
+      outcome: 'POSITIVE' | 'NEGATIVE' | 'RISK' | null;
+    };
     products: Array<{ id: string; name: string; price: string | null; quantity: number }>;
   } | null;
   customAttributeDefs: Array<{
@@ -61,16 +67,26 @@ export interface LeadDetail {
     options: { values?: string[] } | null;
   }>;
   allLabels: Array<{ id: string; name: string; color: string; scope: string }>;
-  funnels: Array<{ id: string; name: string; stages: Array<{ id: string; name: string; order: number }> }>;
+  funnels: Array<{
+    id: string;
+    name: string;
+    stages: Array<{ id: string; name: string; order: number }>;
+  }>;
   temperature: 'CALIENTE' | 'TIBIO' | 'FRIO';
 }
 
 function initialsFrom(s: string | null | undefined): string {
   if (!s) return '?';
-  return s.split(/[\s.@]/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+  return s
+    .split(/[\s.@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('');
 }
 
 export function ConversationSidePanel({ conversationId }: { conversationId: string }) {
+  const { t } = useT();
   const { data, isLoading } = useQuery<LeadDetail>({
     queryKey: ['lead-detail', conversationId],
     queryFn: () => api(`/api/conversations/${conversationId}/lead-detail`),
@@ -108,10 +124,13 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
         body: JSON.stringify({ stageId, position: 0 }),
       }),
     onSuccess: () => {
-      toast.success('Etapa atualizada');
+      toast.success(t('c_inbox_conversation_side_panel.stage_updated'));
       qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao mover'),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.move_error'),
+      ),
   });
 
   if (isLoading) {
@@ -167,7 +186,7 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
         {data.card && (
           <section className="rounded-md border bg-card p-3 space-y-2">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Embudo
+              {t('c_inbox_conversation_side_panel.funnel')}
             </p>
             <p className="text-sm font-medium">{data.card.funnel.name}</p>
             <select
@@ -177,12 +196,15 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
               disabled={moveStageMut.isPending}
             >
               {(data.funnels.find((f) => f.id === data.card!.funnel.id)?.stages ?? []).map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </select>
             {data.card.value && (
               <p className="text-xs text-muted-foreground">
-                Valor: <span className="font-medium text-foreground">{data.card.value}</span>
+                {t('c_inbox_conversation_side_panel.value_label')}{' '}
+                <span className="font-medium text-foreground">{data.card.value}</span>
               </p>
             )}
           </section>
@@ -221,7 +243,8 @@ export function ConversationSidePanel({ conversationId }: { conversationId: stri
           contactId={data.contact.id}
           trigger={
             <Button type="button" variant="outline" className="w-full">
-              <CalendarPlus className="mr-2 h-4 w-4" /> Agendar evento
+              <CalendarPlus className="mr-2 h-4 w-4" />{' '}
+              {t('c_inbox_conversation_side_panel.schedule_event')}
             </Button>
           }
         />
@@ -237,22 +260,25 @@ function AiSummarySection({
   conversation: LeadDetail['conversation'];
   conversationId: string;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const summarizeMut = useMutation({
-    mutationFn: () =>
-      api(`/api/conversations/${conversationId}/ai/summarize`, { method: 'POST' }),
+    mutationFn: () => api(`/api/conversations/${conversationId}/ai/summarize`, { method: 'POST' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
-      toast.success('Resumo gerado');
+      toast.success(t('c_inbox_conversation_side_panel.summary_generated'));
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro IA'),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.ai_error'),
+      ),
   });
 
   return (
     <section className="rounded-md border bg-card p-3 space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Resumo IA
+          {t('c_inbox_conversation_side_panel.ai_summary')}
         </p>
         <button
           type="button"
@@ -260,13 +286,21 @@ function AiSummarySection({
           disabled={summarizeMut.isPending}
           className="text-xs text-primary hover:underline disabled:opacity-50"
         >
-          {summarizeMut.isPending ? 'Gerando…' : conversation.aiSummary ? 'Atualizar' : 'Gerar'}
+          {summarizeMut.isPending
+            ? t('c_inbox_conversation_side_panel.generating')
+            : conversation.aiSummary
+              ? t('c_inbox_conversation_side_panel.update')
+              : t('c_inbox_conversation_side_panel.generate')}
         </button>
       </div>
       {conversation.aiSummary ? (
-        <p className="text-xs text-muted-foreground whitespace-pre-wrap">{conversation.aiSummary}</p>
+        <p className="text-xs text-muted-foreground whitespace-pre-wrap">
+          {conversation.aiSummary}
+        </p>
       ) : (
-        <p className="text-xs text-muted-foreground italic">Nenhum resumo ainda.</p>
+        <p className="text-xs text-muted-foreground italic">
+          {t('c_inbox_conversation_side_panel.no_summary')}
+        </p>
       )}
     </section>
   );
@@ -279,6 +313,7 @@ function ActionsSection({
   conversation: LeadDetail['conversation'];
   conversationId: string;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const updateMut = useMutation({
     mutationFn: (status: 'OPEN' | 'RESOLVED' | 'PENDING') =>
@@ -288,15 +323,15 @@ function ActionsSection({
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] });
-      toast.success('Status atualizado');
+      toast.success(t('c_inbox_conversation_side_panel.status_updated'));
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t('common.error')),
   });
 
   return (
     <section className="rounded-md border bg-card p-3 space-y-1.5">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Ações
+        {t('c_inbox_conversation_side_panel.actions')}
       </p>
       {conversation.status !== 'RESOLVED' && (
         <button
@@ -305,7 +340,7 @@ function ActionsSection({
           disabled={updateMut.isPending}
           className="w-full rounded bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:opacity-50"
         >
-          Marcar como resolvida
+          {t('c_inbox_conversation_side_panel.mark_resolved')}
         </button>
       )}
       {conversation.status === 'RESOLVED' && (
@@ -315,7 +350,7 @@ function ActionsSection({
           disabled={updateMut.isPending}
           className="w-full rounded border px-3 py-1.5 text-sm hover:bg-accent disabled:opacity-50"
         >
-          Reabrir
+          {t('c_inbox_conversation_side_panel.reopen')}
         </button>
       )}
     </section>
@@ -329,6 +364,7 @@ interface CustomAttrsSectionProps {
 }
 
 function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSectionProps) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [local, setLocal] = useState<Record<string, unknown>>(values);
 
@@ -339,7 +375,10 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
         body: JSON.stringify({ customAttrs: next }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao salvar atributo'),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.save_attr_error'),
+      ),
   });
 
   function updateField(key: string, value: unknown) {
@@ -351,7 +390,7 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
   return (
     <section className="rounded-md border bg-card p-3 space-y-2">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Atributos
+        {t('c_inbox_conversation_side_panel.attributes')}
       </p>
       {defs.map((def) => {
         const current = local[def.key];
@@ -366,7 +405,9 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
               >
                 <option value="">—</option>
                 {def.options.values.map((o) => (
-                  <option key={o} value={o}>{o}</option>
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
                 ))}
               </select>
             </div>
@@ -380,7 +421,9 @@ function CustomAttrsSection({ defs, values, conversationId }: CustomAttrsSection
                 type="number"
                 className="w-full rounded border bg-background px-2 py-1 text-sm"
                 value={typeof current === 'number' ? current : ''}
-                onChange={(e) => updateField(def.key, e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) =>
+                  updateField(def.key, e.target.value ? Number(e.target.value) : null)
+                }
               />
             </div>
           );
@@ -423,6 +466,7 @@ interface LabelsSectionProps {
 }
 
 function LabelsSection({ applied, available, conversationId }: LabelsSectionProps) {
+  const { t } = useT();
   const qc = useQueryClient();
   const appliedIds = new Set(applied.map((l) => l.id));
 
@@ -439,13 +483,13 @@ function LabelsSection({ applied, available, conversationId }: LabelsSectionProp
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t('common.error')),
   });
 
   return (
     <section className="rounded-md border bg-card p-3 space-y-2">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Etiquetas
+        {t('c_inbox_conversation_side_panel.labels')}
       </p>
       <div className="flex flex-wrap gap-1.5">
         {available.map((l) => {
@@ -471,7 +515,7 @@ function LabelsSection({ applied, available, conversationId }: LabelsSectionProp
         })}
         {available.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            Nenhuma etiqueta. Crie em Configurações → Etiquetas.
+            {t('c_inbox_conversation_side_panel.no_labels')}
           </p>
         )}
       </div>
@@ -486,6 +530,7 @@ function ContactInfoSection({
   contact: LeadDetail['contact'];
   conversationId: string;
 }) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [name, setName] = useState(contact.name ?? '');
   const [email, setEmail] = useState(contact.email ?? '');
@@ -497,16 +542,16 @@ function ContactInfoSection({
         body: JSON.stringify(patch),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : t('common.error')),
   });
 
   return (
     <section className="rounded-md border bg-card p-3 space-y-2">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Contato
+        {t('c_inbox_conversation_side_panel.contact')}
       </p>
       <div className="space-y-1">
-        <label className="text-xs">Nome</label>
+        <label className="text-xs">{t('common.name')}</label>
         <input
           type="text"
           className="w-full rounded border bg-background px-2 py-1 text-sm"
@@ -519,7 +564,7 @@ function ContactInfoSection({
         />
       </div>
       <div className="space-y-1">
-        <label className="text-xs">Email</label>
+        <label className="text-xs">{t('common.email')}</label>
         <input
           type="email"
           className="w-full rounded border bg-background px-2 py-1 text-sm"
@@ -532,7 +577,7 @@ function ContactInfoSection({
         />
       </div>
       <p className="text-[10px] text-muted-foreground">
-        Telefone: {contact.phoneNumber} (não editável)
+        {t('c_inbox_conversation_side_panel.phone_readonly', { phone: contact.phoneNumber })}
       </p>
     </section>
   );
@@ -552,6 +597,7 @@ interface CardAttrsSectionProps {
 }
 
 function CardAttrsSection({ defs, values, cardId, conversationId }: CardAttrsSectionProps) {
+  const { t } = useT();
   const qc = useQueryClient();
   const [local, setLocal] = useState<Record<string, unknown>>(values);
 
@@ -566,7 +612,12 @@ function CardAttrsSection({ defs, values, cardId, conversationId }: CardAttrsSec
         body: JSON.stringify({ customAttrs: next }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['lead-detail', conversationId] }),
-    onError: (err) => toast.error(err instanceof Error ? err.message : 'Erro ao salvar atributo do card'),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : t('c_inbox_conversation_side_panel.save_card_attr_error'),
+      ),
   });
 
   function updateField(key: string, value: unknown) {
@@ -578,7 +629,7 @@ function CardAttrsSection({ defs, values, cardId, conversationId }: CardAttrsSec
   return (
     <section className="space-y-2 rounded-md border bg-card p-3">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Atributos do card
+        {t('c_inbox_conversation_side_panel.card_attributes')}
       </p>
       {defs.map((def) => {
         const current = local[def.key];
@@ -648,6 +699,7 @@ interface SelectAttrFieldProps {
 }
 
 function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrFieldProps) {
+  const { t } = useT();
   const [adding, setAdding] = useState(false);
   const [newOption, setNewOption] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -657,7 +709,7 @@ function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrF
     const trimmed = newOption.trim();
     if (!trimmed || submitting) return;
     if (options.includes(trimmed)) {
-      toast.error('Essa opção já existe');
+      toast.error(t('c_inbox_conversation_side_panel.option_exists'));
       return;
     }
     setSubmitting(true);
@@ -667,13 +719,15 @@ function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrF
         method: 'PATCH',
         body: JSON.stringify({ options: { values: nextValues } }),
       });
-      toast.success('Opção adicionada');
+      toast.success(t('c_inbox_conversation_side_panel.option_added'));
       setNewOption('');
       setAdding(false);
       onOptionsChanged();
       onChange(trimmed);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao adicionar opção');
+      toast.error(
+        err instanceof Error ? err.message : t('c_inbox_conversation_side_panel.add_option_error'),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -699,7 +753,7 @@ function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrF
           type="button"
           onClick={() => setAdding((v) => !v)}
           className="rounded border bg-background px-2 text-xs hover:bg-accent"
-          title="Adicionar nova opção"
+          title={t('c_inbox_conversation_side_panel.add_option')}
         >
           +
         </button>
@@ -710,7 +764,7 @@ function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrF
             type="text"
             value={newOption}
             onChange={(e) => setNewOption(e.target.value)}
-            placeholder="Nova opção"
+            placeholder={t('c_inbox_conversation_side_panel.new_option_placeholder')}
             maxLength={80}
             autoFocus
             onKeyDown={(e) => {
@@ -728,7 +782,7 @@ function SelectAttrField({ def, value, onChange, onOptionsChanged }: SelectAttrF
             disabled={!newOption.trim() || submitting}
             className="rounded border bg-primary px-2 text-xs text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
-            {submitting ? '…' : 'OK'}
+            {submitting ? '…' : t('c_inbox_conversation_side_panel.ok')}
           </button>
         </div>
       )}

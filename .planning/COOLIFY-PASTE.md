@@ -10,11 +10,11 @@ Sequência exata pra subir o Neura AI em produção via Coolify. Secrets já ger
 
 Aponta os 3 subdomínios pro IP do VPS Coolify (registros A):
 
-| Host | Tipo | Valor |
-|---|---|---|
-| `app.neura-ai.net` | A | `<IP do VPS>` |
-| `api.neura-ai.net` | A | `<IP do VPS>` |
-| `neura-ai.net` | A | `<IP do VPS>` (opcional, landing futura) |
+| Host               | Tipo | Valor                                    |
+| ------------------ | ---- | ---------------------------------------- |
+| `app.neura-ai.net` | A    | `<IP do VPS>`                            |
+| `api.neura-ai.net` | A    | `<IP do VPS>`                            |
+| `neura-ai.net`     | A    | `<IP do VPS>` (opcional, landing futura) |
 
 Propagação: ~5min em provedores comuns. Verifique com `dig app.neura-ai.net +short`.
 
@@ -44,10 +44,10 @@ Propagação: ~5min em provedores comuns. Verifique com `dig app.neura-ai.net +s
 
 Em **Services**, mapear domínios pros containers internos:
 
-| Serviço | Domínio | Porta interna |
-|---|---|---|
-| `api` | `https://api.neura-ai.net` | `7301` |
-| `web` | `https://app.neura-ai.net` | `7302` |
+| Serviço | Domínio                    | Porta interna |
+| ------- | -------------------------- | ------------- |
+| `api`   | `https://api.neura-ai.net` | `7301`        |
+| `web`   | `https://app.neura-ai.net` | `7302`        |
 
 Caddy do Coolify resolve SSL via Let's Encrypt automaticamente.
 
@@ -143,11 +143,11 @@ SERVICE_URL_WEB=https://app.neura-ai.net
 
 ### Verificação
 
-| Check | URL | Esperado |
-|---|---|---|
-| API health | `https://api.neura-ai.net/health` | `{"status":"ok","checks":{"db":"ok","redis":"ok"}}` |
-| Web carrega | `https://app.neura-ai.net/login` | Tela de login |
-| WSS handshake | DevTools → Network → `wss://...` | 101 Switching Protocols após login |
+| Check         | URL                               | Esperado                                            |
+| ------------- | --------------------------------- | --------------------------------------------------- |
+| API health    | `https://api.neura-ai.net/health` | `{"status":"ok","checks":{"db":"ok","redis":"ok"}}` |
+| Web carrega   | `https://app.neura-ai.net/login`  | Tela de login                                       |
+| WSS handshake | DevTools → Network → `wss://...`  | 101 Switching Protocols após login                  |
 
 ---
 
@@ -170,14 +170,14 @@ SERVICE_URL_WEB=https://app.neura-ai.net
 
 ## 8. Troubleshooting
 
-| Sintoma | Causa provável | Fix |
-|---|---|---|
-| Login falha "cookie not set" | `secure: true` + `sameSite: 'none'` precisa HTTPS válido | Cert do Caddy demorou: aguarde, ou force renew |
-| WS desconecta toda hora | `TRUSTED_ORIGINS` errado ou WS upgrade barrado | Confere ENV bate exatamente com domínio HTTPS |
-| Resend retorna `domain not verified` | DNS records SPF/DKIM ainda não propagaram | `dig +short txt _dkim.resend.neura-ai.net` |
-| Build trava "no test files found" | OK, esperado em `@neura/waworker` (usa `--passWithNoTests`) | Ignorar |
-| Container `api` reinicia em loop | `migrate deploy` falhou — schema dessincronizado | Logs do api; mais comum: `DATABASE_URL` aponta pra DB antigo. Solução: novo Coolify project = novo volume |
-| Baileys cai e não reconecta | IP do VPS marcado como suspeito pelo WhatsApp | Tenta outro VPS / use proxy residencial |
+| Sintoma                              | Causa provável                                              | Fix                                                                                                       |
+| ------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Login falha "cookie not set"         | `secure: true` + `sameSite: 'none'` precisa HTTPS válido    | Cert do Caddy demorou: aguarde, ou force renew                                                            |
+| WS desconecta toda hora              | `TRUSTED_ORIGINS` errado ou WS upgrade barrado              | Confere ENV bate exatamente com domínio HTTPS                                                             |
+| Resend retorna `domain not verified` | DNS records SPF/DKIM ainda não propagaram                   | `dig +short txt _dkim.resend.neura-ai.net`                                                                |
+| Build trava "no test files found"    | OK, esperado em `@neura/waworker` (usa `--passWithNoTests`) | Ignorar                                                                                                   |
+| Container `api` reinicia em loop     | `migrate deploy` falhou — schema dessincronizado            | Logs do api; mais comum: `DATABASE_URL` aponta pra DB antigo. Solução: novo Coolify project = novo volume |
+| Baileys cai e não reconecta          | IP do VPS marcado como suspeito pelo WhatsApp               | Tenta outro VPS / use proxy residencial                                                                   |
 
 ---
 
