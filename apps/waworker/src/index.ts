@@ -27,7 +27,9 @@ async function main() {
     try {
       await outboundWorker.close();
       await shutdownCommandsListener();
-      await sessionManager.stopAll();
+      // shutdownAll, não stopAll: deploy/restart não é "desconectar" — o status
+      // fica no banco pro resumeAll() do próximo boot religar as sessões.
+      await sessionManager.shutdownAll();
       await redis.quit();
       await prisma.$disconnect();
     } catch (err) {

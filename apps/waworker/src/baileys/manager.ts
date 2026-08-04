@@ -198,6 +198,39 @@ class SessionManager {
     await Promise.all([...this.sessions.keys()].map((id) => this.stop(id)));
   }
 
+  /**
+   * Encerramento do PROCESSO (deploy/restart): fecha sockets e persiste auth,
+   * mas NÃO grava DISCONNECTED — o status fica CONNECTED/CONNECTING pra
+   * resumeAll() da próxima instância retomar sozinho. stop() continua sendo o
+   * desligamento intencional (usuário), esse sim marca DISCONNECTED.
+   * Sem essa distinção, todo deploy derrubava as sessões de vez: stopAll
+   * escrevia DISCONNECTED e o boot novo pulava as inboxes.
+   */
+  async shutdownAll(): Promise<void> {
+    await Promise.all(
+      [...this.sessions.keys()].map((inboxId) =>
+        this.enqueue(inboxId, async () => {
+          this.stopping.add(inboxId);
+          try {
+            this.cancelPendingRetry(inboxId);
+            const current = this.sessions.get(inboxId);
+            if (current) {
+              if (current.retryTimer) clearTimeout(current.retryTimer);
+              current.handle.stop();
+              this.sessions.delete(inboxId);
+            }
+            await flushPendingAuthState(inboxId);
+            const { clearSessionState } = await import('./events.js');
+            clearSessionState(inboxId);
+            logger.info({ inboxId }, 'Session closed for process shutdown');
+          } finally {
+            this.stopping.delete(inboxId);
+          }
+        }),
+      ),
+    );
+  }
+
   private cancelPendingRetry(inboxId: string): void {
     const timer = this.pendingRetries.get(inboxId);
     if (timer) {
