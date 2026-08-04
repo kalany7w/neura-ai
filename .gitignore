@@ -30,3 +30,7 @@ Thumbs.db
 .minio-data
 .postgres-data
 .redis-data
+
+# local-only
+.env.local
+CLAUDE.md
