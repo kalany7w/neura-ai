@@ -21,6 +21,11 @@ RUN pnpm install --frozen-lockfile
 
 # ========== builder (gera Prisma + builda os 3 apps de uma vez) ==========
 FROM deps AS builder
+# Build args opcionais pro Next inlinar no client bundle (self-host via
+# docker-compose.selfhost.yml). Não setados = comportamento atual (Coolify
+# injeta env no build por conta própria).
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WS_URL
 COPY . .
 RUN pnpm db:generate
 # Build all (turbo paraleliza entre packages). 3 targets finais (api/web/waworker)
