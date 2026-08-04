@@ -11,9 +11,25 @@ const apiEnvSchema = baseEnvSchema.extend({
   BETTER_AUTH_URL: z.string().url(),
   TRUSTED_ORIGINS: z.string().transform((s) => s.split(',').map((v) => v.trim()).filter(Boolean)),
   ENCRYPTION_KEY: z.string().length(64, 'ENCRYPTION_KEY must be 64 hex chars (32 bytes)'),
-  RESEND_API_KEY: z.string().startsWith('re_'),
-  RESEND_FROM: z.string().email(),
-  RESEND_FROM_NAME: z.string().default('Neura AI'),
+  // --- Mail (transacional + canal EMAIL) ---
+  // Provider por auto-detect: SMTP_HOST setado → smtp; RESEND_API_KEY → resend.
+  // Ambos setados → MAIL_PROVIDER decide (default resend, compat com prod).
+  MAIL_PROVIDER: z.preprocess(emptyToUndefined, z.enum(['resend', 'smtp']).optional()),
+  RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().startsWith('re_').optional()),
+  SMTP_HOST: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_USER: z.preprocess(emptyToUndefined, z.string().optional()),
+  SMTP_PASS: z.preprocess(emptyToUndefined, z.string().optional()),
+  SMTP_SECURE: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  // From padrão dos transacionais. MAIL_FROM/MAIL_FROM_NAME têm precedência;
+  // RESEND_FROM/RESEND_FROM_NAME mantidos como alias (ENV de prod já usa).
+  MAIL_FROM: z.preprocess(emptyToUndefined, z.string().email().optional()),
+  MAIL_FROM_NAME: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  RESEND_FROM: z.preprocess(emptyToUndefined, z.string().email().optional()),
+  RESEND_FROM_NAME: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   RATE_LIMIT_LOGIN_MAX: z.coerce.number().default(5),
   RATE_LIMIT_LOGIN_WINDOW_SEC: z.coerce.number().default(60),
   MINIO_ENDPOINT: z.string().default('localhost'),
@@ -39,5 +55,36 @@ const apiEnvSchema = baseEnvSchema.extend({
   APP_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
 });
 
-export const env = loadEnv(apiEnvSchema);
+const apiEnvSchemaChecked = apiEnvSchema.superRefine((v, ctx) => {
+  if (!v.RESEND_API_KEY && !v.SMTP_HOST) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MAIL_PROVIDER'],
+      message: 'Configure um provedor de e-mail: SMTP_HOST (SMTP genérico) ou RESEND_API_KEY (Resend)',
+    });
+  }
+  if (!v.MAIL_FROM && !v.RESEND_FROM) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MAIL_FROM'],
+      message: 'Defina MAIL_FROM (ou o alias RESEND_FROM) com o endereço remetente dos e-mails transacionais',
+    });
+  }
+  if (v.MAIL_PROVIDER === 'smtp' && !v.SMTP_HOST) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['SMTP_HOST'],
+      message: 'MAIL_PROVIDER=smtp exige SMTP_HOST',
+    });
+  }
+  if (v.MAIL_PROVIDER === 'resend' && !v.RESEND_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['RESEND_API_KEY'],
+      message: 'MAIL_PROVIDER=resend exige RESEND_API_KEY',
+    });
+  }
+});
+
+export const env = loadEnv(apiEnvSchemaChecked);
 export type Env = typeof env;

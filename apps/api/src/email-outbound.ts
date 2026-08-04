@@ -1,6 +1,6 @@
 /**
  * Email outbound worker — consume queue `outbound-email`.
- * Envia via Resend SDK (mesma chave RESEND_API_KEY do app).
+ * Envia via mailer unificado (SMTP genérico ou Resend — ver services/mailer.ts).
  *
  * Threading: olha replyToId pra carregar Message original, pega seu
  * `emailMessageId` e passa como `In-Reply-To` header — cliente vê thread.

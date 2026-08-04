@@ -1,8 +1,5 @@
-import { Resend } from 'resend';
-import { env } from './env.js';
 import { logger } from './logger.js';
-
-export const resend = new Resend(env.RESEND_API_KEY);
+import { sendMail } from './services/mailer.js';
 
 interface SendEmailParams {
   to: string;
@@ -10,19 +7,14 @@ interface SendEmailParams {
   html: string;
 }
 
+/** E-mail transacional (signup confirm, convite, reset) — from padrão da ENV. */
 export async function sendEmail({ to, subject, html }: SendEmailParams) {
-  const { data, error } = await resend.emails.send({
-    from: `${env.RESEND_FROM_NAME} <${env.RESEND_FROM}>`,
-    to,
-    subject,
-    html,
-  });
-  if (error) {
-    logger.error({ err: error, to }, 'Failed to send email');
-    throw new Error(`Resend error: ${error.message}`);
+  try {
+    return await sendMail({ to, subject, html });
+  } catch (err) {
+    logger.error({ err, to }, 'Failed to send email');
+    throw err;
   }
-  logger.info({ to, id: data?.id }, 'Email sent');
-  return data;
 }
 
 export { emailTemplates, emailLayout, escapeHtml } from './email-templates.js';
