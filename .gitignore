@@ -34,3 +34,8 @@ Thumbs.db
 # local-only
 .env.local
 CLAUDE.md
+
+# Docs internos de planejamento — NUNCA versionar (secrets já vazaram por aqui em 04/08)
+.planning/
+PROJECT.md
+PENDENCIAS.md
