@@ -52,6 +52,15 @@ class SessionManager {
       .update({ where: { id: inboxId }, data: { status }, select: { workspaceId: true } })
       .catch(() => null);
     if (!inbox) return;
+    // O motivo ia só no evento de pub/sub, que é efêmero: depois de uma queda
+    // ninguém conseguia dizer se tinha sido logout ou fim das tentativas, e o
+    // diagnóstico virava adivinhação. waSession.lastError já existia no schema
+    // e nunca era preenchido fora do logout.
+    if (motivo) {
+      await prisma.waSession
+        .updateMany({ where: { inboxId }, data: { lastError: motivo } })
+        .catch(() => {});
+    }
     await publishEvent(inbox.workspaceId, 'inboxes', 'inbox.status', {
       inboxId,
       status,
@@ -99,6 +108,16 @@ class SessionManager {
           }
           this.scheduleRetry(id);
         },
+        // Conexão de pé devolve o crédito de tentativas. Sem isso o retryCount só
+        // subia: cada queda do dia consumia uma das 5 vidas para sempre, e ao
+        // esgotar o worker desistia da inbox — o "cai todo dia" era isso.
+        onOpen: (id) => {
+          const atual = this.sessions.get(id);
+          if (atual && atual.retryCount !== 0) {
+            logger.info({ inboxId: id, gastos: atual.retryCount }, 'Reconnected, resetting retries');
+            atual.retryCount = 0;
+          }
+        },
       });
 
       // A inbox pode ter pedido stop enquanto o socket subia.
@@ -131,16 +150,35 @@ class SessionManager {
   }
 
   /**
-   * Fim da linha das tentativas. Zera o auth state antes de liberar a inbox:
-   * uma sessão interrompida no meio do handshake deixa credenciais pela metade,
-   * e o Baileys passa a tentar retomá-las em vez de emitir QR — a inbox ficava
-   * inconectável para sempre, sem saída pela interface. Sem credencial, o
-   * próximo "Conectar" volta a gerar QR.
+   * Fim da linha das tentativas.
+   *
+   * Zerar o auth state aqui existe por um motivo específico: uma sessão
+   * interrompida no meio do handshake deixa credenciais pela metade, e o Baileys
+   * passa a tentar retomá-las em vez de emitir QR — a inbox ficava inconectável
+   * para sempre, sem saída pela interface.
+   *
+   * Mas isso só vale para credencial que NUNCA conectou. Aplicar em credencial
+   * boa era destrutivo: bastava uma rajada de quedas para o worker apagar um
+   * pareamento válido e exigir QR novo, com celular na mão (caso da inbox Bots
+   * Caltech em 12/08). Credencial que já subiu uma vez é preservada, e a inbox
+   * fica em ERROR — que o resumeAll() do próximo boot retoma sozinho, sem QR.
    */
   private async desistir(inboxId: string, motivo: string): Promise<void> {
-    logger.error({ inboxId, motivo }, 'Giving up on session, clearing auth state');
     this.cancelPendingRetry(inboxId);
     this.removeSession(inboxId);
+
+    const sessao = await prisma.waSession
+      .findUnique({ where: { inboxId }, select: { lastConnectedAt: true } })
+      .catch(() => null);
+    const jaConectou = Boolean(sessao?.lastConnectedAt);
+
+    if (jaConectou) {
+      logger.error({ inboxId, motivo }, 'Giving up on session, keeping auth state (already paired)');
+      await this.setStatus(inboxId, 'ERROR', motivo);
+      return;
+    }
+
+    logger.error({ inboxId, motivo }, 'Giving up on session, clearing auth state (never paired)');
     await clearAuthState(inboxId).catch(() => {});
     await this.setStatus(inboxId, 'DISCONNECTED', motivo);
   }

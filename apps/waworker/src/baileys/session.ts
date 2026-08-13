@@ -27,6 +27,8 @@ export interface SessionHandle {
 export interface StartSessionOptions {
   onLoggedOut?: (inboxId: string) => Promise<void>;
   onClosed?: (inboxId: string, isLoggedOut: boolean) => void;
+  /** Conexão de pé: o manager usa pra devolver o crédito de retries gasto até aqui. */
+  onOpen?: (inboxId: string) => void;
 }
 
 export async function startSession(
@@ -75,6 +77,9 @@ export async function startSession(
       await handleConnectionUpdate(ctx, update);
     } catch (err) {
       logger.error({ err, inboxId: inbox.id }, 'connection.update handler failed');
+    }
+    if (update.connection === 'open') {
+      options.onOpen?.(inbox.id);
     }
     if (update.connection === 'close') {
       const isLoggedOut =
