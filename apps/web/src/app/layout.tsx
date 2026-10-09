@@ -6,6 +6,13 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Neura AI',
   description: 'Plataforma de atendimento WhatsApp',
+  // App logado (login, cadastro, painel): nada aqui deve aparecer em buscador.
+  // Vale pra todas as rotas — nenhuma página filha sobrescreve `robots`.
+  robots: {
+    index: false,
+    follow: false,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -30,5 +30,9 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)'],
+  // robots.txt fica fora do middleware: sem isso o buscador (que não tem sessão) era
+  // redirecionado pro /login e nunca lia o arquivo gerado por app/robots.ts.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|robots\\.txt$|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+  ],
 };

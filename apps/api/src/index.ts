@@ -59,6 +59,16 @@ import { startWelcomeScheduler } from './welcome-scheduler.js';
 
 const app = new Hono();
 
+// Nada da API deve aparecer em buscador (a raiz chegou a ser indexada pelo Google
+// por causa do redirect pro app). É o primeiro middleware e escreve o header DEPOIS
+// do next() de propósito: assim alcança toda resposta — preflight do CORS, redirect
+// da raiz, handler do Better Auth, 404 e onError — sem mudar a ordem em que CORS,
+// logger e rotas tratam a request.
+app.use('*', async (c, next) => {
+  await next();
+  c.header('X-Robots-Tag', 'noindex, nofollow');
+});
+
 app.use(
   '*',
   cors({
@@ -72,10 +82,11 @@ app.use(
 app.use('*', honoLogger((msg) => logger.info(msg)));
 
 // Raiz da API redireciona pro web app (UX + fallback pra links antigos
-// de verify-email que usavam baseURL como callbackURL).
+// de verify-email que usavam baseURL como callbackURL). 301 (permanente) pro
+// buscador consolidar no destino em vez de manter api.neura-ai.net no índice.
 app.get('/', (c) => {
   const appUrl = env.APP_URL ?? env.TRUSTED_ORIGINS[0] ?? '/';
-  return c.redirect(appUrl, 302);
+  return c.redirect(appUrl, 301);
 });
 
 // Better Auth handler (signup, login, verify email, reset password, etc.)

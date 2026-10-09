@@ -24,6 +24,9 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
+  // Tira o app do índice dos buscadores. O header cobre o que a <meta name="robots">
+  // do layout não alcança: respostas que não são HTML e os redirects do próprio Next.
+  { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
 ];
 
 const nextConfig = {
