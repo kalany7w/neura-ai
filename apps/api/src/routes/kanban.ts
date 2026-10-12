@@ -281,6 +281,106 @@ kanbanRouter.post(
 
 // ==================== CARDS ====================
 
+// Telefone digitado com espaço/traço/parênteses vira E.164 (+ código do país).
+const cardContactSchema = z.object({
+  phoneNumber: z
+    .string()
+    .trim()
+    .transform((v) => {
+      const digits = v.replace(/\D/g, '');
+      return digits ? `+${digits}` : '';
+    })
+    .pipe(z.string().regex(/^\+[1-9]\d{7,14}$/, 'invalid_phone')),
+  name: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((v) => v || undefined)
+    .optional(),
+});
+type CardContactInput = z.infer<typeof cardContactSchema>;
+
+class CardContactError extends Error {
+  constructor(public code: 'no_whatsapp_inbox') {
+    super(code);
+  }
+}
+
+// Vincula contato a card: acha/cria o Contact e reaproveita (ou abre) a conversa no
+// WhatsApp do ambiente — um número por ambiente: conectado primeiro, senão o mais antigo.
+async function resolveCardConversation(
+  workspaceId: string,
+  input: CardContactInput,
+): Promise<{ conversationId: string; contactId: string }> {
+  const inboxes = await prisma.inbox.findMany({
+    where: { workspaceId, type: 'WHATSAPP' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, status: true },
+  });
+  const inbox = inboxes.find((i) => i.status === 'CONNECTED') ?? inboxes[0];
+  if (!inbox) throw new CardContactError('no_whatsapp_inbox');
+
+  let contact = await prisma.contact.findFirst({
+    where: { workspaceId, phoneNumber: input.phoneNumber },
+    select: { id: true, name: true },
+  });
+  if (!contact) {
+    try {
+      contact = await prisma.contact.create({
+        data: { workspaceId, phoneNumber: input.phoneNumber, name: input.name ?? null },
+        select: { id: true, name: true },
+      });
+      await publishEvent(workspaceId, 'contacts', 'contact.created', { contactId: contact.id });
+    } catch {
+      // Corrida com outro cadastro do mesmo número (unique workspace+phone)
+      contact = await prisma.contact.findFirst({
+        where: { workspaceId, phoneNumber: input.phoneNumber },
+        select: { id: true, name: true },
+      });
+      if (!contact) throw new Error('contact_create_failed');
+    }
+  } else if (!contact.name && input.name) {
+    await prisma.contact.update({ where: { id: contact.id }, data: { name: input.name } });
+  }
+
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      workspaceId,
+      contactId: contact.id,
+      inboxId: inbox.id,
+      status: { in: ['OPEN', 'PENDING', 'SNOOZED'] },
+      archivedAt: null,
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (existing) return { conversationId: existing.id, contactId: contact.id };
+
+  const conv = await prisma.conversation.create({
+    data: { workspaceId, contactId: contact.id, inboxId: inbox.id, status: 'OPEN' },
+    select: { id: true },
+  });
+  await publishEvent(workspaceId, 'conversations', 'conversation.created', {
+    conversationId: conv.id,
+    contactId: contact.id,
+    inboxId: inbox.id,
+  });
+  return { conversationId: conv.id, contactId: contact.id };
+}
+
+function cardContactErrorResponse(err: unknown) {
+  if (err instanceof CardContactError) {
+    return {
+      body: {
+        error: err.code,
+        message: 'Nenhum WhatsApp cadastrado neste ambiente. Conecte um número em Inboxes.',
+      },
+      status: 409 as const,
+    };
+  }
+  throw err;
+}
+
 const cardSchema = z.object({
   funnelId: z.string().min(1),
   stageId: z.string().min(1),
@@ -291,6 +391,9 @@ const cardSchema = z.object({
   assignedAgentId: z.string().nullable().optional(),
   dueDate: z.string().datetime().optional(),
   conversationId: z.string().optional(),
+  // Contato do lead (estilo Kommo): acha/cria o contato e abre conversa no WhatsApp do
+  // ambiente — o card passa a abrir o chat e dá pra mandar mensagem por ele.
+  contact: cardContactSchema.optional(),
   // Atributos customizados (CARD scope) — Json com pares { [key]: valor }. Renderizado
   // no side panel da conversa via cardAttributeDefs do lead-detail.
   customAttrs: z.record(z.unknown()).nullable().optional(),
@@ -320,10 +423,28 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
     where.OR = [{ assignedAgentId: userId }, { assignedAgentId: null }];
   }
   if (search) {
-    where.OR = [
-      ...(where.OR ?? []),
+    // Busca também pelo nome/telefone do contato vinculado (via conversa)
+    const digits = search.replace(/\D/g, '');
+    const convs = await prisma.conversation.findMany({
+      where: {
+        workspaceId,
+        contact: {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            ...(digits.length >= 4 ? [{ phoneNumber: { contains: digits } }] : []),
+          ],
+        },
+      },
+      select: { id: true },
+      take: 500,
+    });
+    const searchOr: Prisma.CardWhereInput[] = [
       { title: { contains: search, mode: 'insensitive' } },
+      ...(convs.length ? [{ conversationId: { in: convs.map((cv) => cv.id) } }] : []),
     ];
+    // AGENT já tem OR de visibilidade — busca entra como AND pra não abrir cards de outros
+    if (where.OR) where.AND = [{ OR: searchOr }];
+    else where.OR = searchOr;
   }
   if (labelId) where.labels = { some: { labelId } };
 
@@ -348,7 +469,22 @@ kanbanRouter.get('/cards', requireAuth, requireWorkspace, async (c) => {
     orderBy: [{ stageId: 'asc' }, { position: 'asc' }],
   });
 
-  return c.json({ cards });
+  // Contato de cada card (nome + telefone) pela conversa vinculada
+  const convIds = [...new Set(cards.map((cd) => cd.conversationId).filter((v): v is string => !!v))];
+  const convs = convIds.length
+    ? await prisma.conversation.findMany({
+        where: { id: { in: convIds }, workspaceId },
+        select: { id: true, contact: { select: { name: true, phoneNumber: true } } },
+      })
+    : [];
+  const contactByConv = new Map(convs.map((cv) => [cv.id, cv.contact]));
+
+  return c.json({
+    cards: cards.map((cd) => ({
+      ...cd,
+      contact: cd.conversationId ? contactByConv.get(cd.conversationId) ?? null : null,
+    })),
+  });
 });
 
 // GET /api/kanban/cards/:id — detalhe completo
@@ -479,6 +615,16 @@ kanbanRouter.post(
     });
     if (!stage) return c.json({ error: 'stage_not_found' }, 404);
 
+    let conversationId = parsed.data.conversationId;
+    if (parsed.data.contact) {
+      try {
+        ({ conversationId } = await resolveCardConversation(workspaceId, parsed.data.contact));
+      } catch (err) {
+        const r = cardContactErrorResponse(err);
+        return c.json(r.body, r.status);
+      }
+    }
+
     const max = await prisma.card.aggregate({
       where: { stageId: stage.id },
       _max: { position: true },
@@ -493,7 +639,7 @@ kanbanRouter.post(
         value: parsed.data.value !== undefined ? parsed.data.value : undefined,
         currency: parsed.data.currency,
         assignedAgentId: parsed.data.assignedAgentId,
-        conversationId: parsed.data.conversationId,
+        conversationId,
         dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : undefined,
         position: (max._max.position ?? -1) + 1,
       },
@@ -530,6 +676,50 @@ kanbanRouter.patch(
         }),
       },
     });
+    await publishEvent(workspaceId, 'cards', 'card.updated', { card: updated });
+    return c.json({ card: updated });
+  },
+);
+
+// PUT /api/kanban/cards/:id/contact — vincula (ou troca) o contato do card
+kanbanRouter.put(
+  '/cards/:id/contact',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = cardContactSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_input', issues: parsed.error.issues }, 400);
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const card = await prisma.card.findFirst({ where: { id, workspaceId }, select: { id: true } });
+    if (!card) return c.json({ error: 'not_found' }, 404);
+    let conversationId: string;
+    try {
+      ({ conversationId } = await resolveCardConversation(workspaceId, parsed.data));
+    } catch (err) {
+      const r = cardContactErrorResponse(err);
+      return c.json(r.body, r.status);
+    }
+    const updated = await prisma.card.update({ where: { id }, data: { conversationId } });
+    await publishEvent(workspaceId, 'cards', 'card.updated', { card: updated });
+    return c.json({ card: updated, conversationId });
+  },
+);
+
+// DELETE /api/kanban/cards/:id/contact — desvincula (contato e conversa continuam existindo)
+kanbanRouter.delete(
+  '/cards/:id/contact',
+  requireAuth,
+  requireWorkspace,
+  requirePermission('card.update'),
+  async (c) => {
+    const workspaceId = c.get('workspaceId') as string;
+    const id = c.req.param('id');
+    const card = await prisma.card.findFirst({ where: { id, workspaceId }, select: { id: true } });
+    if (!card) return c.json({ error: 'not_found' }, 404);
+    const updated = await prisma.card.update({ where: { id }, data: { conversationId: null } });
     await publishEvent(workspaceId, 'cards', 'card.updated', { card: updated });
     return c.json({ card: updated });
   },

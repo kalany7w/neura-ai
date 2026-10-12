@@ -22,6 +22,7 @@ import {
   Filter,
   MessageSquare,
   MoreHorizontal,
+  Phone,
   Plus,
   Save,
   Search,
@@ -39,6 +40,11 @@ import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { useConfirm } from '@/components/confirm-provider';
 import { useRealtimeListener } from '@/hooks/use-realtime-listener';
+import {
+  CARD_PHONE_HINT,
+  buildCardContact,
+  cardContactErrorMessage,
+} from '@/components/kanban/card-contact';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -116,6 +122,7 @@ interface Card {
   currency?: string;
   assignedAgentId: string | null;
   conversationId?: string | null;
+  contact?: { name: string | null; phoneNumber: string | null } | null;
   slaStatus: string;
   lastMessageAt: string | null;
   lastMessagePreview: string | null;
@@ -433,6 +440,16 @@ function DraggableCard({
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-medium leading-snug text-foreground line-clamp-2">{card.title}</p>
+            {card.contact?.phoneNumber && (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                <Phone className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  {card.contact.name && card.contact.name !== card.title
+                    ? `${card.contact.name} · ${card.contact.phoneNumber}`
+                    : card.contact.phoneNumber}
+                </span>
+              </p>
+            )}
             {value !== null && value > 0 && (
               <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-emerald-600">
                 <TrendingUp className="h-3 w-3" />
@@ -603,6 +620,8 @@ function StageColumn({
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerTitle, setComposerTitle] = useState('');
+  const [composerContactName, setComposerContactName] = useState('');
+  const [composerContactPhone, setComposerContactPhone] = useState('');
   const [composerSubmitting, setComposerSubmitting] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -616,18 +635,34 @@ function StageColumn({
   function closeComposer() {
     setComposerOpen(false);
     setComposerTitle('');
+    setComposerContactName('');
+    setComposerContactPhone('');
   }
 
   async function submitQuickAdd(keepOpen: boolean) {
-    const title = composerTitle.trim();
-    if (!title || composerSubmitting) return;
+    if (composerSubmitting) return;
+    const contact = buildCardContact(composerContactName, composerContactPhone);
+    if (contact === 'invalid') {
+      toast.error(`Telefone inválido. ${CARD_PHONE_HINT}`);
+      return;
+    }
+    const title =
+      composerTitle.trim() || composerContactName.trim() || contact?.phoneNumber || '';
+    if (!title) return;
     setComposerSubmitting(true);
     try {
       await api('/api/kanban/cards', {
         method: 'POST',
-        body: JSON.stringify({ funnelId, stageId: stage.id, title }),
+        body: JSON.stringify({
+          funnelId,
+          stageId: stage.id,
+          title,
+          ...(contact ? { contact } : {}),
+        }),
       });
       setComposerTitle('');
+      setComposerContactName('');
+      setComposerContactPhone('');
       await qc.invalidateQueries({ queryKey: ['cards', funnelId] });
       if (keepOpen) {
         requestAnimationFrame(() => composerRef.current?.focus());
@@ -635,7 +670,7 @@ function StageColumn({
         closeComposer();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao criar card');
+      toast.error(cardContactErrorMessage(err, 'Erro ao criar card'));
     } finally {
       setComposerSubmitting(false);
     }
@@ -715,6 +750,38 @@ function StageColumn({
               placeholder="Título do card (Enter pra criar, Shift+Enter pra quebrar linha)"
               className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
+            <div className="mt-1.5 space-y-1.5">
+              {(
+                [
+                  ['Contato: nome', composerContactName, setComposerContactName, 'text', 120],
+                  ['Contato: telefone', composerContactPhone, setComposerContactPhone, 'tel', 24],
+                ] as const
+              ).map(([placeholder, val, setVal, type, max]) => (
+                <input
+                  key={placeholder}
+                  type={type}
+                  value={val}
+                  maxLength={max}
+                  onChange={(e) => setVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      closeComposer();
+                    }
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      submitQuickAdd(e.metaKey || e.ctrlKey);
+                    }
+                  }}
+                  placeholder={placeholder}
+                  aria-label={placeholder}
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+              ))}
+              <p className="text-[10px] text-muted-foreground">
+                Com telefone, o card abre a conversa no WhatsApp do ambiente.
+              </p>
+            </div>
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <p className="text-[10px] text-muted-foreground">
                 Cmd/Ctrl+Enter cria e mantém aberto
@@ -732,7 +799,12 @@ function StageColumn({
                 <Button
                   size="sm"
                   onClick={() => submitQuickAdd(false)}
-                  disabled={composerSubmitting || !composerTitle.trim()}
+                  disabled={
+                    composerSubmitting ||
+                    (!composerTitle.trim() &&
+                      !composerContactName.trim() &&
+                      !composerContactPhone.trim())
+                  }
                   className="h-7 px-2 text-xs"
                 >
                   {composerSubmitting ? 'Criando…' : 'Adicionar'}
@@ -1570,22 +1642,42 @@ function CreateCardDialog({
 }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
   const [stageId, setStageId] = useState(funnel.stages[0]?.id ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const canSubmit = !!(title.trim() || contactName.trim() || contactPhone.trim()) && !!stageId;
   async function submit() {
-    if (!title.trim() || !stageId) return;
+    if (!canSubmit || submitting) return;
+    const contact = buildCardContact(contactName, contactPhone);
+    if (contact === 'invalid') {
+      toast.error(`Telefone inválido. ${CARD_PHONE_HINT}`);
+      return;
+    }
+    const finalTitle = title.trim() || contactName.trim() || contact?.phoneNumber || '';
+    if (!finalTitle) {
+      toast.error('Informe o título ou o contato');
+      return;
+    }
     setSubmitting(true);
     try {
       await api('/api/kanban/cards', {
         method: 'POST',
-        body: JSON.stringify({ funnelId: funnel.id, stageId, title }),
+        body: JSON.stringify({
+          funnelId: funnel.id,
+          stageId,
+          title: finalTitle,
+          ...(contact ? { contact } : {}),
+        }),
       });
       toast.success('Card criado');
       setTitle('');
+      setContactName('');
+      setContactPhone('');
       onOpenChange(false);
       await qc.invalidateQueries({ queryKey: ['cards', funnel.id] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro');
+      toast.error(cardContactErrorMessage(err, 'Erro ao criar card'));
     } finally {
       setSubmitting(false);
     }
@@ -1609,8 +1701,35 @@ function CreateCardDialog({
               id="card-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
             />
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="card-contact-name">Contato: nome</Label>
+              <Input
+                id="card-contact-name"
+                value={contactName}
+                maxLength={120}
+                onChange={(e) => setContactName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="card-contact-phone">Contato: telefone</Label>
+              <Input
+                id="card-contact-phone"
+                type="tel"
+                value={contactPhone}
+                maxLength={24}
+                placeholder="+595 981 123456"
+                onChange={(e) => setContactPhone(e.target.value)}
+              />
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Com telefone, o card abre a conversa no WhatsApp do ambiente e dá pra mandar
+            mensagem por ele. {CARD_PHONE_HINT}.
+          </p>
           <div className="space-y-2">
             <Label htmlFor="card-stage">Stage</Label>
             <select
@@ -1629,7 +1748,7 @@ function CreateCardDialog({
           <Button
             onClick={submit}
             className="w-full"
-            disabled={submitting || !title.trim() || !stageId}
+            disabled={submitting || !canSubmit}
           >
             {submitting ? 'Criando...' : 'Criar card'}
           </Button>

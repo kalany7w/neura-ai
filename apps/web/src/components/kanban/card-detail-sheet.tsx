@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Phone,
   Plus,
+  Send,
   StickyNote,
   Tag,
   Trash2,
@@ -25,6 +26,11 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import {
+  CARD_PHONE_HINT,
+  buildCardContact,
+  cardContactErrorMessage,
+} from '@/components/kanban/card-contact';
 import { useConfirm } from '@/components/confirm-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -454,30 +460,9 @@ function CardDetailBody({
               <code className="text-[10px] text-muted-foreground break-all">{card.id}</code>
             </MetaField>
 
-            {conversation && (
-              <MetaField icon={MessageCircle} label="Conversa vinculada">
-                <Link
-                  href={`/inbox/${conversation.id}`}
-                  className="flex items-center gap-2 rounded-md border bg-card p-2 text-sm hover:bg-accent"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-[11px] font-semibold text-slate-700">
-                    {initialsFrom(conversation.contact.name ?? conversation.contact.phoneNumber)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium">
-                      {conversation.contact.name ?? 'Sem nome'}
-                    </p>
-                    <p className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
-                      <Phone className="h-2.5 w-2.5" />
-                      {conversation.contact.phoneNumber}
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">
-                    {conversation.status}
-                  </span>
-                </Link>
-              </MetaField>
-            )}
+            <MetaField icon={MessageCircle} label="Contato">
+              <CardContactEditor cardId={card.id} conversation={conversation} refresh={refresh} />
+            </MetaField>
 
             <MetaField icon={History} label="Histórico" defaultCollapsed>
               {history.length === 0 ? (
@@ -1180,6 +1165,154 @@ function TasksSection({ cardId, members }: { cardId: string; members: Member[] }
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+function CardContactEditor({
+  cardId,
+  conversation,
+  refresh,
+}: {
+  cardId: string;
+  conversation: ConversationLite | null;
+  refresh: () => void;
+}) {
+  const confirm = useConfirm();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  function startEdit() {
+    setName(conversation?.contact.name ?? '');
+    setPhone(conversation?.contact.phoneNumber ?? '');
+    setEditing(true);
+  }
+
+  async function save() {
+    if (submitting) return;
+    const contact = buildCardContact(name, phone);
+    if (contact === null || contact === 'invalid') {
+      toast.error(`Telefone inválido. ${CARD_PHONE_HINT}`);
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api(`/api/kanban/cards/${cardId}/contact`, {
+        method: 'PUT',
+        body: JSON.stringify(contact),
+      });
+      toast.success('Contato vinculado');
+      setEditing(false);
+      refresh();
+    } catch (err) {
+      toast.error(cardContactErrorMessage(err, 'Erro ao vincular contato'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function unlink() {
+    const ok = await confirm({
+      title: 'Desvincular contato?',
+      description: 'O contato e a conversa continuam existindo; só saem deste card.',
+      confirmLabel: 'Desvincular',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await api(`/api/kanban/cards/${cardId}/contact`, { method: 'DELETE' });
+      toast.success('Contato desvinculado');
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao desvincular');
+    }
+  }
+
+  if (editing || !conversation) {
+    if (!editing) {
+      return (
+        <Button size="sm" variant="outline" className="w-full" onClick={startEdit}>
+          <Plus className="h-3.5 w-3.5" />
+          Vincular contato
+        </Button>
+      );
+    }
+    return (
+      <form
+        className="space-y-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <Input
+          value={name}
+          maxLength={120}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Contato: nome"
+          aria-label="Contato: nome"
+          className="h-8 text-sm"
+        />
+        <Input
+          type="tel"
+          value={phone}
+          maxLength={24}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Contato: telefone"
+          aria-label="Contato: telefone"
+          className="h-8 text-sm"
+          autoFocus
+        />
+        <p className="text-[10px] text-muted-foreground">{CARD_PHONE_HINT}</p>
+        <div className="flex gap-1.5">
+          <Button type="submit" size="sm" className="flex-1" disabled={submitting || !phone.trim()}>
+            {submitting ? 'Salvando…' : 'Salvar'}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditing(false)}
+            disabled={submitting}
+          >
+            Cancelar
+          </Button>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2 rounded-md border bg-card p-2 text-sm">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-[11px] font-semibold text-slate-700">
+          {initialsFrom(conversation.contact.name ?? conversation.contact.phoneNumber)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-medium">{conversation.contact.name ?? 'Sem nome'}</p>
+          <p className="flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+            <Phone className="h-2.5 w-2.5" />
+            {conversation.contact.phoneNumber}
+          </p>
+        </div>
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{conversation.status}</span>
+      </div>
+      <Button asChild size="sm" className="w-full">
+        <Link href={`/inbox/${conversation.id}`}>
+          <Send className="h-3.5 w-3.5" />
+          Enviar mensagem
+        </Link>
+      </Button>
+      <div className="flex gap-1.5">
+        <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={startEdit}>
+          Trocar
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={unlink}>
+          Desvincular
+        </Button>
+      </div>
     </div>
   );
 }
