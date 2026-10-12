@@ -42,7 +42,12 @@ interface LabelItem {
 
 const createSchema = z.object({
   phoneNumber: z.string().regex(/^\+\d{8,15}$/, 'Formato E.164: +5511999999999'),
-  name: z.string().min(1).max(120).optional(),
+  name: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((value) => value || undefined)
+    .optional(),
 });
 type CreateInput = z.infer<typeof createSchema>;
 
@@ -138,7 +143,10 @@ export default function ContactsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Novo contato</DialogTitle>
-              <DialogDescription>Use formato E.164 (com código do país).</DialogDescription>
+              <DialogDescription>
+                Cadastre também clientes que só ligaram, sem precisar de mensagem anterior.
+                Informe o telefone com + e código do país.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onCreate)} className="space-y-4">
               <div className="space-y-2">
