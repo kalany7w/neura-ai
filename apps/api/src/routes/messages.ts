@@ -7,6 +7,7 @@ import { requirePermission } from '../middlewares/permissions.js';
 import { outboundQueue, dispatchOutbound } from '../queue.js';
 import { publishEvent } from '../redis-pub.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 export const messagesRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -310,7 +311,7 @@ async function forwardOneMessage(
       lastAgentRepliedId: userId,
       lastOutboundAt: msg.createdAt,
       lastMessagePreview: source.content
-        ? source.content.slice(0, 80)
+        ? safeSlice(source.content, 80)
         : `[${source.type.toLowerCase()}]`,
       ...slaPatch,
     },

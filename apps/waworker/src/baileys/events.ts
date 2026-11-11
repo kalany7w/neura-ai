@@ -16,6 +16,7 @@ import { applyInboxRules } from './inbox-rules.js';
 import { enqueueTranscribe } from '../queue/transcribe.js';
 import { enqueueAi } from '../queue/ai.js';
 import { enqueueWelcomeTrigger, enqueueWelcomeParseReply } from '../welcome-trigger.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 type ConnectionUpdate = Partial<ConnectionState>;
 
@@ -521,7 +522,7 @@ async function persistInboundMessage(
 
     // Sync cards linkados — atualiza preview/badge unread/lastMessageAt
     // (slaStatus deixa pro SLA scheduler recalcular)
-    const preview = text ? text.slice(0, 60) : `[${type.toLowerCase()}]`;
+    const preview = text ? safeSlice(text, 60) : `[${type.toLowerCase()}]`;
     await tx.conversation.update({
       where: { id: conversation.id },
       data: {

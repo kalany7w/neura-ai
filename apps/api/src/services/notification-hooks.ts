@@ -1,5 +1,6 @@
 import { prisma } from '../db.js';
 import { createNotification } from './notifications.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 /**
  * Dedup window: se a mesma chave criou notif nos últimos N ms, pula.
@@ -105,7 +106,7 @@ async function handleMessageNew(
 
   const who = conv.contact.name ?? conv.contact.phoneNumber ?? 'Contato';
   const preview = message.content
-    ? message.content.slice(0, 80)
+    ? safeSlice(message.content, 80)
     : `[${message.type ?? 'mídia'}]`;
   await createNotification({
     workspaceId,

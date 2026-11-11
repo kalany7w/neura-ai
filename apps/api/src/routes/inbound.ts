@@ -10,6 +10,7 @@ import { redis } from './../redis.js';
 import { audit } from '../services/audit.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
 import { splitMessageText, MESSAGE_TEXT_MAX } from '../services/split-message.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 /**
  * Endpoints PÚBLICOS — sem requireAuth/requireWorkspace. Cada request é
@@ -165,7 +166,7 @@ async function handleAction(
         data: {
           lastMessageAt: lastCreatedAt!,
           lastOutboundAt: lastCreatedAt!,
-          lastMessagePreview: action.text.slice(0, 80),
+          lastMessagePreview: safeSlice(action.text, 80),
           ...slaPatch1,
         },
       });
@@ -262,7 +263,7 @@ async function handleAction(
           data: {
             lastMessageAt: lastCreatedAt!,
             lastOutboundAt: lastCreatedAt!,
-            lastMessagePreview: action.text.slice(0, 80),
+            lastMessagePreview: safeSlice(action.text, 80),
             ...slaPatch2,
           },
         });

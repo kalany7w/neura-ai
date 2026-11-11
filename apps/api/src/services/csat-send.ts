@@ -17,6 +17,7 @@ import { logger } from '../logger.js';
 import { dispatchOutbound } from '../queue.js';
 import { publishEvent } from '../redis-pub.js';
 import { renderTemplate } from '@neura/shared/template-render';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 const AWAITING_WINDOW_DAYS = 7;
 
@@ -97,7 +98,7 @@ export async function sendCsatSurvey(
       csatAwaitingResponseUntil: awaitingUntil,
       lastMessageAt: msg.createdAt,
       lastOutboundAt: msg.createdAt,
-      lastMessagePreview: renderedBody.slice(0, 80),
+      lastMessagePreview: safeSlice(renderedBody, 80),
     },
   });
 

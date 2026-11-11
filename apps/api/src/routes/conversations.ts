@@ -20,6 +20,7 @@ import { aiQueue, enqueueCsatSend, cancelCsatSend } from '../queue.js';
 import { resolveSurveyForConversation } from '../services/csat-send.js';
 import { splitMessageText, MESSAGE_TEXT_MAX } from '../services/split-message.js';
 import { env } from '../env.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 export const conversationsRouter = new Hono<{
   Variables: AuthVars & Partial<Pick<WorkspaceVars, 'workspaceId' | 'role'>>;
@@ -1149,7 +1150,7 @@ conversationsRouter.post(
     const lastMsg = created[created.length - 1]!;
     // Cache do preview pra lista de conversas
     const preview = parsed.data.text
-      ? parsed.data.text.slice(0, 80)
+      ? safeSlice(parsed.data.text, 80)
       : `[${parsed.data.type.toLowerCase()}]`;
     // SLA: registra FRT se primeira resposta de agente
     const slaPatch = await patchFirstResponse(conv.id, firstMsg.createdAt);

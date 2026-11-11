@@ -38,6 +38,7 @@ import {
   ensureAngleBrackets,
   htmlToPlainText,
 } from '../services/email-client.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 export const inboundEmailRouter = new Hono();
 
@@ -244,7 +245,7 @@ async function processInbound(
   });
 
   // Atualiza cache da conversation
-  const preview = content.slice(0, 60).replace(/\s+/g, ' ');
+  const preview = safeSlice(content, 60).replace(/\s+/g, ' ');
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {

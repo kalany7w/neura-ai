@@ -14,6 +14,7 @@ import { aiQueue } from '../queue.js';
 import { patchFirstResponse } from '../services/sla-compute.js';
 import { enqueueWelcomeProcess } from '../welcome-worker.js';
 import type { TgUpdate, TgMessage } from '../services/telegram-client.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 export const telegramRouter = new Hono();
 
@@ -152,7 +153,7 @@ async function processUpdate(
   });
 
   // Atualiza cache da conversation
-  const preview = contentText ? contentText.slice(0, 60) : `[${contentType.toLowerCase()}]`;
+  const preview = contentText ? safeSlice(contentText, 60) : `[${contentType.toLowerCase()}]`;
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: {

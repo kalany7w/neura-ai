@@ -40,6 +40,10 @@
     "./funnel-presets": {
       "types": "./dist/funnel-presets.d.ts",
       "default": "./dist/funnel-presets.js"
+    },
+    "./safe-slice": {
+      "types": "./dist/safe-slice.d.ts",
+      "default": "./dist/safe-slice.js"
     }
   },
   "scripts": {

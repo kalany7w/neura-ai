@@ -21,6 +21,7 @@ import { prisma } from '../db.js';
 import { publishEvent } from '../redis-pub.js';
 import { aiQueue } from '../queue.js';
 import { enqueueWelcomeProcess } from '../welcome-worker.js';
+import { safeSlice } from '@neura/shared/safe-slice';
 
 export const webchatRouter = new Hono();
 
@@ -299,7 +300,7 @@ webchatRouter.post('/:widgetSlug/session', async (c) => {
         data: {
           lastMessageAt: welcomeMsg.createdAt,
           lastOutboundAt: welcomeMsg.createdAt,
-          lastMessagePreview: welcomeMessage.slice(0, 60),
+          lastMessagePreview: safeSlice(welcomeMessage, 60),
         },
       });
     }
@@ -414,7 +415,7 @@ webchatRouter.post('/:widgetSlug/messages', async (c) => {
     },
   });
 
-  const preview = content.slice(0, 60);
+  const preview = safeSlice(content, 60);
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: {
